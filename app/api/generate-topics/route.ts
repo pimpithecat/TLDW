@@ -8,146 +8,63 @@ function combineTranscript(segments: TranscriptSegment[]): string {
   return segments.map(s => s.text).join(' ');
 }
 
-// Fallback keyword extraction from title and description
-function extractKeywordsFromText(text: string, transcriptText: string): string[] {
-  const keywords: string[] = [];
-  
-  // Convert to lowercase for processing
-  const lowerText = text.toLowerCase();
-  const lowerTranscript = transcriptText.toLowerCase();
-  
-  // Extract important words from title/description (nouns, verbs, adjectives)
-  // Remove common stop words
-  const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 
-    'of', 'with', 'by', 'from', 'up', 'about', 'into', 'through', 'during', 'how', 
-    'when', 'where', 'why', 'what', 'which', 'who', 'whom', 'this', 'that', 'these', 
-    'those', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 
-    'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must',
-    'can', 'could', 'it', 'its', 'we', 'our', 'they', 'their', 'he', 'she', 'his', 'her']);
-  
-  // Split into words and filter
-  const words = lowerText.split(/\s+/)
-    .map(w => w.replace(/[^a-z0-9'-]/gi, ''))
-    .filter(w => w.length > 2 && !stopWords.has(w));
-  
-  // Check which words actually appear in the transcript
-  words.forEach(word => {
-    if (lowerTranscript.includes(word)) {
-      keywords.push(word);
-    }
-  });
-  
-  // Try to find 2-word phrases from the title/description in the transcript
-  const titleWords = text.split(/\s+/);
-  for (let i = 0; i < titleWords.length - 1; i++) {
-    const phrase = `${titleWords[i]} ${titleWords[i + 1]}`.toLowerCase().replace(/[^a-z0-9\s'-]/gi, '');
-    if (phrase.length > 5 && lowerTranscript.includes(phrase)) {
-      keywords.push(phrase);
-    }
-  }
-  
-  // Return unique keywords
-  return [...new Set(keywords)].slice(0, 8);
+function formatTranscriptWithTimestamps(segments: TranscriptSegment[]): string {
+  return segments.map(s => {
+    const startTime = formatTime(s.start);
+    const endTime = formatTime(s.start + s.duration);
+    return `[${startTime}-${endTime}] ${s.text}`;
+  }).join('\n');
 }
 
-interface SegmentGroup {
-  start: number;
-  end: number;
-  texts: string[];
+function formatTime(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-function findRelevantSegments(
+function findExactQuotes(
   transcript: TranscriptSegment[],
-  topicKeywords: string[]
+  timestampRanges: Array<{ start: string; end: string }>
 ): { start: number; end: number; text: string }[] {
-  const segments: { start: number; end: number; text: string }[] = [];
+  const quotes: { start: number; end: number; text: string }[] = [];
   
-  // Process keywords for better matching - preserve apostrophes and hyphens
-  const processedKeywords = topicKeywords.map(k => {
-    // Keep apostrophes and hyphens, but remove other special characters
-    // Convert to lowercase for case-insensitive matching
-    return k.toLowerCase().trim().replace(/[^a-z0-9\s'-]/gi, '');
-  }).filter(k => k.length > 1); // Allow shorter keywords (>1 instead of >2)
-  
-  // Create variations of keywords for better matching
-  const keywordVariations: string[] = [];
-  processedKeywords.forEach(keyword => {
-    keywordVariations.push(keyword);
-    // Add version without apostrophes as a fallback
-    if (keyword.includes("'")) {
-      keywordVariations.push(keyword.replace(/'/g, ''));
+  for (const range of timestampRanges) {
+    // Parse timestamp strings (format: "MM:SS")
+    const [startMin, startSec] = range.start.split(':').map(Number);
+    const [endMin, endSec] = range.end.split(':').map(Number);
+    const startTime = startMin * 60 + startSec;
+    const endTime = endMin * 60 + endSec;
+    
+    // Find all segments within this time range
+    const relevantSegments: string[] = [];
+    let actualStart = startTime;
+    let actualEnd = endTime;
+    let foundAny = false;
+    
+    for (const seg of transcript) {
+      const segEnd = seg.start + seg.duration;
+      
+      // Check if segment overlaps with our time range
+      if (seg.start <= endTime && segEnd >= startTime) {
+        relevantSegments.push(seg.text);
+        if (!foundAny) {
+          actualStart = Math.max(seg.start, startTime);
+          foundAny = true;
+        }
+        actualEnd = Math.min(segEnd, endTime);
+      }
     }
-    // Add individual words from multi-word keywords
-    const words = keyword.split(/\s+/);
-    if (words.length > 1 && words.length <= 3) {
-      words.forEach(word => {
-        if (word.length > 2) keywordVariations.push(word);
+    
+    if (relevantSegments.length > 0) {
+      quotes.push({
+        start: actualStart,
+        end: actualEnd,
+        text: relevantSegments.join(' ')
       });
     }
-  });
-  
-  console.log('Searching for keywords:', keywordVariations);
-  let matchCount = 0;
-  
-  let currentSegment: SegmentGroup | null = null;
-  
-  for (const seg of transcript) {
-    // Less aggressive text processing - preserve apostrophes and hyphens
-    const lowerText = seg.text.toLowerCase().replace(/[^a-z0-9\s'-]/gi, '');
-    
-    // Check if segment is relevant - match if any keyword variation is found
-    const matchedKeyword = keywordVariations.find(keyword => {
-      // Try exact substring match
-      if (lowerText.includes(keyword)) return true;
-      
-      // Try word boundary match for single words
-      if (!keyword.includes(' ')) {
-        const wordBoundaryRegex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-        if (wordBoundaryRegex.test(lowerText)) return true;
-      }
-      
-      return false;
-    });
-    
-    const isRelevant = !!matchedKeyword;
-    
-    if (isRelevant) {
-      matchCount++;
-      if (currentSegment && seg.start - currentSegment.end < 30) {
-        // Extend current segment if close enough (within 30 seconds)
-        currentSegment.end = seg.start + seg.duration;
-        currentSegment.texts.push(seg.text);
-      } else {
-        // Save previous segment if exists
-        if (currentSegment) {
-          segments.push({
-            start: currentSegment.start,
-            end: currentSegment.end,
-            text: currentSegment.texts.join(' ')
-          });
-        }
-        // Start new segment
-        currentSegment = {
-          start: seg.start,
-          end: seg.start + seg.duration,
-          texts: [seg.text]
-        };
-      }
-    }
   }
   
-  // Save last segment if exists
-  if (currentSegment) {
-    segments.push({
-      start: currentSegment.start,
-      end: currentSegment.end,
-      text: currentSegment.texts.join(' ')
-    });
-  }
-  
-  console.log(`Matched ${matchCount} transcript segments, grouped into ${segments.length} topic segments`);
-  
-  return segments;
+  return quotes;
 }
 
 export async function POST(request: Request) {
@@ -167,49 +84,69 @@ export async function POST(request: Request) {
     console.log('Analyzing transcript sample (first 200 chars):', fullText.substring(0, 200) + '...');
     console.log('Total transcript length:', fullText.length, 'characters');
     
-    const systemPrompt = `You are an expert content strategist analyzing video transcripts to create distinct "highlight reels" or topics. Your goal is to identify the most valuable insights from the ACTUAL VIDEO CONTENT provided.
+    const systemPrompt = `## Role and Goal
+You are an expert content strategist. Your goal is to analyze the provided video transcript to create 5 distinct "highlight reels." Each reel will focus on a single, powerful theme, supported by direct quotes from the speaker. The final output should allow a busy, intelligent viewer to absorb the video's most valuable insights in minutes.
 
+## Target Audience
+Your audience is forward-thinking and curious. They have a short attention span and are looking for contrarian insights, actionable mental models, and bold predictions, not generic advice.
+
+## Your Task
+
+### Step 1: Identify 5 Core Themes
+Analyze the entire transcript to identify 5 key themes that are most valuable and thought-provoking.
+
+**Theme/Title Criteria:**
+- **Insightful:** It must challenge a common assumption or reframe a known concept.
+- **Specific:** Avoid vague titles.
+- **Format:** Must be a complete sentence or a question.
+- **Concise:** Maximum of 10 words.
+- **Synthesized:** The theme should connect ideas from different parts of the talk, not just one section.
+
+### Step 2: Select Supporting Passages
+For each theme, select 1 to 5 direct passages from the transcript that powerfully illustrate the core idea.
+
+**Passage Selection Criteria:**
+- **Direct Quotes Only:** Use complete, unedited sentences from the transcript. Do NOT summarize, paraphrase, or use ellipses.
+- **Self-Contained:** IMPORTANT: Each passage must be understandable on its own without surrounding context. Include surrounding context until quotes are full sentences.
+- **High-Signal:** Choose passages that contain memorable stories, bold predictions, or contrarian thinking.
+- **No Fluff:** Avoid introductions, transition phrases, or generic commentary.
+- **Avoid Redundancy:** Within a single reel, ensure each selected passage offers a unique angle on the theme.
+- **Chronological:** Within each reel, list the passages in the order they appear in the video.
+
+## Quality Control
+- **Distinct Themes:** Each highlight reel's title must represent a clearly distinct theme.
+- **Value Over Quantity:** If you can only identify 3-4 high-quality themes, deliver that number.
+
+## Output Format
 You must return a JSON array with this EXACT structure:
 [
   {
-    "title": "A complete sentence or question (max 10 words)",
+    "title": "Complete sentence or question (max 10 words)",
     "description": "1-2 sentences explaining what this theme covers and why it's valuable",
-    "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5", "keyword6"]
+    "quotes": [
+      {
+        "timestamp": "[MM:SS-MM:SS]",
+        "text": "Exact transcript of passage as it appears"
+      }
+    ]
   }
-]
+]`;
 
-CRITICAL KEYWORD REQUIREMENTS:
-- Keywords MUST be EXACT words or phrases that appear VERBATIM in the transcript below
-- Copy keywords directly from the transcript text - do not paraphrase or summarize
-- Include 6-10 keywords per topic for better matching
-- Mix both single words and short phrases (2-3 words max)
-- Choose distinctive, topic-specific terms that appear in the transcript
-- Keywords should be lowercase and exactly as they appear in the transcript
-- DO NOT invent keywords that don't exist in the transcript
+    const transcriptWithTimestamps = formatTranscriptWithTimestamps(transcript);
+    
+    const userPrompt = `Analyze this video transcript and create highlight reels that capture the most valuable insights.
 
-VALIDATION REQUIREMENT:
-Before returning any topic, verify that ALL keywords you've chosen actually exist in the transcript text provided. If a keyword doesn't appear in the transcript, do not use it.
+**Video Transcript (with timestamps):**
+${transcriptWithTimestamps.substring(0, 15000)}
 
-Topic requirements:
-- Topics MUST be about what's actually discussed in the transcript
-- Each title must relate to the actual content of the video
-- Do not generate generic topics - they must be specific to this video's content`;
+IMPORTANT INSTRUCTIONS:
+1. Each quote MUST be taken VERBATIM from the transcript above
+2. Use the exact timestamps shown in brackets [MM:SS-MM:SS]
+3. Ensure each quote is self-contained and understandable without context
+4. Focus on contrarian insights, actionable takeaways, and memorable moments
+5. Deliver 3-5 high-quality themes (quality over quantity)
 
-    const userPrompt = `Analyze this SPECIFIC video transcript and identify 4-6 core themes that are actually discussed in the video. 
-
-IMPORTANT: Base your topics ONLY on what is actually said in this transcript. Do not make up topics about subjects that aren't discussed.
-
-For keywords:
-1. Read through the transcript text below carefully
-2. Copy EXACT words and phrases that appear in the text (lowercase)
-3. Verify each keyword exists in the transcript before including it
-4. Choose terms that relate to each theme
-5. Include both single words AND 2-3 word phrases that appear in the transcript
-
-Transcript to analyze:
-${fullText.substring(0, 10000)} // Limit to prevent token overflow
-
-Return themes that are ACTUALLY discussed in the above transcript as a JSON array. Remember: ALL keywords must exist VERBATIM in the transcript above (case-insensitive matching is fine).`;
+Return the highlight reels as a JSON array following the exact format specified.`;
 
     const model = genAI.getGenerativeModel({ 
       model: "gemini-2.5-flash",
@@ -245,58 +182,44 @@ ${userPrompt}`;
       throw new Error('Invalid response format from Gemini - not an array');
     }
     
-    console.log(`Found ${topicsArray.length} topics from Gemini`);
+    console.log(`Found ${topicsArray.length} highlight reels from Gemini`);
     
     // Validate that topics have required fields
-    topicsArray.forEach((topic, index) => {
-      console.log(`Topic ${index + 1} structure:`, {
-        hasTitle: !!topic.title,
-        hasDescription: !!topic.description,
-        hasKeywords: !!topic.keywords,
-        keywordCount: topic.keywords ? topic.keywords.length : 0,
-        keywords: topic.keywords || []
+    topicsArray.forEach((topic: any, index: number) => {
+      console.log(`Highlight Reel ${index + 1}:`, {
+        title: topic.title,
+        hasQuotes: !!topic.quotes,
+        quoteCount: topic.quotes ? topic.quotes.length : 0
       });
     });
 
-    // Generate topics with segments
-    const fullTranscriptText = combineTranscript(transcript);
-    const topicsWithSegments = topicsArray.map((topic, index) => {
-      console.log(`\nProcessing Topic ${index + 1}: "${topic.title}"`);
+    // Generate topics with segments from quotes
+    const topicsWithSegments = topicsArray.map((topic: any, index: number) => {
+      console.log(`\nProcessing Highlight Reel ${index + 1}: "${topic.title}"`);
       
-      // Use provided keywords or extract fallback keywords
-      let keywords = topic.keywords || [];
+      // Extract timestamp ranges from quotes
+      const timestampRanges: Array<{ start: string; end: string }> = [];
       
-      if (!keywords || keywords.length === 0) {
-        console.log(`No keywords from Gemini, extracting fallback keywords...`);
-        const combinedText = `${topic.title} ${topic.description}`;
-        keywords = extractKeywordsFromText(combinedText, fullTranscriptText);
-        console.log(`Extracted fallback keywords:`, keywords);
-      } else {
-        console.log(`Keywords from Gemini:`, keywords);
+      if (topic.quotes && Array.isArray(topic.quotes)) {
+        topic.quotes.forEach((quote: any) => {
+          // Parse timestamp format "[MM:SS-MM:SS]" or "MM:SS-MM:SS"
+          const timestampMatch = quote.timestamp?.match(/\[?(\d{1,2}:\d{2})-(\d{1,2}:\d{2})\]?/);
+          if (timestampMatch) {
+            timestampRanges.push({
+              start: timestampMatch[1],
+              end: timestampMatch[2]
+            });
+          }
+        });
       }
       
-      // Ensure we have at least some keywords to work with
-      if (keywords.length === 0) {
-        console.warn(`WARNING: Could not extract any keywords for topic "${topic.title}"`);
-        // As a last resort, use individual words from the title
-        keywords = topic.title.toLowerCase().split(/\s+/)
-          .filter(w => w.length > 3)
-          .slice(0, 5);
-        console.log(`Using title words as last resort:`, keywords);
-      }
+      console.log(`Found ${timestampRanges.length} quotes with timestamps`);
       
-      const segments = findRelevantSegments(transcript, keywords);
+      // Find the exact segments for these timestamps
+      const segments = findExactQuotes(transcript, timestampRanges);
       const totalDuration = segments.reduce((sum, seg) => sum + (seg.end - seg.start), 0);
       
-      console.log(`Result: Found ${segments.length} segments covering ${Math.round(totalDuration)} seconds`);
-      if (segments.length === 0) {
-        console.log(`WARNING: No segments matched for topic "${topic.title}"`);
-        console.log(`Keywords that failed to match:`, keywords);
-        // Log a sample of the transcript for debugging
-        if (transcript.length > 0) {
-          console.log(`Sample transcript segment: "${transcript[0].text.substring(0, 100)}..."`);
-        }
-      }
+      console.log(`Result: Found ${segments.length} quote segments covering ${Math.round(totalDuration)} seconds`);
       
       return {
         id: `topic-${index}`,
@@ -304,21 +227,22 @@ ${userPrompt}`;
         description: topic.description,
         duration: Math.round(totalDuration),
         segments: segments,
-        keywords: keywords // Include keywords for debugging
+        quotes: topic.quotes // Store original quotes for display
       };
     });
     
     // Keep all topics, even those without segments (they can still be displayed)
     const topics = topicsWithSegments.length > 0 ? topicsWithSegments : 
-      topicsArray.map((topic, index) => ({
+      topicsArray.map((topic: any, index: number) => ({
         id: `topic-${index}`,
         title: topic.title,
         description: topic.description,
         duration: 0,
-        segments: []
+        segments: [],
+        quotes: topic.quotes || []
       }));
     
-    console.log(`Total topics: ${topics.length} (${topicsWithSegments.filter(t => t.segments.length > 0).length} with segments)`)
+    console.log(`Total highlight reels: ${topics.length} (${topicsWithSegments.filter((t: any) => t.segments.length > 0).length} with segments)`)
 
     return NextResponse.json({ topics });
   } catch (error) {

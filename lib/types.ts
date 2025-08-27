@@ -15,6 +15,10 @@ export interface Topic {
     text: string;
   }[];
   keywords?: string[]; // Optional for backward compatibility
+  quotes?: {
+    timestamp: string;
+    text: string;
+  }[];
 }
 
 export interface VideoData {
