@@ -14,6 +14,7 @@ export interface Topic {
     end: number;
     text: string;
   }[];
+  keywords?: string[]; // Optional for backward compatibility
 }
 
 export interface VideoData {

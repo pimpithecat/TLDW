@@ -33,8 +33,17 @@ export function TopicCard({ topic, isSelected, onClick }: TopicCardProps) {
       <p className="text-gray-600 text-sm">
         {topic.description}
       </p>
-      <div className="mt-3 text-xs text-gray-500">
-        {topic.segments.length} segment{topic.segments.length !== 1 ? 's' : ''} found
+      <div className="mt-3 space-y-1">
+        <div className="text-xs text-gray-500">
+          {topic.segments.length} segment{topic.segments.length !== 1 ? 's' : ''} found
+        </div>
+        {/* Show keywords for debugging */}
+        {topic.keywords && topic.keywords.length > 0 && (
+          <div className="text-xs text-gray-400">
+            <span className="font-medium">Keywords:</span> {topic.keywords.slice(0, 5).join(', ')}
+            {topic.keywords.length > 5 && ` (+${topic.keywords.length - 5} more)`}
+          </div>
+        )}
       </div>
     </button>
   );

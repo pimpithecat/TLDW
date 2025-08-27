@@ -61,6 +61,20 @@ export default function Home() {
       }
       
       const { topics: generatedTopics } = await topicsRes.json();
+      console.log("Generated topics count:", generatedTopics?.length || 0);
+      console.log("Full topic objects:", JSON.stringify(generatedTopics, null, 2));
+      
+      // Log each topic's structure for debugging
+      generatedTopics?.forEach((topic: any, index: number) => {
+        console.log(`Topic ${index + 1}:`, {
+          title: topic.title,
+          segmentCount: topic.segments?.length || 0,
+          keywordCount: topic.keywords?.length || 0,
+          keywords: topic.keywords || [],
+          duration: topic.duration
+        });
+      });
+      
       setTopics(generatedTopics);
       
     } catch (err) {
