@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { TranscriptSegment, Topic } from '@/lib/types';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 function combineTranscript(segments: TranscriptSegment[]): string {
   return segments.map(s => s.text).join(' ');
@@ -102,26 +100,30 @@ ${fullText.substring(0, 10000)} // Limit to prevent token overflow
 
 Generate topics in JSON format.`;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      temperature: 0.7,
-      response_format: { type: "json_object" }
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-2.5-flash",
+      generationConfig: {
+        responseMimeType: "application/json",
+        temperature: 0.7,
+      }
     });
 
-    const response = completion.choices[0].message.content;
+    const prompt = `${systemPrompt}
+
+${userPrompt}`;
+
+    const result = await model.generateContent(prompt);
+    const response = result.response.text();
+    
     if (!response) {
-      throw new Error('No response from OpenAI');
+      throw new Error('No response from Gemini');
     }
 
     const parsedResponse = JSON.parse(response);
     const topicsArray = parsedResponse.topics || parsedResponse;
     
     if (!Array.isArray(topicsArray)) {
-      throw new Error('Invalid response format from OpenAI');
+      throw new Error('Invalid response format from Gemini');
     }
 
     // Generate topics with segments

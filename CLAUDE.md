@@ -24,15 +24,15 @@ npm start            # Start production server
 ### Core Application Flow
 1. User inputs YouTube URL → `components/url-input.tsx`
 2. Fetch transcript → `app/api/transcript/route.ts` (uses youtube-transcript library)
-3. Generate AI topics → `app/api/generate-topics/route.ts` (OpenAI GPT-4)
+3. Generate AI topics → `app/api/generate-topics/route.ts` (Google Gemini)
 4. Display topics → `components/topic-card.tsx`
 5. Show highlighted transcript → `components/transcript-viewer.tsx`
 6. Control video playback → `components/youtube-player.tsx`
 
 ### API Integration
-- **OpenAI API**: Topic generation using GPT-4o-mini with custom prompts for cross-transcript topic identification
+- **Google Gemini API**: Topic generation using Gemini 2.5 Flash with custom prompts for cross-transcript topic identification
 - **YouTube**: Transcript fetching via youtube-transcript library, video playback via YouTube IFrame API
-- **Environment**: Requires `OPENAI_API_KEY` in `.env.local`
+- **Environment**: Requires `GEMINI_API_KEY` in `.env.local`
 
 ### Key Technical Decisions
 - **Cross-Transcript Topics**: Unlike chronological chapters, topics identify thematically related content scattered across multiple video segments

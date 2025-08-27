@@ -14,7 +14,7 @@ Smart video navigation that transforms long YouTube videos into topic-driven lea
 ### Prerequisites
 
 - Node.js 18+ installed
-- OpenAI API key for topic generation
+- Google Gemini API key for topic generation
 
 ### Installation
 
@@ -30,9 +30,9 @@ npm install
 ```
 
 3. Set up environment variables:
-Create a `.env.local` file in the root directory and add your OpenAI API key:
+Create a `.env.local` file in the root directory and add your Gemini API key:
 ```
-OPENAI_API_KEY=your_openai_api_key_here
+GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
 4. Run the development server:
@@ -55,7 +55,7 @@ npm run dev
 
 - **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS
 - **Backend**: Next.js API Routes
-- **AI**: OpenAI GPT-4 for topic generation
+- **AI**: Google Gemini 2.5 Flash for topic generation
 - **Video**: YouTube IFrame API for player integration
 - **Transcript**: youtube-transcript library for fetching video transcripts
 
@@ -93,7 +93,7 @@ The app is ready to deploy on Vercel:
 
 1. Push your code to GitHub
 2. Import the project in Vercel
-3. Add your `OPENAI_API_KEY` in Vercel environment variables
+3. Add your `GEMINI_API_KEY` in Vercel environment variables
 4. Deploy!
 
 ## License
