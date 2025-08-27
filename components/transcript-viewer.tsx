@@ -19,11 +19,20 @@ export function TranscriptViewer({
   const highlightedRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {
+    // Clear the refs array when topic changes
+    highlightedRefs.current = [];
+  }, [selectedTopic]);
+
+  useEffect(() => {
+    // Scroll to first highlighted segment after refs are set
     if (selectedTopic && highlightedRefs.current[0]) {
-      highlightedRefs.current[0].scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
+      // Small delay to ensure refs are properly set
+      setTimeout(() => {
+        highlightedRefs.current[0]?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }, 100);
     }
   }, [selectedTopic]);
 

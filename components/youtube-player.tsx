@@ -21,6 +21,7 @@ export function YouTubePlayer({
   const playerRef = useRef<any>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentSegmentIndex, setCurrentSegmentIndex] = useState(0);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Load YouTube IFrame API
@@ -51,6 +52,9 @@ export function YouTubePlayer({
       if (playerRef.current) {
         playerRef.current.destroy();
       }
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
     };
   }, [videoId]);
 
@@ -60,24 +64,45 @@ export function YouTubePlayer({
     }
   }, [seekToTime]);
 
-  const playSegments = () => {
+  // Reset segment index when topic changes
+  useEffect(() => {
+    setCurrentSegmentIndex(0);
+    // Clear any existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, [selectedTopic]);
+
+  const playSegments = (segmentIndex?: number) => {
     if (!selectedTopic || !playerRef.current) return;
     
-    const segment = selectedTopic.segments[currentSegmentIndex];
+    // Clear any existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    
+    const index = segmentIndex ?? currentSegmentIndex;
+    const segment = selectedTopic.segments[index];
+    
     if (segment) {
       playerRef.current.seekTo(segment.start, true);
       playerRef.current.playVideo();
       
       // Set up interval to check when to move to next segment
-      const checkInterval = setInterval(() => {
+      intervalRef.current = setInterval(() => {
         if (playerRef.current?.getCurrentTime) {
           const currentTime = playerRef.current.getCurrentTime();
           if (currentTime >= segment.end) {
-            clearInterval(checkInterval);
-            const nextIndex = currentSegmentIndex + 1;
+            if (intervalRef.current) {
+              clearInterval(intervalRef.current);
+              intervalRef.current = null;
+            }
+            const nextIndex = index + 1;
             if (nextIndex < selectedTopic.segments.length) {
               setCurrentSegmentIndex(nextIndex);
-              playSegments();
+              playSegments(nextIndex);
             } else {
               playerRef.current.pauseVideo();
               setCurrentSegmentIndex(0);
@@ -118,7 +143,7 @@ export function YouTubePlayer({
           
           <div className="flex gap-2">
             <button
-              onClick={playSegments}
+              onClick={() => playSegments(0)}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
             >
               {isPlaying ? (
