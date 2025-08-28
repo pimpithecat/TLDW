@@ -147,6 +147,39 @@ function findExactQuotes(
   return mergedQuotes;
 }
 
+function sanitizeJsonString(str: string): string {
+  try {
+    // First, try to extract just the JSON array/object
+    const jsonMatch = str.match(/\[.*\]|\{.*\}/s);
+    if (!jsonMatch) return str;
+    
+    let cleaned = jsonMatch[0];
+    
+    // Fix common JSON issues
+    // 1. Replace unescaped quotes within text fields
+    cleaned = cleaned.replace(/("text"\s*:\s*")([^"]*)(")/g, (match, p1, p2, p3) => {
+      // Escape any unescaped quotes within the text content
+      const escapedContent = p2.replace(/(?<!\\)"/g, '\\"');
+      return p1 + escapedContent + p3;
+    });
+    
+    // 2. Remove control characters that break JSON
+    cleaned = cleaned.replace(/[\x00-\x1F\x7F]/g, ' ');
+    
+    // 3. Fix incomplete JSON by ensuring proper closing
+    const openBrackets = (cleaned.match(/\[/g) || []).length;
+    const closeBrackets = (cleaned.match(/\]/g) || []).length;
+    if (openBrackets > closeBrackets) {
+      cleaned += ']'.repeat(openBrackets - closeBrackets);
+    }
+    
+    return cleaned;
+  } catch (e) {
+    console.error('Error in sanitizeJsonString:', e);
+    return str;
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const { transcript } = await request.json();
@@ -237,10 +270,58 @@ ${transcriptWithTimestamps}
     });
 
     const result = await model.generateContent(prompt);
-    const response = result.response.text();
     
-    if (!response) {
-      throw new Error('No response from Gemini');
+    // Check if the response was blocked
+    if (!result.response) {
+      console.error('No response object from Gemini');
+      throw new Error('No response from AI model');
+    }
+    
+    // Check for safety blocks or other issues
+    if (result.response.promptFeedback?.blockReason) {
+      console.error('Response blocked:', result.response.promptFeedback);
+      // Return a simple fallback
+      const fallbackTopics = [{
+        title: "Video Overview",
+        description: "Complete video content",
+        quotes: [{
+          timestamp: "[00:00-00:30]",
+          text: fullText.substring(0, 200)
+        }]
+      }];
+      return NextResponse.json({ topics: processHighlightReels(fallbackTopics, transcript) });
+    }
+    
+    let response: string;
+    try {
+      response = result.response.text();
+    } catch (textError) {
+      console.error('Failed to get text from response:', textError);
+      console.log('Full response object:', JSON.stringify(result.response, null, 2));
+      // Return a simple fallback
+      const fallbackTopics = [{
+        title: "Video Overview",
+        description: "Complete video content",
+        quotes: [{
+          timestamp: "[00:00-00:30]",
+          text: fullText.substring(0, 200)
+        }]
+      }];
+      return NextResponse.json({ topics: processHighlightReels(fallbackTopics, transcript) });
+    }
+    
+    if (!response || response.trim() === '') {
+      console.error('Empty response from Gemini');
+      // Return a simple fallback
+      const fallbackTopics = [{
+        title: "Video Overview",
+        description: "Complete video content",
+        quotes: [{
+          timestamp: "[00:00-00:30]",
+          text: fullText.substring(0, 200)
+        }]
+      }];
+      return NextResponse.json({ topics: processHighlightReels(fallbackTopics, transcript) });
     }
 
     console.log('Raw Gemini response:', response);
@@ -250,35 +331,47 @@ ${transcriptWithTimestamps}
       parsedResponse = JSON.parse(response);
     } catch (parseError) {
       console.error('Failed to parse Gemini response:', parseError);
-      console.log('Attempting to extract JSON from response...');
+      console.log('Attempting to sanitize and extract JSON from response...');
       
-      // Try to extract JSON array from the response
-      const jsonMatch = response.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        try {
-          parsedResponse = JSON.parse(jsonMatch[0]);
-        } catch (e) {
-          console.error('Failed to extract JSON:', e);
+      // Try to sanitize and parse the response
+      const sanitized = sanitizeJsonString(response);
+      
+      try {
+        parsedResponse = JSON.parse(sanitized);
+        console.log('Successfully parsed sanitized JSON');
+      } catch (e) {
+        console.error('Failed to parse sanitized JSON:', e);
+        
+        // Try one more time with a more aggressive extraction
+        const jsonArrayMatch = response.match(/\[([^\[\]]*(?:\[[^\[\]]*\][^\[\]]*)*)*\]/s);
+        if (jsonArrayMatch) {
+          try {
+            const extracted = sanitizeJsonString(jsonArrayMatch[0]);
+            parsedResponse = JSON.parse(extracted);
+            console.log('Successfully parsed extracted JSON');
+          } catch (e2) {
+            console.error('Failed to parse extracted JSON:', e2);
+            // Create a fallback response
+            parsedResponse = [{
+              title: "Full Video",
+              description: "Complete video content",
+              quotes: [{
+                timestamp: "[00:00-00:30]",
+                text: fullText.substring(0, 200).replace(/"/g, '\\"')
+              }]
+            }];
+          }
+        } else {
           // Create a fallback response
           parsedResponse = [{
             title: "Full Video",
             description: "Complete video content",
             quotes: [{
               timestamp: "[00:00-00:30]",
-              text: fullText.substring(0, 200)
+              text: fullText.substring(0, 200).replace(/"/g, '\\"')
             }]
           }];
         }
-      } else {
-        // Create a fallback response
-        parsedResponse = [{
-          title: "Full Video",
-          description: "Complete video content",
-          quotes: [{
-            timestamp: "[00:00-00:30]",
-            text: fullText.substring(0, 200)
-          }]
-        }];
       }
     }
     
