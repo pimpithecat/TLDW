@@ -66,7 +66,6 @@ export function TranscriptViewer({
   const scrollToElement = useCallback((element: HTMLElement | null, smooth = true) => {
     if (!element || !scrollViewportRef.current) return;
     
-    lastUserScrollTime.current = Date.now();
     const viewport = scrollViewportRef.current;
     const elementRect = element.getBoundingClientRect();
     const viewportRect = viewport.getBoundingClientRect();
@@ -76,6 +75,9 @@ export function TranscriptViewer({
     
     // Center the element in the viewport with improved calculation
     const scrollPosition = relativeTop - (viewportRect.height / 2) + (elementRect.height / 2);
+    
+    // Mark this as programmatic scroll
+    lastUserScrollTime.current = Date.now() + 500; // Add buffer to prevent detecting as user scroll
     
     // Use requestAnimationFrame for smoother scrolling
     requestAnimationFrame(() => {
@@ -129,6 +131,17 @@ export function TranscriptViewer({
       }
     }
   }, [currentTime, autoScroll, scrollToElement]);
+
+  // Add scroll event listener
+  useEffect(() => {
+    const viewport = scrollViewportRef.current;
+    if (viewport) {
+      viewport.addEventListener('scroll', handleUserScroll);
+      return () => {
+        viewport.removeEventListener('scroll', handleUserScroll);
+      };
+    }
+  }, [handleUserScroll]);
 
   const getSegmentTopic = (segment: TranscriptSegment): { topic: Topic; index: number } | null => {
     for (let i = 0; i < topics.length; i++) {
@@ -233,14 +246,12 @@ export function TranscriptViewer({
         <div 
           className="p-4 space-y-1" 
           ref={(el) => {
-            // Get the viewport element from ScrollArea
-            if (el?.parentElement) {
-              scrollViewportRef.current = el.parentElement;
-              // Add scroll listener
-              el.parentElement.addEventListener('scroll', handleUserScroll);
-              return () => {
-                el.parentElement?.removeEventListener('scroll', handleUserScroll);
-              };
+            // Get the viewport element from ScrollArea - it's the data-radix-scroll-area-viewport element
+            if (el) {
+              const viewport = el.closest('[data-radix-scroll-area-viewport]');
+              if (viewport && viewport instanceof HTMLElement) {
+                scrollViewportRef.current = viewport;
+              }
             }
           }}
         >
