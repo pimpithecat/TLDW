@@ -163,8 +163,7 @@ For each theme, select 1 to 5 direct passages from the transcript that powerfull
 You must return a JSON array with this EXACT structure:
 [
   {
-    "title": "Complete sentence or question (max 10 words)",
-    "description": "1-2 sentences explaining what this theme covers and why it's valuable",
+    "title": "Complete sentence or question",
     "quotes": [
       {
         "timestamp": "[MM:SS-MM:SS]",
@@ -257,7 +256,7 @@ ${transcriptWithTimestamps}
       return {
         id: `topic-${index}`,
         title: topic.title,
-        description: topic.description,
+        description: topic.description || '',
         duration: Math.round(totalDuration),
         segments: segments,
         quotes: topic.quotes // Store original quotes for display
@@ -269,7 +268,7 @@ ${transcriptWithTimestamps}
       topicsArray.map((topic: ParsedTopic, index: number) => ({
         id: `topic-${index}`,
         title: topic.title,
-        description: topic.description,
+        description: topic.description || '',
         duration: 0,
         segments: [],
         quotes: topic.quotes || []
