@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { UrlInput } from "@/components/url-input";
 import { TopicCard } from "@/components/topic-card";
 import { TranscriptViewer } from "@/components/transcript-viewer";
 import { YouTubePlayer } from "@/components/youtube-player";
+import { AIChat } from "@/components/ai-chat";
 import { Topic, TranscriptSegment } from "@/lib/types";
 import { extractVideoId } from "@/lib/utils";
 import { Loader2, Video, FileText, Sparkles } from "lucide-react";
@@ -123,7 +124,14 @@ export default function Home() {
   };
 
   const handleTimestampClick = (seconds: number) => {
+    // Prevent rapid sequential clicks and state updates
+    if (seekToTime === seconds) return;
+    
     setSeekToTime(seconds);
+    // Use setTimeout instead of nested requestAnimationFrame to avoid rapid state updates
+    setTimeout(() => {
+      setSeekToTime(undefined);
+    }, 100);
   };
 
   const handleTimeUpdate = (seconds: number) => {
@@ -185,35 +193,47 @@ export default function Home() {
         )}
 
         {videoId && topics.length > 0 && !isLoading && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column - Video (2/3 width) */}
-            <div className="lg:col-span-2">
-              <div className="sticky top-4 h-[calc(100vh-6rem)]">
-                <YouTubePlayer
-                  videoId={videoId}
-                  selectedTopic={selectedTopic}
-                  seekToTime={seekToTime}
-                  topics={topics}
-                  onTopicSelect={setSelectedTopic}
-                  onTimeUpdate={handleTimeUpdate}
-                  transcript={transcript}
-                />
+          <>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+              {/* Left Column - Video (2/3 width) */}
+              <div className="lg:col-span-2">
+                <div className="sticky top-4 h-[calc(100vh-6rem)]">
+                  <YouTubePlayer
+                    videoId={videoId}
+                    selectedTopic={selectedTopic}
+                    seekToTime={seekToTime}
+                    topics={topics}
+                    onTopicSelect={setSelectedTopic}
+                    onTimeUpdate={handleTimeUpdate}
+                    transcript={transcript}
+                  />
+                </div>
+              </div>
+
+              {/* Right Column - Transcript (1/3 width) */}
+              <div className="lg:col-span-1">
+                <div className="sticky top-4 h-[calc(100vh-6rem)] overflow-hidden">
+                  <TranscriptViewer
+                    transcript={transcript}
+                    selectedTopic={selectedTopic}
+                    onTimestampClick={handleTimestampClick}
+                    currentTime={currentTime}
+                    topics={topics}
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Right Column - Transcript (1/3 width) */}
-            <div className="lg:col-span-1">
-              <div className="sticky top-4 h-[calc(100vh-6rem)] overflow-hidden">
-                <TranscriptViewer
-                  transcript={transcript}
-                  selectedTopic={selectedTopic}
-                  onTimestampClick={handleTimestampClick}
-                  currentTime={currentTime}
-                  topics={topics}
-                />
-              </div>
+            {/* AI Chat Section - Full width below */}
+            <div className="max-w-4xl mx-auto">
+              <AIChat
+                transcript={transcript}
+                topics={topics}
+                videoId={videoId}
+                onTimestampClick={handleTimestampClick}
+              />
             </div>
-          </div>
+          </>
         )}
 
         {!isLoading && !error && topics.length === 0 && !videoId && (

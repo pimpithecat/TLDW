@@ -36,6 +36,8 @@ export function YouTubePlayer({
   const [videoDuration, setVideoDuration] = useState(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isSeekingRef = useRef(false);
+  const lastSeekTimeRef = useRef<number | undefined>();
 
   useEffect(() => {
     // Load YouTube IFrame API
@@ -68,6 +70,9 @@ export function YouTubePlayer({
                 clearInterval(timeUpdateIntervalRef.current);
               }
               timeUpdateIntervalRef.current = setInterval(() => {
+                // Skip updates while seeking to prevent feedback loops
+                if (isSeekingRef.current) return;
+                
                 if (playerRef.current?.getCurrentTime) {
                   const time = playerRef.current.getCurrentTime();
                   setCurrentTime(time);
@@ -101,13 +106,24 @@ export function YouTubePlayer({
 
   useEffect(() => {
     if (seekToTime !== undefined && playerRef.current?.seekTo) {
+      // Prevent seeking to the same position repeatedly
+      if (lastSeekTimeRef.current === seekToTime) return;
+      
+      lastSeekTimeRef.current = seekToTime;
+      isSeekingRef.current = true;
+      
       playerRef.current.seekTo(seekToTime, true);
-      // Immediately update time when seeking
-      if (playerRef.current?.getCurrentTime) {
-        const time = playerRef.current.getCurrentTime();
-        setCurrentTime(time);
-        onTimeUpdate?.(time);
-      }
+      
+      // Delay time update to avoid feedback loop
+      setTimeout(() => {
+        if (playerRef.current?.getCurrentTime) {
+          const time = playerRef.current.getCurrentTime();
+          setCurrentTime(time);
+          onTimeUpdate?.(time);
+        }
+        isSeekingRef.current = false;
+        lastSeekTimeRef.current = undefined;
+      }, 200);
     }
   }, [seekToTime, onTimeUpdate]);
 

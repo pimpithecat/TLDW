@@ -27,3 +27,18 @@ export interface VideoData {
   transcript: TranscriptSegment[];
   topics: Topic[];
 }
+
+export interface Citation {
+  timestamp: number;
+  endTime?: number;
+  text: string;
+  context?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  citations?: Citation[];
+  timestamp: Date;
+}
