@@ -189,8 +189,8 @@ export function YouTubePlayer({
 
   return (
     <div className="w-full space-y-4">
-      <Card className="overflow-hidden">
-        <div className="relative pb-[56.25%] h-0">
+      <Card className="overflow-hidden shadow-sm">
+        <div className="relative pb-[56.25%] h-0 bg-black rounded-t-lg overflow-hidden">
           <div
             id="youtube-player"
             className="absolute top-0 left-0 w-full h-full"
@@ -198,7 +198,7 @@ export function YouTubePlayer({
         </div>
       
         {/* Custom control overlay */}
-        <div className="p-4 bg-card border-t">
+        <div className="p-3 bg-background border-t">
           {/* Video progress bar */}
           {videoDuration > 0 && (
             <VideoProgressBar

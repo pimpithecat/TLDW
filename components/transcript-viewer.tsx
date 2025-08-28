@@ -26,6 +26,7 @@ export function TranscriptViewer({
 }: TranscriptViewerProps) {
   const highlightedRefs = useRef<(HTMLDivElement | null)[]>([]);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const scrollViewportRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const [hoveredSegment, setHoveredSegment] = useState<number | null>(null);
   const currentSegmentRef = useRef<HTMLDivElement | null>(null);
@@ -35,14 +36,32 @@ export function TranscriptViewer({
     highlightedRefs.current = [];
   }, [selectedTopic]);
 
+  // Custom scroll function that only scrolls within the container
+  const scrollToElement = (element: HTMLElement | null) => {
+    if (!element || !scrollViewportRef.current) return;
+    
+    const viewport = scrollViewportRef.current;
+    const elementRect = element.getBoundingClientRect();
+    const viewportRect = viewport.getBoundingClientRect();
+    
+    // Calculate the element's position relative to the viewport
+    const relativeTop = elementRect.top - viewportRect.top + viewport.scrollTop;
+    
+    // Center the element in the viewport
+    const scrollPosition = relativeTop - (viewportRect.height / 2) + (elementRect.height / 2);
+    
+    // Smooth scroll to the calculated position
+    viewport.scrollTo({
+      top: Math.max(0, scrollPosition),
+      behavior: 'smooth'
+    });
+  };
+
   // Scroll to first highlighted segment
   useEffect(() => {
     if (selectedTopic && highlightedRefs.current[0] && autoScroll) {
       setTimeout(() => {
-        highlightedRefs.current[0]?.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
+        scrollToElement(highlightedRefs.current[0]);
       }, 100);
     }
   }, [selectedTopic, autoScroll]);
@@ -51,10 +70,7 @@ export function TranscriptViewer({
   useEffect(() => {
     if (autoScroll && currentTime && currentSegmentRef.current) {
       const scrollTimeout = setTimeout(() => {
-        currentSegmentRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
+        scrollToElement(currentSegmentRef.current);
       }, 100);
       return () => clearTimeout(scrollTimeout);
     }
@@ -93,49 +109,58 @@ export function TranscriptViewer({
   );
 
   return (
-    <div className="h-full flex flex-col rounded-lg border bg-card">
-      {/* Controls */}
-      <div className="p-3 border-b flex items-center justify-between bg-muted/50">
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-xs">
-            {transcript.length} segments
-          </Badge>
-          {selectedTopic && (
-            <Badge 
-              className="text-xs"
-              style={{
-                backgroundColor: `hsl(${getTopicHSLColor(topics.indexOf(selectedTopic))} / 0.2)`,
-                color: `hsl(${getTopicHSLColor(topics.indexOf(selectedTopic))})`,
-                borderColor: `hsl(${getTopicHSLColor(topics.indexOf(selectedTopic))})`,
-              }}
-            >
-              Highlighting: {selectedTopic.title}
+    <div className="h-full flex flex-col rounded-lg border bg-card shadow-sm">
+      {/* Header */}
+      <div className="p-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-sm">Transcript</h3>
+            <Badge variant="outline" className="text-xs">
+              {transcript.length} segments
             </Badge>
-          )}
+          </div>
+          <Button
+            variant={autoScroll ? "default" : "outline"}
+            size="sm"
+            onClick={() => setAutoScroll(!autoScroll)}
+            className="text-xs h-7"
+          >
+            {autoScroll ? (
+              <>
+                <Eye className="w-3 h-3 mr-1" />
+                Auto-follow
+              </>
+            ) : (
+              <>
+                <EyeOff className="w-3 h-3 mr-1" />
+                Manual
+              </>
+            )}
+          </Button>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setAutoScroll(!autoScroll)}
-          className="text-xs"
-        >
-          {autoScroll ? (
-            <>
-              <Eye className="w-3 h-3 mr-1" />
-              Auto-follow
-            </>
-          ) : (
-            <>
-              <EyeOff className="w-3 h-3 mr-1" />
-              Manual
-            </>
-          )}
-        </Button>
+        {selectedTopic && (
+          <div className="flex items-center gap-2">
+            <div
+              className="h-2 w-2 rounded-full"
+              style={{
+                backgroundColor: `hsl(${getTopicHSLColor(topics.indexOf(selectedTopic))})`,
+              }}
+            />
+            <span className="text-xs text-muted-foreground truncate">
+              Highlighting: {selectedTopic.title}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Transcript content */}
       <ScrollArea className="flex-1" ref={scrollAreaRef}>
-        <div className="p-4 space-y-1">
+        <div className="p-4 space-y-1" ref={(el) => {
+          // Get the viewport element from ScrollArea
+          if (el?.parentElement) {
+            scrollViewportRef.current = el.parentElement;
+          }
+        }}>
           {transcript.map((segment, index) => {
             const isHighlighted = isSegmentHighlighted(segment);
             const isCurrent = isCurrentSegment(segment);
@@ -179,25 +204,11 @@ export function TranscriptViewer({
                   </div>
                 )}
 
-                {/* Topic badge */}
-                {topicInfo && (
-                  <Badge
-                    variant="outline"
-                    className="absolute right-2 top-2 text-xs opacity-70"
-                    style={{
-                      backgroundColor: `hsl(${getTopicHSLColor(topicInfo.index)} / 0.1)`,
-                      borderColor: `hsl(${getTopicHSLColor(topicInfo.index)})`,
-                      color: `hsl(${getTopicHSLColor(topicInfo.index)})`,
-                    }}
-                  >
-                    {topicInfo.topic.title}
-                  </Badge>
-                )}
 
                 {/* Transcript text */}
                 <p 
                   className={cn(
-                    "text-sm leading-relaxed pr-24",
+                    "text-sm leading-relaxed",
                     isCurrent ? "text-foreground font-medium" : "text-muted-foreground",
                     isHighlighted && "text-foreground"
                   )}

@@ -168,8 +168,8 @@ export default function Home() {
             </div>
             
             {/* Loading skeletons */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 space-y-4">
                 <Skeleton className="h-[320px] w-full rounded-lg" />
                 <div className="space-y-3">
                   <Skeleton className="h-24 w-full rounded-lg" />
@@ -177,26 +177,29 @@ export default function Home() {
                   <Skeleton className="h-24 w-full rounded-lg" />
                 </div>
               </div>
-              <div>
-                <Skeleton className="h-[600px] w-full rounded-lg" />
+              <div className="lg:col-span-1">
+                <Skeleton className="h-[calc(100vh-6rem)] w-full rounded-lg" />
               </div>
             </div>
           </div>
         )}
 
         {videoId && topics.length > 0 && !isLoading && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="space-y-6">
-              {/* Video Player */}
-              <YouTubePlayer
-                videoId={videoId}
-                selectedTopic={selectedTopic}
-                seekToTime={seekToTime}
-                topics={topics}
-                onTopicSelect={setSelectedTopic}
-                onTimeUpdate={handleTimeUpdate}
-                transcript={transcript}
-              />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column - Video and Topics (2/3 width) */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Sticky Video Player */}
+              <div className="sticky top-4 z-10">
+                <YouTubePlayer
+                  videoId={videoId}
+                  selectedTopic={selectedTopic}
+                  seekToTime={seekToTime}
+                  topics={topics}
+                  onTopicSelect={setSelectedTopic}
+                  onTimeUpdate={handleTimeUpdate}
+                  transcript={transcript}
+                />
+              </div>
 
               {/* Topics Section */}
               <div>
@@ -220,13 +223,9 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Transcript Section */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" />
-                <h2 className="text-xl font-semibold">Transcript</h2>
-              </div>
-              <div className="h-[800px] sticky top-8">
+            {/* Right Column - Transcript (1/3 width) */}
+            <div className="lg:col-span-1">
+              <div className="sticky top-4 h-[calc(100vh-6rem)]">
                 <TranscriptViewer
                   transcript={transcript}
                   selectedTopic={selectedTopic}

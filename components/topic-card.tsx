@@ -23,12 +23,12 @@ export function TopicCard({ topic, isSelected, onClick, topicIndex, onPlayTopic 
     <Card 
       className={cn(
         "w-full cursor-pointer transition-all duration-200",
-        "hover:shadow-lg hover:scale-[1.02]",
-        isSelected && "ring-2 shadow-lg scale-[1.02]"
+        "hover:shadow-md hover:-translate-y-0.5",
+        isSelected && "ring-2 shadow-md -translate-y-0.5"
       )}
       style={{
         borderColor: isSelected ? `hsl(${topicColor})` : undefined,
-        backgroundColor: isSelected ? `hsl(${topicColor} / 0.05)` : undefined,
+        backgroundColor: isSelected ? `hsl(${topicColor} / 0.03)` : undefined,
         ringColor: isSelected ? `hsl(${topicColor})` : undefined,
       }}
       onClick={onClick}
