@@ -2,6 +2,15 @@ import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { TranscriptSegment, Topic } from '@/lib/types';
 
+interface ParsedTopic {
+  title: string;
+  description: string;
+  quotes?: Array<{
+    timestamp: string;
+    text: string;
+  }>;
+}
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 function combineTranscript(segments: TranscriptSegment[]): string {
@@ -78,14 +87,47 @@ export async function POST(request: Request) {
       );
     }
 
+    // Fetch video metadata from Supadata API
+    let videoTitle = '';
+    let videoDescription = '';
+    
+    if (videoId) {
+      try {
+        const apiKey = process.env.SUPADATA_API_KEY;
+        if (apiKey) {
+          const metadataResponse = await fetch(`https://api.supadata.ai/v1/youtube/metadata?url=https://www.youtube.com/watch?v=${videoId}`, {
+            method: 'GET',
+            headers: {
+              'x-api-key': apiKey,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (metadataResponse.ok) {
+            const metadata = await metadataResponse.json();
+            videoTitle = metadata.title || '';
+            videoDescription = metadata.description || '';
+            console.log('Fetched video metadata:', { title: videoTitle, descriptionLength: videoDescription.length });
+          } else {
+            console.warn('Failed to fetch video metadata:', metadataResponse.status);
+          }
+        }
+      } catch (metadataError) {
+        console.warn('Error fetching video metadata:', metadataError);
+        // Continue without metadata if it fails
+      }
+    }
+
     const fullText = combineTranscript(transcript);
     
     // Log a sample of the transcript to help with debugging
     console.log('Analyzing transcript sample (first 200 chars):', fullText.substring(0, 200) + '...');
     console.log('Total transcript length:', fullText.length, 'characters');
     
-    const systemPrompt = `## Role and Goal
-You are an expert content strategist. Your goal is to analyze the provided video transcript to create 5 distinct "highlight reels." Each reel will focus on a single, powerful theme, supported by direct quotes from the speaker. The final output should allow a busy, intelligent viewer to absorb the video's most valuable insights in minutes.
+    const transcriptWithTimestamps = formatTranscriptWithTimestamps(transcript);
+
+    const prompt = `## Role and Goal
+You are an expert content strategist. Your goal is to analyze the provided video transcript and description to create 5 distinct "highlight reels." Each reel will focus on a single, powerful theme, supported by direct quotes from the speaker. The final output should allow a busy, intelligent viewer to absorb the video's most valuable insights in minutes.
 
 ## Target Audience
 Your audience is forward-thinking and curious. They have a short attention span and are looking for contrarian insights, actionable mental models, and bold predictions, not generic advice.
@@ -114,8 +156,8 @@ For each theme, select 1 to 5 direct passages from the transcript that powerfull
 - **Chronological:** Within each reel, list the passages in the order they appear in the video.
 
 ## Quality Control
-- **Distinct Themes:** Each highlight reel's title must represent a clearly distinct theme.
-- **Value Over Quantity:** If you can only identify 3-4 high-quality themes, deliver that number.
+- **Distinct Themes:** Each highlight reel's title must represent a clearly distinct theme. While themes can be related, their core ideas should be unique.
+- **Value Over Quantity:** If you can only identify 3-4 high-quality, distinct themes, deliver that number. Do not force generic themes to meet the count of 5.
 
 ## Output Format
 You must return a JSON array with this EXACT structure:
@@ -130,23 +172,18 @@ You must return a JSON array with this EXACT structure:
       }
     ]
   }
-]`;
+]
 
-    const transcriptWithTimestamps = formatTranscriptWithTimestamps(transcript);
+## Video Information
+**Title:** ${videoTitle || 'Not available'}
+**Description:** ${videoDescription ? videoDescription.substring(0, 500) + (videoDescription.length > 500 ? '...' : '') : 'Not available'}
+
+## Video Transcript (with timestamps)
+${transcriptWithTimestamps}
+
+`;
     
-    const userPrompt = `Analyze this video transcript and create highlight reels that capture the most valuable insights.
-
-**Video Transcript (with timestamps):**
-${transcriptWithTimestamps.substring(0, 15000)}
-
-IMPORTANT INSTRUCTIONS:
-1. Each quote MUST be taken VERBATIM from the transcript above
-2. Use the exact timestamps shown in brackets [MM:SS-MM:SS]
-3. Ensure each quote is self-contained and understandable without context
-4. Focus on contrarian insights, actionable takeaways, and memorable moments
-5. Deliver 3-5 high-quality themes (quality over quantity)
-
-Return the highlight reels as a JSON array following the exact format specified.`;
+    
 
     const model = genAI.getGenerativeModel({ 
       model: "gemini-2.5-flash",
@@ -155,10 +192,6 @@ Return the highlight reels as a JSON array following the exact format specified.
         temperature: 0.7,
       }
     });
-
-    const prompt = `${systemPrompt}
-
-${userPrompt}`;
 
     const result = await model.generateContent(prompt);
     const response = result.response.text();
@@ -185,7 +218,7 @@ ${userPrompt}`;
     console.log(`Found ${topicsArray.length} highlight reels from Gemini`);
     
     // Validate that topics have required fields
-    topicsArray.forEach((topic: any, index: number) => {
+    topicsArray.forEach((topic: ParsedTopic, index: number) => {
       console.log(`Highlight Reel ${index + 1}:`, {
         title: topic.title,
         hasQuotes: !!topic.quotes,
@@ -194,7 +227,7 @@ ${userPrompt}`;
     });
 
     // Generate topics with segments from quotes
-    const topicsWithSegments = topicsArray.map((topic: any, index: number) => {
+    const topicsWithSegments = topicsArray.map((topic: ParsedTopic, index: number) => {
       console.log(`\nProcessing Highlight Reel ${index + 1}: "${topic.title}"`);
       
       // Extract timestamp ranges from quotes
@@ -233,7 +266,7 @@ ${userPrompt}`;
     
     // Keep all topics, even those without segments (they can still be displayed)
     const topics = topicsWithSegments.length > 0 ? topicsWithSegments : 
-      topicsArray.map((topic: any, index: number) => ({
+      topicsArray.map((topic: ParsedTopic, index: number) => ({
         id: `topic-${index}`,
         title: topic.title,
         description: topic.description,
@@ -242,7 +275,7 @@ ${userPrompt}`;
         quotes: topic.quotes || []
       }));
     
-    console.log(`Total highlight reels: ${topics.length} (${topicsWithSegments.filter((t: any) => t.segments.length > 0).length} with segments)`)
+    console.log(`Total highlight reels: ${topics.length} (${topicsWithSegments.filter((t: Topic) => t.segments.length > 0).length} with segments)`)
 
     return NextResponse.json({ topics });
   } catch (error) {
