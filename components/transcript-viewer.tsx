@@ -250,7 +250,7 @@ export function TranscriptViewer({
             if (el) {
               const viewport = el.closest('[data-radix-scroll-area-viewport]');
               if (viewport && viewport instanceof HTMLElement) {
-                scrollViewportRef.current = viewport;
+                scrollViewportRef.current = viewport as HTMLDivElement;
               }
             }
           }}

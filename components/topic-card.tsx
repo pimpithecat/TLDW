@@ -29,8 +29,8 @@ export function TopicCard({ topic, isSelected, onClick, topicIndex, onPlayTopic 
       style={{
         borderColor: isSelected ? `hsl(${topicColor})` : undefined,
         backgroundColor: isSelected ? `hsl(${topicColor} / 0.03)` : undefined,
-        ringColor: isSelected ? `hsl(${topicColor})` : undefined,
-      }}
+        "--tw-ring-color": isSelected ? `hsl(${topicColor})` : undefined,
+      } as React.CSSProperties}
       onClick={onClick}
     >
       <CardHeader className="pb-3">
