@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { UrlInput } from "@/components/url-input";
 import { TopicCard } from "@/components/topic-card";
 import { TranscriptViewer } from "@/components/transcript-viewer";
@@ -22,6 +22,7 @@ export default function Home() {
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
   const [seekToTime, setSeekToTime] = useState<number | undefined>();
   const [currentTime, setCurrentTime] = useState(0);
+  const [transcriptHeight, setTranscriptHeight] = useState<string>("auto");
 
   const processVideo = async (url: string) => {
     setIsLoading(true);
@@ -144,6 +145,37 @@ export default function Home() {
     }
   };
 
+  // Dynamically adjust transcript height to match video container
+  useEffect(() => {
+    const adjustTranscriptHeight = () => {
+      const videoContainer = document.getElementById("video-container");
+      const transcriptContainer = document.getElementById("transcript-container");
+      
+      if (videoContainer && transcriptContainer) {
+        const videoHeight = videoContainer.offsetHeight;
+        setTranscriptHeight(`${videoHeight}px`);
+      }
+    };
+
+    // Initial adjustment
+    adjustTranscriptHeight();
+
+    // Adjust on window resize
+    window.addEventListener("resize", adjustTranscriptHeight);
+    
+    // Also observe video container for size changes
+    const resizeObserver = new ResizeObserver(adjustTranscriptHeight);
+    const videoContainer = document.getElementById("video-container");
+    if (videoContainer) {
+      resizeObserver.observe(videoContainer);
+    }
+
+    return () => {
+      window.removeEventListener("resize", adjustTranscriptHeight);
+      resizeObserver.disconnect();
+    };
+  }, [videoId, topics]); // Re-run when video or topics change
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -197,7 +229,7 @@ export default function Home() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
               {/* Left Column - Video (2/3 width) */}
               <div className="lg:col-span-2">
-                <div className="sticky top-4 h-[calc(100vh-6rem)]">
+                <div className="sticky top-4" id="video-container">
                   <YouTubePlayer
                     videoId={videoId}
                     selectedTopic={selectedTopic}
@@ -212,7 +244,11 @@ export default function Home() {
 
               {/* Right Column - Transcript (1/3 width) */}
               <div className="lg:col-span-1">
-                <div className="sticky top-4 h-[calc(100vh-6rem)] overflow-hidden">
+                <div 
+                  className="sticky top-4" 
+                  id="transcript-container"
+                  style={{ height: transcriptHeight, maxHeight: transcriptHeight }}
+                >
                   <TranscriptViewer
                     transcript={transcript}
                     selectedTopic={selectedTopic}

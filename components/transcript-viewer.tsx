@@ -175,7 +175,7 @@ export function TranscriptViewer({
   );
 
   return (
-    <div className="h-full flex flex-col rounded-lg border bg-card shadow-sm overflow-hidden">
+    <div className="h-full max-h-full flex flex-col rounded-lg border bg-card shadow-sm overflow-hidden">
       {/* Header */}
       <div className="p-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-between mb-2">

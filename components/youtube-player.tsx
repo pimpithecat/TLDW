@@ -212,9 +212,9 @@ export function YouTubePlayer({
   const selectedTopicIndex = selectedTopic ? topics.findIndex(t => t.id === selectedTopic.id) : -1;
 
   return (
-    <div className="w-full h-full flex flex-col">
-      <Card className="overflow-hidden shadow-sm flex-1 flex flex-col">
-        <div className="relative flex-1 bg-black rounded-t-lg overflow-hidden">
+    <div className="w-full">
+      <Card className="overflow-hidden shadow-sm">
+        <div className="relative bg-black rounded-t-lg overflow-hidden aspect-video">
           <div
             id="youtube-player"
             className="absolute top-0 left-0 w-full h-full"
