@@ -7,7 +7,10 @@ import { TranscriptViewer } from "@/components/transcript-viewer";
 import { YouTubePlayer } from "@/components/youtube-player";
 import { Topic, TranscriptSegment } from "@/lib/types";
 import { extractVideoId } from "@/lib/utils";
-import { Loader2 } from "lucide-react";
+import { Loader2, Video, FileText, Sparkles } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
@@ -17,6 +20,7 @@ export default function Home() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
   const [seekToTime, setSeekToTime] = useState<number | undefined>();
+  const [currentTime, setCurrentTime] = useState(0);
 
   const processVideo = async (url: string) => {
     setIsLoading(true);
@@ -30,22 +34,43 @@ export default function Home() {
       
       setVideoId(extractedVideoId);
       
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
       // Fetch transcript
+      console.log("Fetching transcript for URL:", url);
       const transcriptRes = await fetch("/api/transcript", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
+        signal: controller.signal,
+      }).catch(err => {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+          console.error("Request timeout:", err);
+          throw new Error("Request timed out. Please try again.");
+        }
+        console.error("Network error fetching transcript:", err);
+        throw new Error("Network error: Unable to connect to server. Please ensure the server is running.");
       });
       
+      clearTimeout(timeoutId);
+      
       if (!transcriptRes.ok) {
-        const errorData = await transcriptRes.json();
+        const errorData = await transcriptRes.json().catch(() => ({ error: "Unknown error" }));
+        console.error("Transcript API error:", transcriptRes.status, errorData);
         throw new Error(errorData.error || "Failed to fetch transcript");
       }
       
       const { transcript: fetchedTranscript } = await transcriptRes.json();
       setTranscript(fetchedTranscript);
       
-      // Generate topics
+      // Generate topics with timeout
+      const controller2 = new AbortController();
+      const timeoutId2 = setTimeout(() => controller2.abort(), 60000); // 60 second timeout for AI generation
+      
+      console.log("Generating topics for video:", extractedVideoId);
       const topicsRes = await fetch("/api/generate-topics", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -53,10 +78,22 @@ export default function Home() {
           transcript: fetchedTranscript,
           videoId: extractedVideoId
         }),
+        signal: controller2.signal,
+      }).catch(err => {
+        clearTimeout(timeoutId2);
+        if (err.name === 'AbortError') {
+          console.error("Request timeout:", err);
+          throw new Error("Topic generation timed out. The video might be too long. Please try a shorter video.");
+        }
+        console.error("Network error generating topics:", err);
+        throw new Error("Network error: Unable to generate topics. Please check your connection.");
       });
       
+      clearTimeout(timeoutId2);
+      
       if (!topicsRes.ok) {
-        const errorData = await topicsRes.json();
+        const errorData = await topicsRes.json().catch(() => ({ error: "Unknown error" }));
+        console.error("Topics API error:", topicsRes.status, errorData);
         throw new Error(errorData.error || "Failed to generate topics");
       }
       
@@ -89,12 +126,27 @@ export default function Home() {
     setSeekToTime(seconds);
   };
 
+  const handleTimeUpdate = (seconds: number) => {
+    setCurrentTime(seconds);
+  };
+
+  const handlePlayTopic = () => {
+    if (selectedTopic && selectedTopic.segments.length > 0) {
+      setSeekToTime(selectedTopic.segments[0].start);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         <header className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-2">TLDW</h1>
-          <p className="text-gray-600">Too Long; Didn't Watch - Smart Video Navigation</p>
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <Video className="h-8 w-8 text-primary" />
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+              TLDW
+            </h1>
+          </div>
+          <p className="text-muted-foreground">Too Long; Didn't Watch - Smart Video Navigation</p>
         </header>
 
         <div className="flex justify-center mb-8">
@@ -102,59 +154,85 @@ export default function Home() {
         </div>
 
         {error && (
-          <div className="max-w-2xl mx-auto mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-            {error}
-          </div>
+          <Card className="max-w-2xl mx-auto mb-6 p-4 bg-destructive/10 border-destructive/20">
+            <p className="text-destructive">{error}</p>
+          </Card>
         )}
 
         {isLoading && (
-          <div className="flex flex-col items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-4" />
-            <p className="text-gray-600">Analyzing video and generating topics...</p>
-            <p className="text-sm text-gray-500 mt-2">This may take a minute</p>
+          <div className="max-w-6xl mx-auto">
+            <div className="flex flex-col items-center justify-center py-12 mb-8">
+              <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+              <p className="text-foreground font-medium">Analyzing video and generating topics...</p>
+              <p className="text-sm text-muted-foreground mt-2">This may take a minute</p>
+            </div>
+            
+            {/* Loading skeletons */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <Skeleton className="h-[320px] w-full rounded-lg" />
+                <div className="space-y-3">
+                  <Skeleton className="h-24 w-full rounded-lg" />
+                  <Skeleton className="h-24 w-full rounded-lg" />
+                  <Skeleton className="h-24 w-full rounded-lg" />
+                </div>
+              </div>
+              <div>
+                <Skeleton className="h-[600px] w-full rounded-lg" />
+              </div>
+            </div>
           </div>
         )}
 
         {videoId && topics.length > 0 && !isLoading && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div>
-              <div className="mb-6">
-                <YouTubePlayer
-                  videoId={videoId}
-                  selectedTopic={selectedTopic}
-                  seekToTime={seekToTime}
-                />
-              </div>
+            <div className="space-y-6">
+              {/* Video Player */}
+              <YouTubePlayer
+                videoId={videoId}
+                selectedTopic={selectedTopic}
+                seekToTime={seekToTime}
+                topics={topics}
+                onTopicSelect={setSelectedTopic}
+                onTimeUpdate={handleTimeUpdate}
+                transcript={transcript}
+              />
 
+              {/* Topics Section */}
               <div>
-                <h2 className="text-xl font-semibold mb-4">Topics Found</h2>
+                <div className="flex items-center gap-2 mb-4">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  <h2 className="text-xl font-semibold">Topics Found</h2>
+                  <Badge variant="secondary">{topics.length}</Badge>
+                </div>
                 <div className="space-y-3">
-                  {topics.map((topic) => (
+                  {topics.map((topic, index) => (
                     <TopicCard
                       key={topic.id}
                       topic={topic}
+                      topicIndex={index}
                       isSelected={selectedTopic?.id === topic.id}
                       onClick={() => setSelectedTopic(topic)}
+                      onPlayTopic={handlePlayTopic}
                     />
                   ))}
                 </div>
               </div>
             </div>
 
-            <div>
-              <h2 className="text-xl font-semibold mb-4">
-                Transcript
-                {selectedTopic && (
-                  <span className="ml-2 text-sm font-normal text-gray-600">
-                    - Highlighting: {selectedTopic.title}
-                  </span>
-                )}
-              </h2>
-              <div className="h-[600px] sticky top-8">
+            {/* Transcript Section */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                <h2 className="text-xl font-semibold">Transcript</h2>
+              </div>
+              <div className="h-[800px] sticky top-8">
                 <TranscriptViewer
                   transcript={transcript}
                   selectedTopic={selectedTopic}
                   onTimestampClick={handleTimestampClick}
+                  currentTime={currentTime}
+                  topics={topics}
                 />
               </div>
             </div>
@@ -162,14 +240,15 @@ export default function Home() {
         )}
 
         {!isLoading && !error && topics.length === 0 && !videoId && (
-          <div className="text-center py-12">
-            <p className="text-gray-600 mb-2">
+          <Card className="max-w-2xl mx-auto p-12 text-center bg-muted/30">
+            <Video className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+            <p className="text-foreground mb-2 text-lg">
               Enter a YouTube URL above to get started
             </p>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               We'll analyze the video and create smart topics for efficient navigation
             </p>
-          </div>
+          </Card>
         )}
       </div>
     </div>

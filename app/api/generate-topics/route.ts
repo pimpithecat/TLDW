@@ -279,7 +279,44 @@ ${transcriptWithTimestamps}
     }
 
     console.log('Raw Gemini response:', response);
-    const parsedResponse = JSON.parse(response);
+    
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(response);
+    } catch (parseError) {
+      console.error('Failed to parse Gemini response:', parseError);
+      console.log('Attempting to extract JSON from response...');
+      
+      // Try to extract JSON array from the response
+      const jsonMatch = response.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        try {
+          parsedResponse = JSON.parse(jsonMatch[0]);
+        } catch (e) {
+          console.error('Failed to extract JSON:', e);
+          // Create a fallback response
+          parsedResponse = [{
+            title: "Full Video",
+            description: "Complete video content",
+            quotes: [{
+              timestamp: "[00:00-00:30]",
+              text: fullText.substring(0, 200)
+            }]
+          }];
+        }
+      } else {
+        // Create a fallback response
+        parsedResponse = [{
+          title: "Full Video",
+          description: "Complete video content",
+          quotes: [{
+            timestamp: "[00:00-00:30]",
+            text: fullText.substring(0, 200)
+          }]
+        }];
+      }
+    }
+    
     console.log('Parsed Gemini response:', JSON.stringify(parsedResponse, null, 2));
     
     // Handle different possible response structures
@@ -291,6 +328,35 @@ ${transcriptWithTimestamps}
     } else if (!Array.isArray(parsedResponse)) {
       console.error('Unexpected response structure:', parsedResponse);
       throw new Error('Invalid response format from Gemini - not an array');
+    }
+    
+    // If we got an empty array, create a basic structure
+    if (topicsArray.length === 0) {
+      console.log('Gemini returned empty array, creating fallback topics');
+      
+      // Create basic topics based on transcript chunks
+      const chunkSize = Math.ceil(transcript.length / 3);
+      topicsArray = [];
+      
+      for (let i = 0; i < 3 && i * chunkSize < transcript.length; i++) {
+        const startIdx = i * chunkSize;
+        const endIdx = Math.min((i + 1) * chunkSize, transcript.length);
+        const chunkSegments = transcript.slice(startIdx, endIdx);
+        
+        if (chunkSegments.length > 0) {
+          const startTime = chunkSegments[0].start;
+          const endTime = chunkSegments[chunkSegments.length - 1].start + chunkSegments[chunkSegments.length - 1].duration;
+          
+          topicsArray.push({
+            title: `Part ${i + 1}`,
+            description: `Section ${i + 1} of the video`,
+            quotes: [{
+              timestamp: `[${formatTime(startTime)}-${formatTime(endTime)}]`,
+              text: chunkSegments.map(s => s.text).join(' ').substring(0, 200) + '...'
+            }]
+          });
+        }
+      }
     }
     
     console.log(`Found ${topicsArray.length} highlight reels from Gemini`);
