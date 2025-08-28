@@ -37,7 +37,7 @@ export function YouTubePlayer({
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isSeekingRef = useRef(false);
-  const lastSeekTimeRef = useRef<number | undefined>();
+  const lastSeekTimeRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     // Load YouTube IFrame API
