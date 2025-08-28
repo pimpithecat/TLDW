@@ -196,9 +196,9 @@ export function YouTubePlayer({
   const selectedTopicIndex = selectedTopic ? topics.findIndex(t => t.id === selectedTopic.id) : -1;
 
   return (
-    <div className="w-full space-y-4">
-      <Card className="overflow-hidden shadow-sm">
-        <div className="relative pb-[56.25%] h-0 bg-black rounded-t-lg overflow-hidden">
+    <div className="w-full h-full flex flex-col">
+      <Card className="overflow-hidden shadow-sm flex-1 flex flex-col">
+        <div className="relative flex-1 bg-black rounded-t-lg overflow-hidden">
           <div
             id="youtube-player"
             className="absolute top-0 left-0 w-full h-full"
@@ -206,7 +206,7 @@ export function YouTubePlayer({
         </div>
       
         {/* Custom control overlay */}
-        <div className="p-3 bg-background border-t">
+        <div className="p-3 bg-background border-t flex-shrink-0">
           {/* Video progress bar */}
           {videoDuration > 0 && (
             <VideoProgressBar
