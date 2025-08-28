@@ -257,17 +257,6 @@ export function YouTubePlayer({
             <div className="flex items-center gap-2">
               {selectedTopic && (
                 <>
-                  <Badge
-                    variant="outline"
-                    className="text-xs"
-                    style={{
-                      backgroundColor: `hsl(${getTopicHSLColor(selectedTopicIndex)} / 0.1)`,
-                      borderColor: `hsl(${getTopicHSLColor(selectedTopicIndex)})`,
-                      color: `hsl(${getTopicHSLColor(selectedTopicIndex)})`,
-                    }}
-                  >
-                    {selectedTopic.title}
-                  </Badge>
                   <Badge variant="secondary" className="text-xs">
                     Segment {currentSegmentIndex + 1}/{selectedTopic.segments.length}
                   </Badge>

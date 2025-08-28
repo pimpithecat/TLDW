@@ -178,12 +178,14 @@ export function VideoProgressBar({
               className={cn(
                 "w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all",
                 "hover:shadow-md hover:-translate-x-1",
-                selectedTopic?.id === topic.id && "ring-2 ring-offset-1 shadow-md"
+                selectedTopic?.id === topic.id && "shadow-lg scale-[1.02]"
               )}
               style={{
-                backgroundColor: `hsl(${getTopicHSLColor(index)} / 0.1)`,
+                backgroundColor: selectedTopic?.id === topic.id 
+                  ? `hsl(${getTopicHSLColor(index)} / 0.25)` 
+                  : `hsl(${getTopicHSLColor(index)} / 0.1)`,
                 borderColor: `hsl(${getTopicHSLColor(index)})`,
-                borderWidth: "1px",
+                borderWidth: selectedTopic?.id === topic.id ? "2px" : "1px",
                 borderStyle: "solid",
               }}
               onClick={() => onTopicSelect?.(topic)}
