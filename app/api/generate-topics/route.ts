@@ -149,44 +149,13 @@ function findExactQuotes(
 
 export async function POST(request: Request) {
   try {
-    const { transcript, videoId } = await request.json();
+    const { transcript } = await request.json();
 
     if (!transcript || !Array.isArray(transcript)) {
       return NextResponse.json(
         { error: 'Valid transcript is required' },
         { status: 400 }
       );
-    }
-
-    // Fetch video metadata from Supadata API
-    let videoTitle = '';
-    let videoDescription = '';
-    
-    if (videoId) {
-      try {
-        const apiKey = process.env.SUPADATA_API_KEY;
-        if (apiKey) {
-          const metadataResponse = await fetch(`https://api.supadata.ai/v1/youtube/metadata?url=https://www.youtube.com/watch?v=${videoId}`, {
-            method: 'GET',
-            headers: {
-              'x-api-key': apiKey,
-              'Content-Type': 'application/json'
-            }
-          });
-
-          if (metadataResponse.ok) {
-            const metadata = await metadataResponse.json();
-            videoTitle = metadata.title || '';
-            videoDescription = metadata.description || '';
-            console.log('Fetched video metadata:', { title: videoTitle, descriptionLength: videoDescription.length });
-          } else {
-            console.warn('Failed to fetch video metadata:', metadataResponse.status);
-          }
-        }
-      } catch (metadataError) {
-        console.warn('Error fetching video metadata:', metadataError);
-        // Continue without metadata if it fails
-      }
     }
 
     const fullText = combineTranscript(transcript);
@@ -251,10 +220,6 @@ You must return a JSON array with this EXACT structure:
     ]
   }
 ]
-
-## Video Information
-**Title:** ${videoTitle || 'Not available'}
-**Description:** ${videoDescription ? videoDescription.substring(0, 500) + (videoDescription.length > 500 ? '...' : '') : 'Not available'}
 
 ## Video Transcript (with timestamps)
 ${transcriptWithTimestamps}
