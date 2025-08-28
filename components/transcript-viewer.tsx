@@ -39,11 +39,11 @@ export function TranscriptViewer({
     highlightedRefs.current = [];
   }, [selectedTopic]);
 
-  // Detect user scroll and temporarily disable auto-scroll
+  // Detect user scroll and temporarily disable auto-scroll with debouncing
   const handleUserScroll = useCallback(() => {
     const now = Date.now();
     // Only consider it user scroll if enough time has passed since last programmatic scroll
-    if (now - lastUserScrollTime.current > 200) {
+    if (now - lastUserScrollTime.current > 300) {
       if (autoScroll) {
         setAutoScroll(false);
         setShowScrollToCurrentButton(true);
@@ -53,11 +53,11 @@ export function TranscriptViewer({
           clearTimeout(scrollTimeoutRef.current);
         }
         
-        // Re-enable auto-scroll after 5 seconds of inactivity
+        // Re-enable auto-scroll after 8 seconds of inactivity for better UX
         scrollTimeoutRef.current = setTimeout(() => {
           setAutoScroll(true);
           setShowScrollToCurrentButton(false);
-        }, 5000);
+        }, 8000);
       }
     }
   }, [autoScroll]);
@@ -74,13 +74,15 @@ export function TranscriptViewer({
     // Calculate the element's position relative to the viewport
     const relativeTop = elementRect.top - viewportRect.top + viewport.scrollTop;
     
-    // Center the element in the viewport
+    // Center the element in the viewport with improved calculation
     const scrollPosition = relativeTop - (viewportRect.height / 2) + (elementRect.height / 2);
     
-    // Smooth scroll to the calculated position
-    viewport.scrollTo({
-      top: Math.max(0, scrollPosition),
-      behavior: smooth ? 'smooth' : 'auto'
+    // Use requestAnimationFrame for smoother scrolling
+    requestAnimationFrame(() => {
+      viewport.scrollTo({
+        top: Math.max(0, scrollPosition),
+        behavior: smooth ? 'smooth' : 'auto'
+      });
     });
   }, []);
 
@@ -104,7 +106,7 @@ export function TranscriptViewer({
     }
   }, [selectedTopic, autoScroll, scrollToElement]);
 
-  // Auto-scroll to current playing segment with smooth tracking
+  // Auto-scroll to current playing segment with improved smooth tracking
   useEffect(() => {
     if (autoScroll && currentSegmentRef.current && currentTime > 0) {
       // Check if current segment is visible
@@ -114,11 +116,14 @@ export function TranscriptViewer({
         const elementRect = element.getBoundingClientRect();
         const viewportRect = viewport.getBoundingClientRect();
         
-        // Check if element is outside the center third of viewport
-        const topThreshold = viewportRect.top + viewportRect.height * 0.3;
-        const bottomThreshold = viewportRect.top + viewportRect.height * 0.7;
+        // Improved thresholds for better centering - check if element is outside the center 40% of viewport
+        const topThreshold = viewportRect.top + viewportRect.height * 0.35;
+        const bottomThreshold = viewportRect.top + viewportRect.height * 0.65;
         
-        if (elementRect.top < topThreshold || elementRect.bottom > bottomThreshold) {
+        // Also check if element is completely out of view
+        const isOutOfView = elementRect.bottom < viewportRect.top || elementRect.top > viewportRect.bottom;
+        
+        if (isOutOfView || elementRect.top < topThreshold || elementRect.bottom > bottomThreshold) {
           scrollToElement(currentSegmentRef.current, true);
         }
       }
@@ -157,7 +162,7 @@ export function TranscriptViewer({
   );
 
   return (
-    <div className="h-full flex flex-col rounded-lg border bg-card shadow-sm">
+    <div className="h-full flex flex-col rounded-lg border bg-card shadow-sm overflow-hidden">
       {/* Header */}
       <div className="p-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-between mb-2">
@@ -209,22 +214,22 @@ export function TranscriptViewer({
         )}
       </div>
 
-      {/* Jump to current button */}
+      {/* Jump to current button with improved positioning */}
       {showScrollToCurrentButton && currentTime > 0 && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-10">
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-10 animate-in fade-in slide-in-from-top-2 duration-300">
           <Button
             size="sm"
             onClick={jumpToCurrent}
-            className="shadow-lg"
+            className="shadow-lg bg-primary/95 hover:bg-primary"
           >
-            <ChevronDown className="w-4 h-4 mr-1" />
+            <ChevronDown className="w-4 h-4 mr-1 animate-bounce" />
             Jump to Current
           </Button>
         </div>
       )}
 
       {/* Transcript content */}
-      <ScrollArea className="flex-1" ref={scrollAreaRef}>
+      <ScrollArea className="flex-1 min-h-0" ref={scrollAreaRef}>
         <div 
           className="p-4 space-y-1" 
           ref={(el) => {
@@ -263,7 +268,7 @@ export function TranscriptViewer({
                   }
                 }}
                 className={cn(
-                  "group relative px-3 py-2 rounded-lg transition-all duration-200 cursor-pointer",
+                  "group relative px-3 py-2 rounded-lg transition-all duration-200 cursor-pointer select-none",
                   "hover:bg-muted/50",
                   isHovered && "bg-muted"
                 )}

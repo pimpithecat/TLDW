@@ -225,7 +225,7 @@ export default function Home() {
 
             {/* Right Column - Transcript (1/3 width) */}
             <div className="lg:col-span-1">
-              <div className="sticky top-4 h-[calc(100vh-6rem)]">
+              <div className="sticky top-4 h-[calc(100vh-6rem)] overflow-hidden">
                 <TranscriptViewer
                   transcript={transcript}
                   selectedTopic={selectedTopic}

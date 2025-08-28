@@ -109,57 +109,55 @@ export function VideoProgressBar({
 
           {/* Topic segments */}
           <div className="absolute inset-0">
-            {topics.map((topic, topicIndex) => (
-              <div key={topic.id}>
-                {topic.segments.map((segment, segmentIndex) => {
-                  const startPercentage = (segment.start / videoDuration) * 100;
-                  const widthPercentage =
-                    ((segment.end - segment.start) / videoDuration) * 100;
-                  const isSelected = selectedTopic?.id === topic.id;
+            {topics.flatMap((topic, topicIndex) => 
+              topic.segments.map((segment, segmentIndex) => {
+                const startPercentage = (segment.start / videoDuration) * 100;
+                const widthPercentage =
+                  ((segment.end - segment.start) / videoDuration) * 100;
+                const isSelected = selectedTopic?.id === topic.id;
 
-                  return (
-                    <Tooltip key={`${topic.id}-${segmentIndex}`}>
-                      <TooltipTrigger asChild>
-                        <div
-                          className={cn(
-                            "absolute top-2 h-8 rounded-md transition-all cursor-pointer",
-                            "hover:z-10 hover:scale-y-110",
-                            isSelected && "z-10 ring-2 ring-white"
-                          )}
-                          style={{
-                            left: `${startPercentage}%`,
-                            width: `${widthPercentage}%`,
-                            backgroundColor: `hsl(${getTopicHSLColor(topicIndex)})`,
-                            opacity: isSelected ? 1 : 0.7,
-                          }}
-                          onMouseEnter={(e) => handleSegmentHover(topic, segment, e)}
-                          onMouseLeave={() => setHoveredSegment(null)}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSeek(segment.start);
-                            onTopicSelect?.(topic);
-                          }}
-                        />
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-xs">
-                        <div className="space-y-1">
-                          <div className="font-semibold">{topic.title}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {formatDuration(segment.start)} -{" "}
-                            {formatDuration(segment.end)}
-                          </div>
-                          {segment.text && (
-                            <div className="text-xs italic">
-                              "{segment.text.substring(0, 100)}..."
-                            </div>
-                          )}
+                return (
+                  <Tooltip key={`${topic.id}-${segmentIndex}`}>
+                    <TooltipTrigger asChild>
+                      <div
+                        className={cn(
+                          "absolute top-2 h-8 rounded-md transition-all cursor-pointer",
+                          "hover:z-10 hover:scale-y-110",
+                          isSelected && "z-10 ring-2 ring-white"
+                        )}
+                        style={{
+                          left: `${startPercentage}%`,
+                          width: `${widthPercentage}%`,
+                          backgroundColor: `hsl(${getTopicHSLColor(topicIndex)})`,
+                          opacity: isSelected ? 1 : 0.7,
+                        }}
+                        onMouseEnter={(e) => handleSegmentHover(topic, segment, e)}
+                        onMouseLeave={() => setHoveredSegment(null)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSeek(segment.start);
+                          onTopicSelect?.(topic);
+                        }}
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs">
+                      <div className="space-y-1">
+                        <div className="font-semibold">{topic.title}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatDuration(segment.start)} -{" "}
+                          {formatDuration(segment.end)}
                         </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  );
-                })}
-              </div>
-            ))}
+                        {segment.text && (
+                          <div className="text-xs italic">
+                            "{segment.text.substring(0, 100)}..."
+                          </div>
+                        )}
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })
+            )}
           </div>
 
           {/* Current time indicator */}
