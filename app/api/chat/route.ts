@@ -18,12 +18,18 @@ function extractCitations(response: string, transcript: TranscriptSegment[]): {
   citations: Citation[];
 } {
   const citations: Citation[] = [];
-  let cleanContent = response;
-
+  const citationMap = new Map<number, Citation>();
+  let processedContent = response;
+  
+  // First, extract all timestamps and create citations
   const timestampPattern = /\[(\d{1,2}:\d{2})(?:-(\d{1,2}:\d{2}))?\]/g;
-  const matches = response.matchAll(timestampPattern);
-
-  for (const match of matches) {
+  const timestampMatches = Array.from(response.matchAll(timestampPattern));
+  
+  // Track citation numbers for each unique timestamp
+  const timestampToCitationNumber = new Map<string, number>();
+  let citationCounter = 1;
+  
+  timestampMatches.forEach(match => {
     const [fullMatch, startTime, endTime] = match;
     const [startMin, startSec] = startTime.split(':').map(Number);
     const startSeconds = startMin * 60 + startSec;
@@ -33,30 +39,62 @@ function extractCitations(response: string, transcript: TranscriptSegment[]): {
       const [endMin, endSec] = endTime.split(':').map(Number);
       endSeconds = endMin * 60 + endSec;
     }
-
+    
     const segment = transcript.find(s => 
       s.start <= startSeconds && (s.start + s.duration) >= startSeconds
     );
-
+    
     if (segment) {
-      const startIndex = Math.max(0, match.index! - 100);
-      const endIndex = Math.min(response.length, match.index! + fullMatch.length + 200);
-      const contextText = response.substring(startIndex, endIndex).replace(timestampPattern, '').trim();
+      const timestampKey = `${startSeconds}-${endSeconds || ''}`;
       
-      const words = contextText.split(' ').slice(0, 30).join(' ');
-      
-      citations.push({
-        timestamp: startSeconds,
-        endTime: endSeconds,
-        text: segment.text,
-        context: words,
-      });
+      if (!timestampToCitationNumber.has(timestampKey)) {
+        const citationNumber = citationCounter++;
+        timestampToCitationNumber.set(timestampKey, citationNumber);
+        
+        // Extract context around the timestamp
+        const startIndex = Math.max(0, match.index! - 150);
+        const endIndex = Math.min(response.length, match.index! + fullMatch.length + 150);
+        const contextText = response.substring(startIndex, endIndex).replace(timestampPattern, '').trim();
+        const words = contextText.split(' ').slice(0, 40).join(' ');
+        
+        const citation: Citation = {
+          timestamp: startSeconds,
+          endTime: endSeconds,
+          text: segment.text,
+          context: words,
+          number: citationNumber,
+        };
+        
+        citationMap.set(citationNumber, citation);
+        citations.push(citation);
+      }
     }
-  }
-
-  cleanContent = cleanContent.replace(timestampPattern, '').trim();
-
-  return { content: cleanContent, citations };
+  });
+  
+  // Replace timestamps with inline citation numbers
+  processedContent = response.replace(timestampPattern, (match, startTime, endTime) => {
+    const [startMin, startSec] = startTime.split(':').map(Number);
+    const startSeconds = startMin * 60 + startSec;
+    
+    let endSeconds: number | undefined;
+    if (endTime) {
+      const [endMin, endSec] = endTime.split(':').map(Number);
+      endSeconds = endMin * 60 + endSec;
+    }
+    
+    const timestampKey = `${startSeconds}-${endSeconds || ''}`;
+    const citationNumber = timestampToCitationNumber.get(timestampKey);
+    
+    if (citationNumber) {
+      return `[${citationNumber}]`;
+    }
+    return '';
+  });
+  
+  // Clean up any extra whitespace
+  processedContent = processedContent.replace(/\s+/g, ' ').trim();
+  
+  return { content: processedContent, citations };
 }
 
 export async function POST(request: Request) {
@@ -95,13 +133,16 @@ ${message}
 
 ## Instructions
 1. Answer the user's question based ONLY on the video transcript provided
-2. Include specific timestamps [MM:SS] when referencing parts of the video
-3. If quoting or paraphrasing, indicate the relevant timestamp
-4. Be concise but thorough
-5. If the question cannot be answered from the transcript, say so clearly
-6. When possible, cite multiple relevant sections if they provide different perspectives
+2. IMPORTANT: Include inline citations by adding [MM:SS] timestamps directly after each sentence or claim that references the video
+3. Place citations immediately after the relevant statement, like this: "The speaker explains the concept [02:45] and provides an example [03:12]."
+4. For bullet points, add the citation at the end of each point: "• First point about X [01:23]"
+5. When quoting directly, place the timestamp right after the quote
+6. Be concise but thorough
+7. If the question cannot be answered from the transcript, say so clearly
+8. Cite multiple relevant sections when they provide different perspectives
+9. Always prefer inline citations over listing them at the end
 
-Provide a clear, informative response with timestamp citations.`;
+Format your response with citations embedded naturally in the text, not as a separate section.`;
 
     const model = genAI.getGenerativeModel({ 
       model: "gemini-2.5-flash",

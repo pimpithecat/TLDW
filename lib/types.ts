@@ -33,6 +33,7 @@ export interface Citation {
   endTime?: number;
   text: string;
   context?: string;
+  number?: number; // Citation number for inline references
 }
 
 export interface ChatMessage {
