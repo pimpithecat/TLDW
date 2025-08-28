@@ -261,7 +261,7 @@ export default function Home() {
             </div>
 
             {/* AI Chat Section - Full width below */}
-            <div className="max-w-4xl mx-auto">
+            <div>
               <AIChat
                 transcript={transcript}
                 topics={topics}
