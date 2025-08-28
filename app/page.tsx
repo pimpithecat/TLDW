@@ -201,26 +201,7 @@ export default function Home() {
                 />
               </div>
 
-              {/* Topics Section */}
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <Sparkles className="h-5 w-5 text-primary" />
-                  <h2 className="text-xl font-semibold">Topics Found</h2>
-                  <Badge variant="secondary">{topics.length}</Badge>
-                </div>
-                <div className="space-y-3">
-                  {topics.map((topic, index) => (
-                    <TopicCard
-                      key={topic.id}
-                      topic={topic}
-                      topicIndex={index}
-                      isSelected={selectedTopic?.id === topic.id}
-                      onClick={() => setSelectedTopic(topic)}
-                      onPlayTopic={handlePlayTopic}
-                    />
-                  ))}
-                </div>
-              </div>
+              
             </div>
 
             {/* Right Column - Transcript (1/3 width) */}
