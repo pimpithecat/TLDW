@@ -37,6 +37,23 @@ function findExactQuotes(
 ): { start: number; end: number; text: string }[] {
   const quotes: { start: number; end: number; text: string }[] = [];
   
+  // Helper function to check if text ends with sentence boundary
+  const isCompleteSentence = (text: string): boolean => {
+    const trimmed = text.trim();
+    return /[.!?]"?$/.test(trimmed) || /[.!?]\s+[A-Z]/.test(trimmed);
+  };
+  
+  // Helper function to find segment index by time
+  const findSegmentIndex = (time: number): number => {
+    for (let i = 0; i < transcript.length; i++) {
+      const segEnd = transcript[i].start + transcript[i].duration;
+      if (transcript[i].start <= time && segEnd >= time) {
+        return i;
+      }
+    }
+    return -1;
+  };
+  
   for (const range of timestampRanges) {
     // Parse timestamp strings (format: "MM:SS")
     const [startMin, startSec] = range.start.split(':').map(Number);
@@ -44,36 +61,90 @@ function findExactQuotes(
     const startTime = startMin * 60 + startSec;
     const endTime = endMin * 60 + endSec;
     
-    // Find all segments within this time range
-    const relevantSegments: string[] = [];
-    let actualStart = startTime;
-    let actualEnd = endTime;
-    let foundAny = false;
+    // Find the segment indices for start and end times
+    let startIdx = findSegmentIndex(startTime);
+    let endIdx = findSegmentIndex(endTime);
     
-    for (const seg of transcript) {
-      const segEnd = seg.start + seg.duration;
-      
-      // Check if segment overlaps with our time range
-      if (seg.start <= endTime && segEnd >= startTime) {
-        relevantSegments.push(seg.text);
-        if (!foundAny) {
-          actualStart = Math.max(seg.start, startTime);
-          foundAny = true;
-        }
-        actualEnd = Math.min(segEnd, endTime);
+    if (startIdx === -1 || endIdx === -1) {
+      // If we can't find exact segments, find the nearest ones
+      startIdx = transcript.findIndex(seg => seg.start >= startTime);
+      endIdx = transcript.findIndex(seg => seg.start + seg.duration >= endTime);
+      if (startIdx === -1) startIdx = 0;
+      if (endIdx === -1) endIdx = transcript.length - 1;
+    }
+    
+    // Extend backward to include complete context if needed
+    // Look back up to 5 segments to find sentence beginning
+    let extendedStartIdx = startIdx;
+    let combinedText = '';
+    for (let i = Math.max(0, startIdx - 5); i <= startIdx; i++) {
+      const testText = transcript.slice(i, startIdx + 1).map(s => s.text).join(' ');
+      if (i === 0 || isCompleteSentence(transcript[i - 1].text)) {
+        extendedStartIdx = i;
+        combinedText = testText;
+        break;
       }
     }
     
-    if (relevantSegments.length > 0) {
+    // If we didn't find a good starting point, use original
+    if (extendedStartIdx === startIdx) {
+      extendedStartIdx = startIdx;
+    }
+    
+    // Extend forward to complete the thought
+    // Look ahead up to 5 segments to find sentence ending
+    let extendedEndIdx = endIdx;
+    for (let i = endIdx; i < Math.min(transcript.length, endIdx + 5); i++) {
+      if (isCompleteSentence(transcript[i].text)) {
+        extendedEndIdx = i;
+        break;
+      }
+    }
+    
+    // Build the complete text from extended range
+    const relevantSegments: string[] = [];
+    let actualStart = transcript[extendedStartIdx].start;
+    let actualEnd = transcript[extendedEndIdx].start + transcript[extendedEndIdx].duration;
+    
+    for (let i = extendedStartIdx; i <= extendedEndIdx && i < transcript.length; i++) {
+      relevantSegments.push(transcript[i].text);
+    }
+    
+    const fullText = relevantSegments.join(' ').trim();
+    
+    // Only add if we have substantial content (at least 50 characters)
+    if (fullText.length > 50) {
       quotes.push({
         start: actualStart,
         end: actualEnd,
-        text: relevantSegments.join(' ')
+        text: fullText
       });
     }
   }
   
-  return quotes;
+  // Merge nearby quotes (within 5 seconds) to avoid fragmentation
+  const mergedQuotes: { start: number; end: number; text: string }[] = [];
+  let currentQuote: { start: number; end: number; text: string } | null = null;
+  
+  for (const quote of quotes) {
+    if (!currentQuote) {
+      currentQuote = { ...quote };
+    } else if (quote.start - currentQuote.end <= 5) {
+      // Merge with current quote
+      currentQuote.end = quote.end;
+      currentQuote.text = currentQuote.text + ' ' + quote.text;
+    } else {
+      // Save current and start new
+      mergedQuotes.push(currentQuote);
+      currentQuote = { ...quote };
+    }
+  }
+  
+  if (currentQuote) {
+    mergedQuotes.push(currentQuote);
+  }
+  
+  return mergedQuotes;
 }
 
 export async function POST(request: Request) {
@@ -147,17 +218,25 @@ Analyze the entire transcript to identify 5 key themes that are most valuable an
 ### Step 2: Select Supporting Passages
 For each theme, select 1 to 5 direct passages from the transcript that powerfully illustrate the core idea.
 
-**Passage Selection Criteria:**
+**CRITICAL Passage Selection Criteria:**
 - **Direct Quotes Only:** Use complete, unedited sentences from the transcript. Do NOT summarize, paraphrase, or use ellipses.
-- **Self-Contained:** IMPORTANT: Each passage must be understandable on its own without surrounding context. Include surrounding context until quotes are full sentences.
-- **High-Signal:** Choose passages that contain memorable stories, bold predictions, or contrarian thinking.
-- **No Fluff:** Avoid introductions, transition phrases, or generic commentary.
+- **LENGTH REQUIREMENT:** Each passage MUST be substantial enough to convey a complete thought or idea. Minimum 15-30 seconds of content. Short fragments are unacceptable.
+- **Complete Thoughts:** ALWAYS extend the timestamp range to capture the FULL idea being expressed. Include the entire explanation, example, or argument - not just a fragment.
+- **Self-Contained:** Each passage must be fully understandable on its own. If the speaker references something earlier, extend the passage backward to include that context.
+- **Natural Boundaries:** Extend timestamps to natural speech breaks - complete sentences, paragraph ends, or topic transitions. NEVER cut off mid-sentence or mid-thought.
+- **High-Signal:** Choose passages that contain memorable stories, bold predictions, data points, specific examples, or contrarian thinking. Avoid generic statements.
+- **No Fluff:** While passages should be complete, avoid including unrelated tangents or off-topic rambling.
 - **Avoid Redundancy:** Within a single reel, ensure each selected passage offers a unique angle on the theme.
 - **Chronological:** Within each reel, list the passages in the order they appear in the video.
+
+**Examples of Good vs Bad Passages:**
+❌ BAD: [02:15-02:25] "The problem with traditional education is that it doesn't..."
+✅ GOOD: [02:15-03:10] "The problem with traditional education is that it doesn't prepare you for the real world. When I graduated from Stanford, I realized I had memorized hundreds of formulas but couldn't negotiate a salary, manage my finances, or build meaningful relationships. The system optimizes for test scores, not life skills. We spend 16 years in school learning calculus we'll never use, but zero hours learning how to handle failure, manage emotions, or think critically about the media we consume."
 
 ## Quality Control
 - **Distinct Themes:** Each highlight reel's title must represent a clearly distinct theme. While themes can be related, their core ideas should be unique.
 - **Value Over Quantity:** If you can only identify 3-4 high-quality, distinct themes, deliver that number. Do not force generic themes to meet the count of 5.
+- **Passage Completeness Check:** Before finalizing, verify each passage contains a COMPLETE thought that can stand alone. If it references something not included, extend the timestamp range.
 
 ## Output Format
 You must return a JSON array with this EXACT structure:
