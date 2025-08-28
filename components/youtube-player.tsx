@@ -73,7 +73,7 @@ export function YouTubePlayer({
                   setCurrentTime(time);
                   onTimeUpdate?.(time);
                 }
-              }, 250);
+              }, 100);
             } else {
               // Clear time update interval
               if (timeUpdateIntervalRef.current) {
@@ -102,8 +102,14 @@ export function YouTubePlayer({
   useEffect(() => {
     if (seekToTime !== undefined && playerRef.current?.seekTo) {
       playerRef.current.seekTo(seekToTime, true);
+      // Immediately update time when seeking
+      if (playerRef.current?.getCurrentTime) {
+        const time = playerRef.current.getCurrentTime();
+        setCurrentTime(time);
+        onTimeUpdate?.(time);
+      }
     }
-  }, [seekToTime]);
+  }, [seekToTime, onTimeUpdate]);
 
   // Reset segment index when topic changes
   useEffect(() => {

@@ -6,7 +6,7 @@ import { getTopicHSLColor } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Play, Eye, EyeOff, FileText } from "lucide-react";
+import { Play, Eye, EyeOff, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface TranscriptViewerProps {
@@ -30,22 +30,43 @@ export function TranscriptViewer({
   const [autoScroll, setAutoScroll] = useState(true);
   const [hoveredSegment, setHoveredSegment] = useState<number | null>(null);
   const currentSegmentRef = useRef<HTMLDivElement | null>(null);
-  const [showAll, setShowAll] = useState(false);
-  
-  // Time window for filtering segments (seconds before and after current time)
-  const TIME_WINDOW_BEFORE = 30;
-  const TIME_WINDOW_AFTER = 60;
-  const INITIAL_SEGMENTS = 15;
+  const [showScrollToCurrentButton, setShowScrollToCurrentButton] = useState(false);
+  const lastUserScrollTime = useRef<number>(0);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Clear refs when topic changes
   useEffect(() => {
     highlightedRefs.current = [];
   }, [selectedTopic]);
 
+  // Detect user scroll and temporarily disable auto-scroll
+  const handleUserScroll = useCallback(() => {
+    const now = Date.now();
+    // Only consider it user scroll if enough time has passed since last programmatic scroll
+    if (now - lastUserScrollTime.current > 200) {
+      if (autoScroll) {
+        setAutoScroll(false);
+        setShowScrollToCurrentButton(true);
+        
+        // Clear existing timeout
+        if (scrollTimeoutRef.current) {
+          clearTimeout(scrollTimeoutRef.current);
+        }
+        
+        // Re-enable auto-scroll after 5 seconds of inactivity
+        scrollTimeoutRef.current = setTimeout(() => {
+          setAutoScroll(true);
+          setShowScrollToCurrentButton(false);
+        }, 5000);
+      }
+    }
+  }, [autoScroll]);
+
   // Custom scroll function that only scrolls within the container
-  const scrollToElement = (element: HTMLElement | null) => {
+  const scrollToElement = useCallback((element: HTMLElement | null, smooth = true) => {
     if (!element || !scrollViewportRef.current) return;
     
+    lastUserScrollTime.current = Date.now();
     const viewport = scrollViewportRef.current;
     const elementRect = element.getBoundingClientRect();
     const viewportRect = viewport.getBoundingClientRect();
@@ -59,9 +80,20 @@ export function TranscriptViewer({
     // Smooth scroll to the calculated position
     viewport.scrollTo({
       top: Math.max(0, scrollPosition),
-      behavior: 'smooth'
+      behavior: smooth ? 'smooth' : 'auto'
     });
-  };
+  }, []);
+
+  const jumpToCurrent = useCallback(() => {
+    if (currentSegmentRef.current) {
+      setAutoScroll(true);
+      setShowScrollToCurrentButton(false);
+      scrollToElement(currentSegmentRef.current);
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    }
+  }, [scrollToElement]);
 
   // Scroll to first highlighted segment
   useEffect(() => {
@@ -70,17 +102,28 @@ export function TranscriptViewer({
         scrollToElement(highlightedRefs.current[0]);
       }, 100);
     }
-  }, [selectedTopic, autoScroll]);
+  }, [selectedTopic, autoScroll, scrollToElement]);
 
-  // Auto-scroll to current playing segment
+  // Auto-scroll to current playing segment with smooth tracking
   useEffect(() => {
-    if (autoScroll && currentTime && currentSegmentRef.current) {
-      const scrollTimeout = setTimeout(() => {
-        scrollToElement(currentSegmentRef.current);
-      }, 100);
-      return () => clearTimeout(scrollTimeout);
+    if (autoScroll && currentSegmentRef.current && currentTime > 0) {
+      // Check if current segment is visible
+      const viewport = scrollViewportRef.current;
+      if (viewport) {
+        const element = currentSegmentRef.current;
+        const elementRect = element.getBoundingClientRect();
+        const viewportRect = viewport.getBoundingClientRect();
+        
+        // Check if element is outside the center third of viewport
+        const topThreshold = viewportRect.top + viewportRect.height * 0.3;
+        const bottomThreshold = viewportRect.top + viewportRect.height * 0.7;
+        
+        if (elementRect.top < topThreshold || elementRect.bottom > bottomThreshold) {
+          scrollToElement(currentSegmentRef.current, true);
+        }
+      }
     }
-  }, [currentTime, autoScroll]);
+  }, [currentTime, autoScroll, scrollToElement]);
 
   const getSegmentTopic = (segment: TranscriptSegment): { topic: Topic; index: number } | null => {
     for (let i = 0; i < topics.length; i++) {
@@ -103,7 +146,6 @@ export function TranscriptViewer({
   };
 
   const isCurrentSegment = (segment: TranscriptSegment): boolean => {
-    if (!currentTime) return false;
     return currentTime >= segment.start && currentTime < segment.start + segment.duration;
   };
 
@@ -113,30 +155,6 @@ export function TranscriptViewer({
     },
     [onTimestampClick]
   );
-  
-  // Filter segments to show only relevant ones
-  const getVisibleSegments = useCallback(() => {
-    if (showAll) return transcript;
-    
-    return transcript.filter((segment, index) => {
-      // Always show segments that are part of the selected topic
-      if (selectedTopic && isSegmentHighlighted(segment)) {
-        return true;
-      }
-      
-      // If video is playing, show segments around current time
-      if (currentTime > 0) {
-        const segmentEnd = segment.start + segment.duration;
-        return segment.start >= (currentTime - TIME_WINDOW_BEFORE) && 
-               segment.start <= (currentTime + TIME_WINDOW_AFTER);
-      }
-      
-      // Show initial segments when no playback has started
-      return index < INITIAL_SEGMENTS;
-    });
-  }, [transcript, selectedTopic, currentTime, showAll]);
-  
-  const visibleSegments = getVisibleSegments();
 
   return (
     <div className="h-full flex flex-col rounded-lg border bg-card shadow-sm">
@@ -146,24 +164,20 @@ export function TranscriptViewer({
           <div className="flex items-center gap-2">
             <h3 className="font-semibold text-sm">Transcript</h3>
             <Badge variant="outline" className="text-xs">
-              {visibleSegments.length === transcript.length 
-                ? `${transcript.length} segments`
-                : `${visibleSegments.length} of ${transcript.length}`}
+              {transcript.length} segments
             </Badge>
           </div>
           <div className="flex items-center gap-2">
             <Button
-              variant={showAll ? "default" : "outline"}
-              size="sm"
-              onClick={() => setShowAll(!showAll)}
-              className="text-xs h-7"
-            >
-              {showAll ? "Show Context" : "Show All"}
-            </Button>
-            <Button
               variant={autoScroll ? "default" : "outline"}
               size="sm"
-              onClick={() => setAutoScroll(!autoScroll)}
+              onClick={() => {
+                setAutoScroll(!autoScroll);
+                if (!autoScroll) {
+                  setShowScrollToCurrentButton(false);
+                  jumpToCurrent();
+                }
+              }}
               className="text-xs h-7"
             >
               {autoScroll ? (
@@ -195,39 +209,50 @@ export function TranscriptViewer({
         )}
       </div>
 
+      {/* Jump to current button */}
+      {showScrollToCurrentButton && currentTime > 0 && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-10">
+          <Button
+            size="sm"
+            onClick={jumpToCurrent}
+            className="shadow-lg"
+          >
+            <ChevronDown className="w-4 h-4 mr-1" />
+            Jump to Current
+          </Button>
+        </div>
+      )}
+
       {/* Transcript content */}
       <ScrollArea className="flex-1" ref={scrollAreaRef}>
-        <div className="p-4 space-y-1" ref={(el) => {
-          // Get the viewport element from ScrollArea
-          if (el?.parentElement) {
-            scrollViewportRef.current = el.parentElement;
-          }
-        }}>
-          {/* Show indicator when content is filtered */}
-          {!showAll && visibleSegments.length < transcript.length && visibleSegments.length > 0 && (
-            <div className="text-center py-2 mb-3">
-              <Badge variant="secondary" className="text-xs">
-                <FileText className="w-3 h-3 mr-1" />
-                Showing context around {currentTime > 0 ? 'current playback' : 'beginning'}
-              </Badge>
-            </div>
-          )}
-          
-          {visibleSegments.length === 0 ? (
+        <div 
+          className="p-4 space-y-1" 
+          ref={(el) => {
+            // Get the viewport element from ScrollArea
+            if (el?.parentElement) {
+              scrollViewportRef.current = el.parentElement;
+              // Add scroll listener
+              el.parentElement.addEventListener('scroll', handleUserScroll);
+              return () => {
+                el.parentElement?.removeEventListener('scroll', handleUserScroll);
+              };
+            }
+          }}
+        >
+          {transcript.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground text-sm">
-              No segments to display in current time range
+              No transcript available
             </div>
           ) : (
-            visibleSegments.map((segment, index) => {
-              const originalIndex = transcript.indexOf(segment);
+            transcript.map((segment, index) => {
               const isHighlighted = isSegmentHighlighted(segment);
               const isCurrent = isCurrentSegment(segment);
               const topicInfo = getSegmentTopic(segment);
-              const isHovered = hoveredSegment === originalIndex;
+              const isHovered = hoveredSegment === index;
 
             return (
               <div
-                key={originalIndex}
+                key={index}
                 ref={(el) => {
                   if (isHighlighted) {
                     const highlightIndex = highlightedRefs.current.length;
@@ -240,19 +265,23 @@ export function TranscriptViewer({
                 className={cn(
                   "group relative px-3 py-2 rounded-lg transition-all duration-200 cursor-pointer",
                   "hover:bg-muted/50",
-                  isCurrent && "bg-primary/10 ring-2 ring-primary/20",
                   isHovered && "bg-muted"
                 )}
                 style={{
-                  backgroundColor: isHighlighted && topicInfo
+                  backgroundColor: isCurrent 
+                    ? "hsl(var(--primary) / 0.15)"
+                    : isHighlighted && topicInfo
                     ? `hsl(${getTopicHSLColor(topicInfo.index)} / 0.1)`
                     : undefined,
-                  borderLeft: isHighlighted && topicInfo
+                  borderLeft: isCurrent
+                    ? "4px solid hsl(var(--primary))"
+                    : isHighlighted && topicInfo
                     ? `3px solid hsl(${getTopicHSLColor(topicInfo.index)})`
                     : undefined,
+                  boxShadow: isCurrent ? "0 0 0 1px hsl(var(--primary) / 0.2)" : undefined,
                 }}
                 onClick={() => handleSegmentClick(segment)}
-                onMouseEnter={() => setHoveredSegment(originalIndex)}
+                onMouseEnter={() => setHoveredSegment(index)}
                 onMouseLeave={() => setHoveredSegment(null)}
               >
                 {/* Play indicator on hover */}
@@ -274,9 +303,12 @@ export function TranscriptViewer({
                   {segment.text}
                 </p>
 
-                {/* Current playback indicator */}
+                {/* Current playback indicator with pulse animation */}
                 {isCurrent && (
-                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-l-lg animate-pulse" />
+                  <>
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-l-lg" />
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-l-lg animate-pulse opacity-50" />
+                  </>
                 )}
               </div>
             );
