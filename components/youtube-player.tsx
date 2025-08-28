@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Play, Pause, SkipForward, SkipBack, Volume2 } from "lucide-react";
+import { Play, SkipForward, SkipBack, Volume2 } from "lucide-react";
 import { Topic } from "@/lib/types";
 import { formatDuration, getTopicHSLColor } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -167,6 +167,7 @@ export function YouTubePlayer({
       setCurrentSegmentIndex(nextIndex);
       const segment = selectedTopic.segments[nextIndex];
       playerRef.current?.seekTo(segment.start, true);
+      playerRef.current?.playVideo();
     }
   };
 
@@ -176,6 +177,7 @@ export function YouTubePlayer({
     setCurrentSegmentIndex(prevIndex);
     const segment = selectedTopic.segments[prevIndex];
     playerRef.current?.seekTo(segment.start, true);
+    playerRef.current?.playVideo();
   };
 
   const handleSeek = (time: number) => {
@@ -221,19 +223,6 @@ export function YouTubePlayer({
           {/* Playback controls */}
           <div className="mt-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={togglePlayPause}
-                className="h-10 w-10"
-              >
-                {isPlaying ? (
-                  <Pause className="h-5 w-5" />
-                ) : (
-                  <Play className="h-5 w-5" />
-                )}
-              </Button>
-              
               {selectedTopic && (
                 <>
                   <Button
@@ -241,7 +230,7 @@ export function YouTubePlayer({
                     variant="ghost"
                     onClick={skipToPrevSegment}
                     disabled={currentSegmentIndex === 0}
-                    className="h-8 w-8"
+                    className="h-9 w-9"
                   >
                     <SkipBack className="h-4 w-4" />
                   </Button>
@@ -250,14 +239,14 @@ export function YouTubePlayer({
                     variant="ghost"
                     onClick={skipToNextSegment}
                     disabled={currentSegmentIndex >= selectedTopic.segments.length - 1}
-                    className="h-8 w-8"
+                    className="h-9 w-9"
                   >
                     <SkipForward className="h-4 w-4" />
                   </Button>
                 </>
               )}
 
-              <div className="ml-4 flex items-center gap-2">
+              <div className="ml-3 flex items-center gap-2">
                 <Volume2 className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-mono text-muted-foreground">
                   {formatDuration(currentTime)} / {formatDuration(videoDuration)}

@@ -171,24 +171,33 @@ export function VideoProgressBar({
         </div>
 
         {/* Topic color legend */}
-        <div className="flex flex-wrap gap-2 mt-4">
+        <div className="mt-4 space-y-2">
           {topics.map((topic, index) => (
             <button
               key={topic.id}
               className={cn(
-                "px-2 py-1 rounded-md text-xs font-medium transition-all",
-                "hover:scale-105",
-                selectedTopic?.id === topic.id && "ring-2 ring-offset-2"
+                "w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all",
+                "hover:shadow-md hover:-translate-x-1",
+                selectedTopic?.id === topic.id && "ring-2 ring-offset-1 shadow-md"
               )}
               style={{
-                backgroundColor: `hsl(${getTopicHSLColor(index)} / 0.2)`,
+                backgroundColor: `hsl(${getTopicHSLColor(index)} / 0.1)`,
                 borderColor: `hsl(${getTopicHSLColor(index)})`,
                 borderWidth: "1px",
                 borderStyle: "solid",
               }}
               onClick={() => onTopicSelect?.(topic)}
             >
-              {topic.title}
+              <div className="flex items-center gap-2">
+                <div 
+                  className="w-3 h-3 rounded-full shrink-0"
+                  style={{ backgroundColor: `hsl(${getTopicHSLColor(index)})` }}
+                />
+                <span className="font-medium text-left">{topic.title}</span>
+              </div>
+              <span className="text-xs text-muted-foreground font-mono ml-2">
+                {formatDuration(topic.duration)}
+              </span>
             </button>
           ))}
         </div>
