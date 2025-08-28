@@ -6,7 +6,7 @@ import { getTopicHSLColor } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Play, Eye, EyeOff } from "lucide-react";
+import { Play, Eye, EyeOff, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface TranscriptViewerProps {
@@ -30,6 +30,12 @@ export function TranscriptViewer({
   const [autoScroll, setAutoScroll] = useState(true);
   const [hoveredSegment, setHoveredSegment] = useState<number | null>(null);
   const currentSegmentRef = useRef<HTMLDivElement | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  
+  // Time window for filtering segments (seconds before and after current time)
+  const TIME_WINDOW_BEFORE = 30;
+  const TIME_WINDOW_AFTER = 60;
+  const INITIAL_SEGMENTS = 15;
 
   // Clear refs when topic changes
   useEffect(() => {
@@ -107,6 +113,30 @@ export function TranscriptViewer({
     },
     [onTimestampClick]
   );
+  
+  // Filter segments to show only relevant ones
+  const getVisibleSegments = useCallback(() => {
+    if (showAll) return transcript;
+    
+    return transcript.filter((segment, index) => {
+      // Always show segments that are part of the selected topic
+      if (selectedTopic && isSegmentHighlighted(segment)) {
+        return true;
+      }
+      
+      // If video is playing, show segments around current time
+      if (currentTime > 0) {
+        const segmentEnd = segment.start + segment.duration;
+        return segment.start >= (currentTime - TIME_WINDOW_BEFORE) && 
+               segment.start <= (currentTime + TIME_WINDOW_AFTER);
+      }
+      
+      // Show initial segments when no playback has started
+      return index < INITIAL_SEGMENTS;
+    });
+  }, [transcript, selectedTopic, currentTime, showAll]);
+  
+  const visibleSegments = getVisibleSegments();
 
   return (
     <div className="h-full flex flex-col rounded-lg border bg-card shadow-sm">
@@ -116,27 +146,39 @@ export function TranscriptViewer({
           <div className="flex items-center gap-2">
             <h3 className="font-semibold text-sm">Transcript</h3>
             <Badge variant="outline" className="text-xs">
-              {transcript.length} segments
+              {visibleSegments.length === transcript.length 
+                ? `${transcript.length} segments`
+                : `${visibleSegments.length} of ${transcript.length}`}
             </Badge>
           </div>
-          <Button
-            variant={autoScroll ? "default" : "outline"}
-            size="sm"
-            onClick={() => setAutoScroll(!autoScroll)}
-            className="text-xs h-7"
-          >
-            {autoScroll ? (
-              <>
-                <Eye className="w-3 h-3 mr-1" />
-                Auto-follow
-              </>
-            ) : (
-              <>
-                <EyeOff className="w-3 h-3 mr-1" />
-                Manual
-              </>
-            )}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={showAll ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowAll(!showAll)}
+              className="text-xs h-7"
+            >
+              {showAll ? "Show Context" : "Show All"}
+            </Button>
+            <Button
+              variant={autoScroll ? "default" : "outline"}
+              size="sm"
+              onClick={() => setAutoScroll(!autoScroll)}
+              className="text-xs h-7"
+            >
+              {autoScroll ? (
+                <>
+                  <Eye className="w-3 h-3 mr-1" />
+                  Auto
+                </>
+              ) : (
+                <>
+                  <EyeOff className="w-3 h-3 mr-1" />
+                  Manual
+                </>
+              )}
+            </Button>
+          </div>
         </div>
         {selectedTopic && (
           <div className="flex items-center gap-2">
@@ -161,15 +203,31 @@ export function TranscriptViewer({
             scrollViewportRef.current = el.parentElement;
           }
         }}>
-          {transcript.map((segment, index) => {
-            const isHighlighted = isSegmentHighlighted(segment);
-            const isCurrent = isCurrentSegment(segment);
-            const topicInfo = getSegmentTopic(segment);
-            const isHovered = hoveredSegment === index;
+          {/* Show indicator when content is filtered */}
+          {!showAll && visibleSegments.length < transcript.length && visibleSegments.length > 0 && (
+            <div className="text-center py-2 mb-3">
+              <Badge variant="secondary" className="text-xs">
+                <FileText className="w-3 h-3 mr-1" />
+                Showing context around {currentTime > 0 ? 'current playback' : 'beginning'}
+              </Badge>
+            </div>
+          )}
+          
+          {visibleSegments.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              No segments to display in current time range
+            </div>
+          ) : (
+            visibleSegments.map((segment, index) => {
+              const originalIndex = transcript.indexOf(segment);
+              const isHighlighted = isSegmentHighlighted(segment);
+              const isCurrent = isCurrentSegment(segment);
+              const topicInfo = getSegmentTopic(segment);
+              const isHovered = hoveredSegment === originalIndex;
 
             return (
               <div
-                key={index}
+                key={originalIndex}
                 ref={(el) => {
                   if (isHighlighted) {
                     const highlightIndex = highlightedRefs.current.length;
@@ -194,7 +252,7 @@ export function TranscriptViewer({
                     : undefined,
                 }}
                 onClick={() => handleSegmentClick(segment)}
-                onMouseEnter={() => setHoveredSegment(index)}
+                onMouseEnter={() => setHoveredSegment(originalIndex)}
                 onMouseLeave={() => setHoveredSegment(null)}
               >
                 {/* Play indicator on hover */}
@@ -222,7 +280,8 @@ export function TranscriptViewer({
                 )}
               </div>
             );
-          })}
+          })
+          )}
         </div>
       </ScrollArea>
     </div>
