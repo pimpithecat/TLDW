@@ -91,8 +91,9 @@ function extractCitations(response: string, transcript: TranscriptSegment[]): {
     return '';
   });
   
-  // Clean up any extra whitespace
-  processedContent = processedContent.replace(/\s+/g, ' ').trim();
+  // Clean up extra whitespace while preserving newlines for formatting
+  // This regex replaces multiple spaces/tabs with single space but keeps newlines
+  processedContent = processedContent.replace(/[^\S\n]+/g, ' ').trim();
   
   return { content: processedContent, citations };
 }
@@ -131,37 +132,79 @@ ${chatHistoryContext}
 ## User Question
 ${message}
 
-## Instructions
-1. Answer the user's question based ONLY on the video transcript provided
-2. IMPORTANT: Include inline citations by adding [MM:SS] timestamps directly after each sentence or claim that references the video
-3. Place citations immediately after the relevant statement, like this: "The speaker explains the concept [02:45] and provides an example [03:12]."
-4. For bullet points, add the citation at the end of each point: "• First point about X [01:23]"
-5. When quoting directly, place the timestamp right after the quote
-6. Be concise but thorough
-7. If the question cannot be answered from the transcript, say so clearly
-8. Cite multiple relevant sections when they provide different perspectives
-9. Always prefer inline citations over listing them at the end
+## Instructions for Response Format
 
-Format your response with citations embedded naturally in the text, not as a separate section.`;
+### Content Structure:
+1. Answer based ONLY on the video transcript provided
+2. Structure your response for maximum readability:
+   - Use **bold** for key terms and important concepts
+   - Break content into clear paragraphs (max 3-4 sentences each)
+   - Use bullet points for lists or multiple related items
+   - Add section headers (##) if covering multiple aspects
+   - Keep paragraphs concise and scannable
+
+### Citation Requirements:
+3. ALWAYS include inline citations using [MM:SS] timestamps
+4. Place citations immediately after relevant statements: "The speaker explains [02:45]"
+5. For bullet points, add citations at the end: "• Key point [01:23]"
+6. When quoting, place timestamp after the quote
+7. Cite multiple sections when they provide different perspectives
+
+### Response Guidelines:
+8. Be concise yet comprehensive - aim for clarity over length
+9. If the question cannot be answered from the transcript, state this clearly
+10. Focus on the most relevant and valuable information
+11. Use natural, conversational language while maintaining accuracy
+
+### Formatting Examples:
+Good: "The speaker introduces **three main concepts** [02:15]. First, they discuss..."
+Good: "• **Performance optimization** involves caching [05:30]\n• **Memory management** requires careful planning [06:45]"
+Bad: "The speaker talks about many things in the video and mentions several concepts..."
+
+Provide a well-structured, easy-to-read response with proper formatting and citations.`;
 
     const model = genAI.getGenerativeModel({ 
       model: "gemini-2.5-flash",
       generationConfig: {
         temperature: 0.7,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 2048,
       }
     });
 
     let response = '';
-    try {
-      const result = await model.generateContent(prompt);
-      response = result.response?.text() || '';
-    } catch (error) {
-      console.error('Gemini API error:', error);
-      return NextResponse.json({ 
-        content: "I apologize, but I'm having trouble processing your request right now. Please try again in a moment.",
-        citations: [],
-      });
+    let retryCount = 0;
+    const maxRetries = 2;
+    
+    while (retryCount <= maxRetries) {
+      try {
+        const result = await model.generateContent(prompt);
+        response = result.response?.text() || '';
+        
+        if (response) {
+          break; // Success, exit retry loop
+        }
+      } catch (error: any) {
+        console.error(`Gemini API error (attempt ${retryCount + 1}):`, error);
+        
+        if (retryCount === maxRetries) {
+          // Final attempt failed
+          const errorMessage = error?.message || 'Unknown error';
+          if (errorMessage.includes('429') || errorMessage.includes('quota')) {
+            return NextResponse.json({ 
+              content: "The AI service is currently at capacity. Please wait a moment and try again.",
+              citations: [],
+            });
+          }
+          return NextResponse.json({ 
+            content: "I apologize, but I'm having trouble processing your request right now. Please try again in a moment.",
+            citations: [],
+          });
+        }
+        
+        // Wait before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
+        retryCount++;
+      }
     }
     
     if (!response) {

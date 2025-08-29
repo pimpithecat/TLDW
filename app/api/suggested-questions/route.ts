@@ -57,14 +57,41 @@ Return ONLY a JSON array with 3 question strings, no other text:
       }
     });
 
-    const result = await model.generateContent(prompt);
-    const response = result.response?.text() || '';
+    let response = '';
+    let retryCount = 0;
+    const maxRetries = 2;
     
-    console.log('Gemini suggested questions response:', response);
+    while (retryCount <= maxRetries) {
+      try {
+        const result = await model.generateContent(prompt);
+        response = result.response?.text() || '';
+        
+        if (response) {
+          console.log('Gemini suggested questions response:', response);
+          break;
+        }
+      } catch (error: any) {
+        console.error(`Gemini API error for suggested questions (attempt ${retryCount + 1}):`, error);
+        
+        if (retryCount === maxRetries) {
+          console.error('Max retries reached for suggested questions');
+          break;
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+        retryCount++;
+      }
+    }
     
     if (!response) {
-      console.error('No response from Gemini model for suggested questions');
-      throw new Error('No response from AI model');
+      console.log('Using fallback questions due to no AI response');
+      return NextResponse.json({ 
+        questions: [
+          "What are the key insights about execution speed in startups?",
+          "How does agentic AI differ from traditional AI workflows?",
+          "Why is learning to code still valuable in the AI era?"
+        ]
+      });
     }
 
     let questions: string[] = [];

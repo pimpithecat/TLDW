@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { Send, Loader2, MessageSquare } from "lucide-react";
 
 interface AIChatProps {
@@ -57,7 +58,7 @@ export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChat
     }
   };
 
-  const sendMessage = async (messageText?: string) => {
+  const sendMessage = async (messageText?: string, retryCount = 0) => {
     const text = messageText || input.trim();
     if (!text || isLoading) return;
 
@@ -68,11 +69,18 @@ export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChat
       timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
-    setInput("");
+    // Only add user message on first attempt
+    if (retryCount === 0) {
+      setMessages(prev => [...prev, userMessage]);
+      setInput("");
+    }
     setIsLoading(true);
 
     try {
+      // Add timeout controller
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -83,19 +91,31 @@ export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChat
           videoId,
           chatHistory: messages,
         }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        throw new Error("Failed to get response");
+        // Check if it's a rate limit or temporary error
+        if (response.status === 429 || response.status === 503) {
+          throw new Error("Service temporarily unavailable");
+        }
+        throw new Error(`Failed to get response (${response.status})`);
       }
 
       const data = await response.json();
+      
+      // Validate response has content
+      if (!data.content || data.content.trim() === "") {
+        throw new Error("Empty response received");
+      }
       
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: data.content,
-        citations: data.citations,
+        citations: data.citations || [],
         timestamp: new Date(),
       };
 
@@ -104,12 +124,36 @@ export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChat
       if (messages.length === 0 && suggestedQuestions.length > 0) {
         fetchSuggestedQuestions();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error sending message:", error);
+      
+      // Retry logic for temporary failures
+      if (retryCount < 2 && (
+        error.name === 'AbortError' ||
+        error.message?.includes('temporarily unavailable') ||
+        error.message?.includes('Empty response')
+      )) {
+        console.log(`Retrying message (attempt ${retryCount + 2}/3)...`);
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, 1500 * (retryCount + 1)));
+        return sendMessage(text, retryCount + 1);
+      }
+      
+      // Provide specific error messages
+      let errorContent = "Sorry, I encountered an error processing your request.";
+      
+      if (error.name === 'AbortError') {
+        errorContent = "The request took too long to process. Please try again with a simpler question.";
+      } else if (error.message?.includes('temporarily unavailable')) {
+        errorContent = "The AI service is temporarily unavailable. Please try again in a moment.";
+      } else if (error.message?.includes('Empty response')) {
+        errorContent = "I couldn't generate a proper response. Please try rephrasing your question.";
+      }
+      
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: "Sorry, I encountered an error processing your request. Please try again.",
+        content: errorContent,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -126,80 +170,82 @@ export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChat
   };
 
   return (
-    <Card className="w-full h-[600px] flex flex-col">
-      <div className="p-4 border-b">
-        <div className="flex items-center gap-2">
-          <MessageSquare className="w-5 h-5 text-primary" />
-          <h3 className="font-semibold">Ask about this video</h3>
-        </div>
-      </div>
-
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-        {messages.length === 0 && (
-          <div className="text-center text-muted-foreground py-8">
-            <MessageSquare className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-            <p className="text-sm">Ask questions about the video content</p>
-            <p className="text-xs mt-2">I'll provide answers with citations from the transcript</p>
+    <TooltipProvider>
+      <Card className="w-full h-[600px] flex flex-col">
+        <div className="p-4 border-b">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="w-5 h-5 text-primary" />
+            <h3 className="font-semibold">Ask about this video</h3>
           </div>
-        )}
-        
-        <div className="space-y-4">
-          {messages.map((message) => (
-            <ChatMessageComponent
-              key={message.id}
-              message={message}
-              onTimestampClick={onTimestampClick}
-            />
-          ))}
-          
-          {isLoading && (
-            <div className="flex gap-3">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-              </div>
-              <Card className="p-4 bg-muted/30">
-                <p className="text-sm text-muted-foreground">Thinking...</p>
-              </Card>
+        </div>
+
+        <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+          {messages.length === 0 && (
+            <div className="text-center text-muted-foreground py-8">
+              <MessageSquare className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
+              <p className="text-sm">Ask questions about the video content</p>
+              <p className="text-xs mt-2">I'll provide answers with citations from the transcript</p>
             </div>
           )}
-        </div>
-      </ScrollArea>
-
-      {messages.length === 0 && (
-        <div className="px-4 pb-2">
-          <SuggestedQuestions
-            questions={suggestedQuestions}
-            onQuestionClick={sendMessage}
-            isLoading={loadingQuestions}
-          />
-        </div>
-      )}
-
-      <div className="p-4 border-t">
-        <div className="flex gap-2">
-          <Textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask about the video..."
-            className="resize-none"
-            rows={2}
-            disabled={isLoading}
-          />
-          <Button
-            onClick={() => sendMessage()}
-            disabled={!input.trim() || isLoading}
-            size="icon"
-            className="self-end"
-          >
-            {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
+          
+          <div className="space-y-4">
+            {messages.map((message) => (
+              <ChatMessageComponent
+                key={message.id}
+                message={message}
+                onTimestampClick={onTimestampClick}
+              />
+            ))}
+            
+            {isLoading && (
+              <div className="flex gap-3">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                </div>
+                <Card className="p-4 bg-muted/30">
+                  <p className="text-sm text-muted-foreground">Thinking...</p>
+                </Card>
+              </div>
             )}
-          </Button>
+          </div>
+        </ScrollArea>
+
+        {messages.length === 0 && (
+          <div className="px-4 pb-2">
+            <SuggestedQuestions
+              questions={suggestedQuestions}
+              onQuestionClick={sendMessage}
+              isLoading={loadingQuestions}
+            />
+          </div>
+        )}
+
+        <div className="p-4 border-t">
+          <div className="flex gap-2">
+            <Textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask about the video..."
+              className="resize-none"
+              rows={2}
+              disabled={isLoading}
+            />
+            <Button
+              onClick={() => sendMessage()}
+              disabled={!input.trim() || isLoading}
+              size="icon"
+              className="self-end"
+            >
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+            </Button>
+          </div>
         </div>
-      </div>
-    </Card>
+      </Card>
+    </TooltipProvider>
   );
 }
