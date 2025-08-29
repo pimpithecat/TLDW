@@ -6,6 +6,7 @@ import { TopicCard } from "@/components/topic-card";
 import { TranscriptViewer } from "@/components/transcript-viewer";
 import { YouTubePlayer } from "@/components/youtube-player";
 import { AIChat } from "@/components/ai-chat";
+import { ModelSelector, type GeminiModel } from "@/components/model-selector";
 import { Topic, TranscriptSegment } from "@/lib/types";
 import { extractVideoId } from "@/lib/utils";
 import { Loader2, Video, FileText, Sparkles } from "lucide-react";
@@ -23,6 +24,7 @@ export default function Home() {
   const [seekToTime, setSeekToTime] = useState<number | undefined>();
   const [currentTime, setCurrentTime] = useState(0);
   const [transcriptHeight, setTranscriptHeight] = useState<string>("auto");
+  const [selectedModel, setSelectedModel] = useState<GeminiModel>('gemini-2.5-flash');
 
   const processVideo = async (url: string) => {
     setIsLoading(true);
@@ -78,7 +80,8 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           transcript: fetchedTranscript,
-          videoId: extractedVideoId
+          videoId: extractedVideoId,
+          model: selectedModel
         }),
         signal: controller2.signal,
       }).catch(err => {
@@ -189,8 +192,16 @@ export default function Home() {
           <p className="text-muted-foreground">Too Long; Didn't Watch - Smart Video Navigation</p>
         </header>
 
-        <div className="flex justify-center mb-8">
+        <div className="flex flex-col items-center gap-4 mb-8">
           <UrlInput onSubmit={processVideo} isLoading={isLoading} />
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Model:</span>
+            <ModelSelector 
+              value={selectedModel} 
+              onChange={setSelectedModel} 
+              disabled={isLoading}
+            />
+          </div>
         </div>
 
         {error && (
