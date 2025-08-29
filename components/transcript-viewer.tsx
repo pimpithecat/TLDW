@@ -181,9 +181,6 @@ export function TranscriptViewer({
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <h3 className="font-semibold text-sm">Transcript</h3>
-            <Badge variant="outline" className="text-xs">
-              {transcript.length} segments
-            </Badge>
           </div>
           <div className="flex items-center gap-2">
             <Button
