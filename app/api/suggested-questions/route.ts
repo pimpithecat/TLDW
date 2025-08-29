@@ -58,7 +58,9 @@ Return ONLY a JSON array with 3 question strings, no other text:
     });
 
     const result = await model.generateContent(prompt);
-    const response = result.response.text();
+    const response = result.response?.text() || '';
+    
+    console.log('Gemini suggested questions response:', response);
     
     if (!response) {
       console.error('No response from Gemini model for suggested questions');
@@ -67,13 +69,48 @@ Return ONLY a JSON array with 3 question strings, no other text:
 
     let questions: string[] = [];
     try {
+      // First try direct JSON parse
       questions = JSON.parse(response);
       if (!Array.isArray(questions)) {
         throw new Error('Response is not an array');
       }
-      questions = questions.slice(0, 3);
-    } catch (e) {
-      console.error('Failed to parse questions:', e);
+    } catch (parseError) {
+      console.error('Failed to parse questions as JSON:', parseError);
+      console.log('Attempting to extract JSON array from response...');
+      
+      // Try to extract JSON array from the response
+      const jsonMatch = response.match(/\[[\s\S]*?\]/);
+      if (jsonMatch) {
+        try {
+          questions = JSON.parse(jsonMatch[0]);
+          console.log('Successfully extracted questions from response');
+        } catch (extractError) {
+          console.error('Failed to extract JSON array:', extractError);
+          // Try to extract questions from a numbered list or line-separated format
+          const lines = response.split('\n').filter(line => line.trim());
+          questions = lines
+            .map(line => line.replace(/^\d+\.\s*/, '').replace(/^[-*]\s*/, '').replace(/^["']|["']$/g, '').trim())
+            .filter(q => q.length > 0 && q.length < 100)
+            .slice(0, 3);
+          
+          if (questions.length === 0) {
+            throw new Error('Could not extract any questions from response');
+          }
+          console.log('Extracted questions from text format:', questions);
+        }
+      } else {
+        throw new Error('No JSON array found in response');
+      }
+    }
+    
+    // Validate and clean questions
+    questions = questions
+      .filter(q => typeof q === 'string' && q.trim().length > 0)
+      .map(q => q.trim())
+      .slice(0, 3);
+    
+    if (questions.length === 0) {
+      console.error('No valid questions after processing');
       questions = [
         "What are the main topics discussed in this video?",
         "Can you summarize the key points made?",
