@@ -4,27 +4,6 @@ import { TranscriptSegment, Topic } from '@/lib/types';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
-function sanitizeJsonString(str: string): string {
-  try {
-    // Extract JSON array
-    const jsonMatch = str.match(/\[.*\]/s);
-    if (!jsonMatch) return str;
-    
-    let cleaned = jsonMatch[0];
-    
-    // Remove control characters
-    cleaned = cleaned.replace(/[\x00-\x1F\x7F]/g, ' ');
-    
-    // Fix unescaped quotes in strings (simple approach for array of strings)
-    cleaned = cleaned.replace(/("[^"]*)(")([ \t\r\n]*[,\]])/g, '$1\\"$3');
-    
-    return cleaned;
-  } catch (e) {
-    console.error('Error in sanitizeJsonString:', e);
-    return str;
-  }
-}
-
 function getTranscriptSample(segments: TranscriptSegment[], maxLength: number = 3000): string {
   let sample = '';
   for (const segment of segments) {
@@ -79,52 +58,11 @@ Return ONLY a JSON array with 3 question strings, no other text:
     });
 
     const result = await model.generateContent(prompt);
+    const response = result.response.text();
     
-    // Check if the response was blocked
-    if (!result.response) {
-      console.error('No response object from Gemini');
+    if (!response) {
+      console.error('No response from Gemini model for suggested questions');
       throw new Error('No response from AI model');
-    }
-    
-    // Check for safety blocks or other issues
-    if (result.response.promptFeedback?.blockReason) {
-      console.error('Response blocked:', result.response.promptFeedback);
-      // Return default questions if blocked
-      return NextResponse.json({ 
-        questions: [
-          "What are the main topics discussed in this video?",
-          "Can you summarize the key points made?",
-          "What are the most important takeaways?"
-        ]
-      });
-    }
-    
-    let response: string;
-    try {
-      response = result.response.text();
-    } catch (textError) {
-      console.error('Failed to get text from response:', textError);
-      console.log('Full response object:', JSON.stringify(result.response, null, 2));
-      // Return default questions if we can't get text
-      return NextResponse.json({ 
-        questions: [
-          "What are the main topics discussed in this video?",
-          "Can you summarize the key points made?",
-          "What are the most important takeaways?"
-        ]
-      });
-    }
-    
-    if (!response || response.trim() === '') {
-      console.error('Empty response from Gemini model');
-      // Return default questions for empty responses
-      return NextResponse.json({ 
-        questions: [
-          "What are the main topics discussed in this video?",
-          "Can you summarize the key points made?",
-          "What are the most important takeaways?"
-        ]
-      });
     }
 
     let questions: string[] = [];
@@ -136,24 +74,11 @@ Return ONLY a JSON array with 3 question strings, no other text:
       questions = questions.slice(0, 3);
     } catch (e) {
       console.error('Failed to parse questions:', e);
-      console.log('Attempting to sanitize and parse JSON...');
-      
-      try {
-        const sanitized = sanitizeJsonString(response);
-        questions = JSON.parse(sanitized);
-        if (!Array.isArray(questions)) {
-          throw new Error('Sanitized response is not an array');
-        }
-        questions = questions.slice(0, 3);
-        console.log('Successfully parsed sanitized questions');
-      } catch (e2) {
-        console.error('Failed to parse sanitized JSON:', e2);
-        questions = [
-          "What are the main topics discussed in this video?",
-          "Can you summarize the key points made?",
-          "What are the most important takeaways?"
-        ];
-      }
+      questions = [
+        "What are the main topics discussed in this video?",
+        "Can you summarize the key points made?",
+        "What are the most important takeaways?"
+      ];
     }
 
     return NextResponse.json({ questions });
