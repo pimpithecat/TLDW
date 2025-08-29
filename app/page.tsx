@@ -7,7 +7,9 @@ import { TranscriptViewer } from "@/components/transcript-viewer";
 import { YouTubePlayer } from "@/components/youtube-player";
 import { AIChat } from "@/components/ai-chat";
 import { ModelSelector, type GeminiModel } from "@/components/model-selector";
-import { Topic, TranscriptSegment } from "@/lib/types";
+import { LoadingContext } from "@/components/loading-context";
+import { LoadingTips } from "@/components/loading-tips";
+import { Topic, TranscriptSegment, VideoInfo } from "@/lib/types";
 import { extractVideoId } from "@/lib/utils";
 import { Loader2, Video, FileText, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -16,8 +18,11 @@ import { Badge } from "@/components/ui/badge";
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingStage, setLoadingStage] = useState<'fetching' | 'understanding' | 'generating'>('fetching');
   const [error, setError] = useState("");
   const [videoId, setVideoId] = useState<string | null>(null);
+  const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
+  const [videoPreview, setVideoPreview] = useState<string>("");
   const [transcript, setTranscript] = useState<TranscriptSegment[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
@@ -28,7 +33,10 @@ export default function Home() {
 
   const processVideo = async (url: string) => {
     setIsLoading(true);
+    setLoadingStage('fetching');
     setError("");
+    setVideoInfo(null);
+    setVideoPreview("");
     
     try {
       const extractedVideoId = extractVideoId(url);
@@ -37,6 +45,20 @@ export default function Home() {
       }
       
       setVideoId(extractedVideoId);
+      
+      // Fetch video info immediately (non-blocking)
+      fetch("/api/video-info", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data && !data.error) {
+            setVideoInfo(data);
+          }
+        })
+        .catch(err => console.error("Error fetching video info:", err));
       
       // Create AbortController for timeout
       const controller = new AbortController();
@@ -69,8 +91,27 @@ export default function Home() {
       
       const { transcript: fetchedTranscript } = await transcriptRes.json();
       setTranscript(fetchedTranscript);
+      setLoadingStage('understanding');
+      
+      // Generate quick preview (non-blocking)
+      fetch("/api/quick-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          transcript: fetchedTranscript,
+          videoTitle: videoInfo?.title
+        }),
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.preview) {
+            setVideoPreview(data.preview);
+          }
+        })
+        .catch(err => console.error("Error generating preview:", err));
       
       // Generate topics with timeout
+      setLoadingStage('generating');
       const controller2 = new AbortController();
       const timeoutId2 = setTimeout(() => controller2.abort(), 60000); // 60 second timeout for AI generation
       
@@ -212,26 +253,20 @@ export default function Home() {
 
         {isLoading && (
           <div className="max-w-6xl mx-auto">
-            <div className="flex flex-col items-center justify-center py-12 mb-8">
+            <div className="flex flex-col items-center justify-center mb-8">
               <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
-              <p className="text-foreground font-medium">Analyzing video and generating topics...</p>
-              <p className="text-sm text-muted-foreground mt-2">This may take a minute</p>
+              <p className="text-foreground font-medium">Analyzing video and generating highlight reels</p>
+              <p className="text-sm text-muted-foreground mt-2">This typically takes 30-60 seconds</p>
             </div>
             
-            {/* Loading skeletons */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 space-y-4">
-                <Skeleton className="h-[320px] w-full rounded-lg" />
-                <div className="space-y-3">
-                  <Skeleton className="h-24 w-full rounded-lg" />
-                  <Skeleton className="h-24 w-full rounded-lg" />
-                  <Skeleton className="h-24 w-full rounded-lg" />
-                </div>
-              </div>
-              <div className="lg:col-span-1">
-                <Skeleton className="h-[calc(100vh-6rem)] w-full rounded-lg" />
-              </div>
-            </div>
+            {/* Enhanced Loading Experience */}
+            <LoadingContext 
+              videoInfo={videoInfo}
+              preview={videoPreview}
+              stage={loadingStage}
+            />
+            
+            <LoadingTips />
           </div>
         )}
 

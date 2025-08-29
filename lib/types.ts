@@ -43,3 +43,11 @@ export interface ChatMessage {
   citations?: Citation[];
   timestamp: Date;
 }
+
+export interface VideoInfo {
+  videoId: string;
+  title: string;
+  author: string;
+  thumbnail: string;
+  duration: number | null;
+}
