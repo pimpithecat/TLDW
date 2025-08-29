@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Play, SkipForward, SkipBack, Volume2 } from "lucide-react";
+import { Play, SkipForward, SkipBack } from "lucide-react";
 import { Topic } from "@/lib/types";
 import { formatDuration, getTopicHSLColor } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -313,7 +313,6 @@ export function YouTubePlayer({
               )}
 
               <div className="ml-3 flex items-center gap-2">
-                <Volume2 className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-mono text-muted-foreground">
                   {formatDuration(currentTime)} / {formatDuration(videoDuration)}
                 </span>
