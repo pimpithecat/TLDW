@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { ChatMessage, TranscriptSegment, Topic } from "@/lib/types";
 import { ChatMessageComponent } from "./chat-message";
 import { SuggestedQuestions } from "./suggested-questions";
+import { ModelSelector, type GeminiModel } from "./model-selector";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,6 +25,7 @@ export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChat
   const [isLoading, setIsLoading] = useState(false);
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<GeminiModel>('gemini-2.5-flash');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,13 +40,25 @@ export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChat
     }
   }, [transcript]);
 
+  useEffect(() => {
+    const savedModel = localStorage.getItem('selectedChatModel');
+    if (savedModel && ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-2.0-flash'].includes(savedModel)) {
+      setSelectedModel(savedModel as GeminiModel);
+    }
+  }, []);
+
+  const handleModelChange = (model: GeminiModel) => {
+    setSelectedModel(model);
+    localStorage.setItem('selectedChatModel', model);
+  };
+
   const fetchSuggestedQuestions = async () => {
     setLoadingQuestions(true);
     try {
       const response = await fetch("/api/suggested-questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript, topics }),
+        body: JSON.stringify({ transcript, topics, model: selectedModel }),
       });
       
       if (response.ok) {
@@ -90,6 +104,7 @@ export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChat
           topics,
           videoId,
           chatHistory: messages,
+          model: selectedModel,
         }),
         signal: controller.signal,
       });
@@ -173,9 +188,16 @@ export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChat
     <TooltipProvider>
       <Card className="w-full h-[600px] flex flex-col">
         <div className="p-4 border-b">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="w-5 h-5 text-primary" />
-            <h3 className="font-semibold">Ask about this video</h3>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold">Ask about this video</h3>
+            </div>
+            <ModelSelector
+              value={selectedModel}
+              onChange={handleModelChange}
+              disabled={isLoading}
+            />
           </div>
         </div>
 

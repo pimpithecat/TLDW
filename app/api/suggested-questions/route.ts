@@ -15,7 +15,7 @@ function getTranscriptSample(segments: TranscriptSegment[], maxLength: number = 
 
 export async function POST(request: Request) {
   try {
-    const { transcript, topics } = await request.json();
+    const { transcript, topics, model } = await request.json();
 
     if (!transcript || !Array.isArray(transcript)) {
       return NextResponse.json(
@@ -48,8 +48,12 @@ Generate exactly 3 questions that:
 Return ONLY a JSON array with 3 question strings, no other text:
 ["Question 1", "Question 2", "Question 3"]`;
 
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.5-flash",
+    const selectedModel = model && ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-2.0-flash'].includes(model) 
+      ? model 
+      : 'gemini-2.5-flash';
+
+    const aiModel = genAI.getGenerativeModel({ 
+      model: selectedModel,
       generationConfig: {
         temperature: 0.8,
         maxOutputTokens: 200,
@@ -63,7 +67,7 @@ Return ONLY a JSON array with 3 question strings, no other text:
     
     while (retryCount <= maxRetries) {
       try {
-        const result = await model.generateContent(prompt);
+        const result = await aiModel.generateContent(prompt);
         response = result.response?.text() || '';
         
         if (response) {

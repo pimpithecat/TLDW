@@ -100,7 +100,7 @@ function extractCitations(response: string, transcript: TranscriptSegment[]): {
 
 export async function POST(request: Request) {
   try {
-    const { message, transcript, topics, chatHistory } = await request.json();
+    const { message, transcript, topics, chatHistory, model } = await request.json();
 
     if (!message || !transcript) {
       return NextResponse.json(
@@ -163,11 +163,17 @@ Bad: "The speaker talks about many things in the video and mentions several conc
 
 Provide a well-structured, easy-to-read response with proper formatting and citations.`;
 
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.5-flash",
+    const selectedModel = model && ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-2.0-flash'].includes(model) 
+      ? model 
+      : 'gemini-2.5-flash';
+
+    const maxOutputTokens = selectedModel === 'gemini-2.0-flash' ? 8192 : 65536;
+
+    const aiModel = genAI.getGenerativeModel({ 
+      model: selectedModel,
       generationConfig: {
         temperature: 0.7,
-        maxOutputTokens: 2048,
+        maxOutputTokens: Math.min(2048, maxOutputTokens),
       }
     });
 
@@ -177,7 +183,7 @@ Provide a well-structured, easy-to-read response with proper formatting and cita
     
     while (retryCount <= maxRetries) {
       try {
-        const result = await model.generateContent(prompt);
+        const result = await aiModel.generateContent(prompt);
         response = result.response?.text() || '';
         
         if (response) {
