@@ -17,6 +17,7 @@ interface YouTubePlayerProps {
   seekToTime?: number;
   topics?: Topic[];
   onTopicSelect?: (topic: Topic) => void;
+  onPlayTopic?: (topic: Topic) => void;
   transcript?: any[];
 }
 
@@ -27,6 +28,7 @@ export function YouTubePlayer({
   seekToTime,
   topics = [],
   onTopicSelect,
+  onPlayTopic,
   transcript = [],
 }: YouTubePlayerProps) {
   const playerRef = useRef<any>(null);
@@ -137,6 +139,53 @@ export function YouTubePlayer({
     }
   }, [selectedTopic]);
 
+
+  const playTopic = (topic: Topic) => {
+    if (!playerRef.current || !topic) return;
+    
+    // Clear any existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    
+    // Reset segment index for this topic
+    setCurrentSegmentIndex(0);
+    
+    // Helper function to play a specific segment of the topic
+    const playTopicSegment = (segmentIndex: number) => {
+      const segment = topic.segments[segmentIndex];
+      if (!segment || !playerRef.current) return;
+      
+      playerRef.current.seekTo(segment.start, true);
+      playerRef.current.playVideo();
+      
+      // Set up interval to check when to move to next segment
+      intervalRef.current = setInterval(() => {
+        if (playerRef.current?.getCurrentTime) {
+          const currentTime = playerRef.current.getCurrentTime();
+          if (currentTime >= segment.end) {
+            if (intervalRef.current) {
+              clearInterval(intervalRef.current);
+              intervalRef.current = null;
+            }
+            const nextIndex = segmentIndex + 1;
+            if (nextIndex < topic.segments.length) {
+              setCurrentSegmentIndex(nextIndex);
+              playTopicSegment(nextIndex);
+            } else {
+              playerRef.current.pauseVideo();
+              setCurrentSegmentIndex(0);
+            }
+          }
+        }
+      }, 100);
+    };
+    
+    // Start playing from the first segment
+    playTopicSegment(0);
+  };
+
   const playSegments = (segmentIndex?: number) => {
     if (!selectedTopic || !playerRef.current) return;
     
@@ -232,6 +281,7 @@ export function YouTubePlayer({
               selectedTopic={selectedTopic}
               onSeek={handleSeek}
               onTopicSelect={onTopicSelect}
+              onPlayTopic={playTopic}
               transcript={transcript}
             />
           )}
@@ -272,20 +322,9 @@ export function YouTubePlayer({
 
             <div className="flex items-center gap-2">
               {selectedTopic && (
-                <>
-                  <Badge variant="secondary" className="text-xs">
-                    Segment {currentSegmentIndex + 1}/{selectedTopic.segments.length}
-                  </Badge>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => playSegments(0)}
-                    className="ml-2"
-                  >
-                    <Play className="h-3 w-3 mr-1" />
-                    Play Topic
-                  </Button>
-                </>
+                <Badge variant="secondary" className="text-xs">
+                  Segment {currentSegmentIndex + 1}/{selectedTopic.segments.length}
+                </Badge>
               )}
             </div>
           </div>

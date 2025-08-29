@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { Play } from "lucide-react";
 import { Topic, TranscriptSegment } from "@/lib/types";
 import { formatDuration, getTopicHSLColor } from "@/lib/utils";
 import {
@@ -18,6 +19,7 @@ interface VideoProgressBarProps {
   selectedTopic: Topic | null;
   onSeek: (time: number) => void;
   onTopicSelect?: (topic: Topic) => void;
+  onPlayTopic?: (topic: Topic) => void;
   transcript?: TranscriptSegment[];
 }
 
@@ -28,6 +30,7 @@ export function VideoProgressBar({
   selectedTopic,
   onSeek,
   onTopicSelect,
+  onPlayTopic,
   transcript,
 }: VideoProgressBarProps) {
   const [hoveredSegment, setHoveredSegment] = useState<{
@@ -188,7 +191,10 @@ export function VideoProgressBar({
                 borderWidth: selectedTopic?.id === topic.id ? "2px" : "1px",
                 borderStyle: "solid",
               }}
-              onClick={() => onTopicSelect?.(topic)}
+              onClick={() => {
+                onTopicSelect?.(topic);
+                onPlayTopic?.(topic);
+              }}
             >
               <div className="flex items-center gap-2">
                 <div 
@@ -196,6 +202,7 @@ export function VideoProgressBar({
                   style={{ backgroundColor: `hsl(${getTopicHSLColor(index)})` }}
                 />
                 <span className="font-medium text-left">{topic.title}</span>
+                <Play className="w-3 h-3 ml-1 opacity-60" />
               </div>
               <span className="text-xs text-muted-foreground font-mono ml-2">
                 {formatDuration(topic.duration)}
