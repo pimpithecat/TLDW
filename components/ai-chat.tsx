@@ -58,7 +58,7 @@ export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChat
       const response = await fetch("/api/suggested-questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript, topics, model: selectedModel }),
+        body: JSON.stringify({ transcript, topics }),
       });
       
       if (response.ok) {

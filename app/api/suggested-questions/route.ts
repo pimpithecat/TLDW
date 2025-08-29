@@ -50,7 +50,7 @@ Return ONLY a JSON array with 3 question strings, no other text:
 
     const selectedModel = model && ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-2.0-flash'].includes(model) 
       ? model 
-      : 'gemini-2.5-flash';
+      : 'gemini-2.5-flash-lite'; // Use lighter model by default for better rate limits
 
     const aiModel = genAI.getGenerativeModel({ 
       model: selectedModel,
@@ -63,7 +63,7 @@ Return ONLY a JSON array with 3 question strings, no other text:
 
     let response = '';
     let retryCount = 0;
-    const maxRetries = 2;
+    const maxRetries = 3; // Increased from 2 to 3
     
     while (retryCount <= maxRetries) {
       try {
@@ -77,12 +77,50 @@ Return ONLY a JSON array with 3 question strings, no other text:
       } catch (error: any) {
         console.error(`Gemini API error for suggested questions (attempt ${retryCount + 1}):`, error);
         
+        // Check if it's a rate limit error
+        const isRateLimit = error.status === 429 || 
+                          error.message?.includes('429') || 
+                          error.message?.includes('quota');
+        
+        if (isRateLimit) {
+          console.log('Rate limit detected, using extended backoff');
+        }
+        
         if (retryCount === maxRetries) {
           console.error('Max retries reached for suggested questions');
+          if (isRateLimit) {
+            console.log('Failed due to rate limiting - returning fallback questions');
+          }
           break;
         }
         
-        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+        // Parse retryDelay from error if available
+        let delayMs = 0;
+        if (error.errorDetails && Array.isArray(error.errorDetails)) {
+          const retryInfo = error.errorDetails.find((detail: any) => 
+            detail['@type'] === 'type.googleapis.com/google.rpc.RetryInfo'
+          );
+          if (retryInfo?.retryDelay) {
+            // Parse delay like "7s" to milliseconds
+            const delayMatch = retryInfo.retryDelay.match(/(\d+)s/);
+            if (delayMatch) {
+              delayMs = parseInt(delayMatch[1]) * 1000;
+              console.log(`Using API suggested retry delay: ${delayMs}ms`);
+            }
+          }
+        }
+        
+        // If no retryDelay found, use exponential backoff with jitter
+        if (!delayMs) {
+          // Base delay: 2s, 4s, 8s, 16s
+          delayMs = Math.min(2000 * Math.pow(2, retryCount), 16000);
+          // Add jitter (±25%)
+          const jitter = delayMs * 0.25 * (Math.random() * 2 - 1);
+          delayMs = Math.round(delayMs + jitter);
+          console.log(`Using exponential backoff with jitter: ${delayMs}ms`);
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, delayMs));
         retryCount++;
       }
     }
