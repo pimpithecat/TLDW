@@ -285,16 +285,24 @@ export function TranscriptViewer({
                 )}
                 style={{
                   backgroundColor: isCurrent 
-                    ? "hsl(var(--primary) / 0.15)"
+                    ? topicInfo
+                      ? `hsl(${getTopicHSLColor(topicInfo.index)} / 0.25)`
+                      : "hsl(221, 83%, 53%, 0.25)"
                     : isHighlighted && topicInfo
                     ? `hsl(${getTopicHSLColor(topicInfo.index)} / 0.1)`
                     : undefined,
                   borderLeft: isCurrent
-                    ? "4px solid hsl(var(--primary))"
+                    ? topicInfo
+                      ? `4px solid hsl(${getTopicHSLColor(topicInfo.index)})`
+                      : "4px solid hsl(221, 83%, 53%)"
                     : isHighlighted && topicInfo
                     ? `3px solid hsl(${getTopicHSLColor(topicInfo.index)})`
                     : undefined,
-                  boxShadow: isCurrent ? "0 0 0 1px hsl(var(--primary) / 0.2)" : undefined,
+                  boxShadow: isCurrent 
+                    ? topicInfo
+                      ? `0 0 0 1px hsl(${getTopicHSLColor(topicInfo.index)} / 0.3), 0 2px 4px hsl(${getTopicHSLColor(topicInfo.index)} / 0.1)`
+                      : "0 0 0 1px hsl(221, 83%, 53%, 0.3), 0 2px 4px hsl(221, 83%, 53%, 0.1)"
+                    : undefined,
                 }}
                 onClick={() => handleSegmentClick(segment)}
                 onMouseEnter={() => setHoveredSegment(index)}
@@ -322,8 +330,22 @@ export function TranscriptViewer({
                 {/* Current playback indicator with pulse animation */}
                 {isCurrent && (
                   <>
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-l-lg" />
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-l-lg animate-pulse opacity-50" />
+                    <div 
+                      className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg" 
+                      style={{ 
+                        backgroundColor: topicInfo 
+                          ? `hsl(${getTopicHSLColor(topicInfo.index)})` 
+                          : "hsl(221, 83%, 53%)" 
+                      }} 
+                    />
+                    <div 
+                      className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg animate-pulse opacity-50" 
+                      style={{ 
+                        backgroundColor: topicInfo 
+                          ? `hsl(${getTopicHSLColor(topicInfo.index)})` 
+                          : "hsl(221, 83%, 53%)" 
+                      }} 
+                    />
                   </>
                 )}
               </div>
