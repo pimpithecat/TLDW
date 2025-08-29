@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Play } from "lucide-react";
 import { Topic, TranscriptSegment } from "@/lib/types";
 import { formatDuration, getTopicHSLColor } from "@/lib/utils";
 import {
@@ -173,42 +172,55 @@ export function VideoProgressBar({
           <span>{formatDuration(videoDuration)}</span>
         </div>
 
-        {/* Topic color legend */}
-        <div className="mt-4 space-y-2">
-          {topics.map((topic, index) => (
-            <button
-              key={topic.id}
-              className={cn(
-                "w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all",
-                "hover:shadow-md hover:-translate-x-1",
-                selectedTopic?.id === topic.id && "shadow-lg scale-[1.02]"
-              )}
-              style={{
-                backgroundColor: selectedTopic?.id === topic.id 
-                  ? `hsl(${getTopicHSLColor(index)} / 0.25)` 
-                  : `hsl(${getTopicHSLColor(index)} / 0.1)`,
-                borderColor: `hsl(${getTopicHSLColor(index)})`,
-                borderWidth: selectedTopic?.id === topic.id ? "2px" : "1px",
-                borderStyle: "solid",
-              }}
-              onClick={() => {
-                onTopicSelect?.(topic);
-                onPlayTopic?.(topic);
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <div 
-                  className="w-3 h-3 rounded-full shrink-0"
-                  style={{ backgroundColor: `hsl(${getTopicHSLColor(index)})` }}
-                />
-                <span className="font-medium text-left">{topic.title}</span>
-                <Play className="w-3 h-3 ml-1 opacity-60" />
+        {/* Topic insights list */}
+        <div className="mt-4 space-y-3 bg-muted/30 rounded-lg p-4">
+          {topics.map((topic, index) => {
+            const topicColor = getTopicHSLColor(index);
+            const isSelected = selectedTopic?.id === topic.id;
+            
+            return (
+              <div
+                key={topic.id}
+                className={cn(
+                  "flex items-start gap-3 transition-all",
+                  isSelected && "scale-[1.02]"
+                )}
+              >
+                {/* Topic title */}
+                <div className="flex-1">
+                  <span 
+                    className="text-sm font-medium"
+                    style={{ color: `hsl(${topicColor})` }}
+                  >
+                    {topic.title}
+                  </span>
+                </div>
+                
+                {/* Play button with duration */}
+                <button
+                  className={cn(
+                    "px-3 py-1 rounded-md text-sm font-medium transition-all",
+                    "hover:scale-105 active:scale-95",
+                    isSelected && "ring-2"
+                  )}
+                  style={{
+                    backgroundColor: `hsl(${topicColor} / 0.15)`,
+                    color: `hsl(${topicColor})`,
+                    borderColor: `hsl(${topicColor})`,
+                    borderWidth: "1px",
+                    borderStyle: "solid",
+                    "--tw-ring-color": `hsl(${topicColor})`,
+                  } as React.CSSProperties}
+                  onClick={() => {
+                    onTopicSelect?.(topic);
+                    onPlayTopic?.(topic);
+                  }}
+                >
+                  Play ({formatDuration(topic.duration)})
+                </button>
               </div>
-              <span className="text-xs text-muted-foreground font-mono ml-2">
-                {formatDuration(topic.duration)}
-              </span>
-            </button>
-          ))}
+            );
+          })}
         </div>
       </div>
     </TooltipProvider>

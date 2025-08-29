@@ -263,7 +263,7 @@ export function YouTubePlayer({
   return (
     <div className="w-full">
       <Card className="overflow-hidden shadow-sm">
-        <div className="relative bg-black rounded-t-lg overflow-hidden aspect-video">
+        <div className="relative bg-black overflow-hidden aspect-video">
           <div
             id="youtube-player"
             className="absolute top-0 left-0 w-full h-full"
