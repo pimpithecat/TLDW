@@ -37,10 +37,37 @@ function findExactQuotes(
 ): { start: number; end: number; text: string }[] {
   const quotes: { start: number; end: number; text: string }[] = [];
   
-  // Helper function to check if text ends with sentence boundary
-  const isCompleteSentence = (text: string): boolean => {
+  // Helper function to split text into sentences with improved detection
+  const splitIntoSentences = (text: string): string[] => {
+    // Handle common abbreviations that shouldn't be treated as sentence ends
+    const abbreviations = ['Mr', 'Mrs', 'Dr', 'Ms', 'Prof', 'Sr', 'Jr', 'Inc', 'Ltd', 'Corp', 'Co', 'vs', 'etc', 'i.e', 'e.g'];
+    let processedText = text;
+    
+    // Temporarily replace abbreviations to avoid false sentence breaks
+    abbreviations.forEach(abbr => {
+      const regex = new RegExp(`\\b${abbr}\\.`, 'gi');
+      processedText = processedText.replace(regex, `${abbr}<!DOT!>`);
+    });
+    
+    // Split on sentence boundaries (. ! ? followed by space and capital letter, or at the end)
+    const sentences = processedText.split(/(?<=[.!?])\s+(?=[A-Z])|(?<=[.!?])$/);
+    
+    // Restore dots in abbreviations
+    return sentences.map(s => s.replace(/<!DOT!>/g, '.')).filter(s => s.trim().length > 0);
+  };
+  
+  // Helper function to check if text ends with a complete sentence
+  const endsWithCompleteSentence = (text: string): boolean => {
     const trimmed = text.trim();
-    return /[.!?]"?$/.test(trimmed) || /[.!?]\s+[A-Z]/.test(trimmed);
+    // Check for sentence ending punctuation, accounting for quotes
+    return /[.!?][\"\']?$/.test(trimmed);
+  };
+  
+  // Helper function to check if text starts with a sentence beginning
+  const startsWithSentenceBeginning = (text: string): boolean => {
+    const trimmed = text.trim();
+    // Check if starts with capital letter or quote followed by capital
+    return /^[A-Z]|^[\"\'][A-Z]/.test(trimmed);
   };
   
   // Helper function to find segment index by time
@@ -52,6 +79,117 @@ function findExactQuotes(
       }
     }
     return -1;
+  };
+  
+  // Helper function to find sentence boundaries within a range of segments
+  const findSentenceBoundaries = (startIdx: number, endIdx: number): { startIdx: number; endIdx: number; text: string } => {
+    // Expand the range to capture more context for finding sentence boundaries
+    const contextStartIdx = Math.max(0, startIdx - 10);
+    const contextEndIdx = Math.min(transcript.length - 1, endIdx + 10);
+    
+    // Combine all segments in the context range
+    let fullContext = '';
+    let segmentStartPositions: number[] = [];
+    
+    for (let i = contextStartIdx; i <= contextEndIdx; i++) {
+      segmentStartPositions[i] = fullContext.length;
+      fullContext += (i > contextStartIdx ? ' ' : '') + transcript[i].text;
+    }
+    
+    // Find the position of the target content within the full context
+    const targetStartPos = segmentStartPositions[startIdx];
+    const targetEndPos = segmentStartPositions[endIdx] + transcript[endIdx].text.length;
+    
+    // Split the full context into sentences
+    const sentences = splitIntoSentences(fullContext);
+    let currentPos = 0;
+    let selectedSentences: string[] = [];
+    let foundStart = false;
+    let newStartIdx = startIdx;
+    let newEndIdx = endIdx;
+    
+    // Find sentences that overlap with our target range
+    for (const sentence of sentences) {
+      const sentenceEnd = currentPos + sentence.length;
+      
+      // Check if this sentence overlaps with our target range
+      if (sentenceEnd >= targetStartPos && currentPos <= targetEndPos) {
+        selectedSentences.push(sentence);
+        
+        // Track the actual segment indices for the first and last sentences
+        if (!foundStart) {
+          // Find which segment this sentence starts in
+          for (let i = contextStartIdx; i <= contextEndIdx; i++) {
+            if (segmentStartPositions[i] <= currentPos && 
+                (i === contextEndIdx || segmentStartPositions[i + 1] > currentPos)) {
+              newStartIdx = i;
+              foundStart = true;
+              break;
+            }
+          }
+        }
+        
+        // Update end index for each included sentence
+        for (let i = contextStartIdx; i <= contextEndIdx; i++) {
+          if (segmentStartPositions[i] <= sentenceEnd && 
+              (i === contextEndIdx || segmentStartPositions[i + 1] > sentenceEnd)) {
+            newEndIdx = i;
+            break;
+          }
+        }
+      }
+      
+      currentPos = sentenceEnd + 1; // +1 for the space between sentences
+    }
+    
+    // If we found complete sentences, use them
+    if (selectedSentences.length > 0) {
+      const completeText = selectedSentences.join(' ').trim();
+      
+      // Ensure we have substantial content
+      if (completeText.length > 50) {
+        return {
+          startIdx: newStartIdx,
+          endIdx: newEndIdx,
+          text: completeText
+        };
+      }
+    }
+    
+    // Fallback: use original range but try to complete sentences
+    let fallbackText = '';
+    let fallbackStartIdx = startIdx;
+    let fallbackEndIdx = endIdx;
+    
+    // Extend backward to find sentence beginning
+    for (let i = startIdx; i >= Math.max(0, startIdx - 5); i--) {
+      const testText = transcript.slice(i, endIdx + 1).map(s => s.text).join(' ');
+      if (i === 0 || endsWithCompleteSentence(transcript[i - 1].text) || startsWithSentenceBeginning(transcript[i].text)) {
+        fallbackStartIdx = i;
+        fallbackText = testText;
+        break;
+      }
+    }
+    
+    // Extend forward to find sentence ending
+    for (let i = endIdx; i <= Math.min(transcript.length - 1, endIdx + 5); i++) {
+      if (endsWithCompleteSentence(transcript[i].text)) {
+        fallbackEndIdx = i;
+        break;
+      }
+    }
+    
+    // Build the final text
+    const segments: string[] = [];
+    for (let i = fallbackStartIdx; i <= fallbackEndIdx; i++) {
+      segments.push(transcript[i].text);
+    }
+    
+    return {
+      startIdx: fallbackStartIdx,
+      endIdx: fallbackEndIdx,
+      text: segments.join(' ').trim()
+    };
   };
   
   for (const range of timestampRanges) {
@@ -73,51 +211,19 @@ function findExactQuotes(
       if (endIdx === -1) endIdx = transcript.length - 1;
     }
     
-    // Extend backward to include complete context if needed
-    // Look back up to 5 segments to find sentence beginning
-    let extendedStartIdx = startIdx;
-    let combinedText = '';
-    for (let i = Math.max(0, startIdx - 5); i <= startIdx; i++) {
-      const testText = transcript.slice(i, startIdx + 1).map(s => s.text).join(' ');
-      if (i === 0 || isCompleteSentence(transcript[i - 1].text)) {
-        extendedStartIdx = i;
-        combinedText = testText;
-        break;
-      }
-    }
+    // Find proper sentence boundaries for this range
+    const { startIdx: boundedStartIdx, endIdx: boundedEndIdx, text: boundedText } = findSentenceBoundaries(startIdx, endIdx);
     
-    // If we didn't find a good starting point, use original
-    if (extendedStartIdx === startIdx) {
-      extendedStartIdx = startIdx;
-    }
-    
-    // Extend forward to complete the thought
-    // Look ahead up to 5 segments to find sentence ending
-    let extendedEndIdx = endIdx;
-    for (let i = endIdx; i < Math.min(transcript.length, endIdx + 5); i++) {
-      if (isCompleteSentence(transcript[i].text)) {
-        extendedEndIdx = i;
-        break;
-      }
-    }
-    
-    // Build the complete text from extended range
-    const relevantSegments: string[] = [];
-    let actualStart = transcript[extendedStartIdx].start;
-    let actualEnd = transcript[extendedEndIdx].start + transcript[extendedEndIdx].duration;
-    
-    for (let i = extendedStartIdx; i <= extendedEndIdx && i < transcript.length; i++) {
-      relevantSegments.push(transcript[i].text);
-    }
-    
-    const fullText = relevantSegments.join(' ').trim();
+    // Calculate actual timestamps
+    const actualStart = transcript[boundedStartIdx].start;
+    const actualEnd = transcript[boundedEndIdx].start + transcript[boundedEndIdx].duration;
     
     // Only add if we have substantial content (at least 50 characters)
-    if (fullText.length > 50) {
+    if (boundedText.length > 50) {
       quotes.push({
         start: actualStart,
         end: actualEnd,
-        text: fullText
+        text: boundedText
       });
     }
   }
@@ -130,9 +236,11 @@ function findExactQuotes(
     if (!currentQuote) {
       currentQuote = { ...quote };
     } else if (quote.start - currentQuote.end <= 5) {
-      // Merge with current quote
+      // Merge quotes but ensure we maintain sentence boundaries
+      const combinedText = currentQuote.text + ' ' + quote.text;
+      const sentences = splitIntoSentences(combinedText);
       currentQuote.end = quote.end;
-      currentQuote.text = currentQuote.text + ' ' + quote.text;
+      currentQuote.text = sentences.join(' ').trim();
     } else {
       // Save current and start new
       mergedQuotes.push(currentQuote);
