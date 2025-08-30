@@ -190,29 +190,235 @@ export function TranscriptViewer({
   const getHighlightedText = (segment: TranscriptSegment, segmentIndex: number): { highlightedParts: Array<{ text: string; highlighted: boolean }> } | null => {
     if (!selectedTopic) return null;
     
-    // Check if this segment index falls within any of the topic segments
-    const shouldHighlight = selectedTopic.segments.some(topicSeg => {
-      // If we have segment indices, use them
-      if (topicSeg.startSegmentIdx !== undefined && topicSeg.endSegmentIdx !== undefined) {
-        return segmentIndex >= topicSeg.startSegmentIdx && segmentIndex <= topicSeg.endSegmentIdx;
+    // Helper function to split text into sentences
+    const splitIntoSentences = (text: string): { sentence: string; startPos: number; endPos: number }[] => {
+      const sentences: { sentence: string; startPos: number; endPos: number }[] = [];
+      // Handle common abbreviations that shouldn't be treated as sentence ends
+      const abbreviations = ['Mr', 'Mrs', 'Dr', 'Ms', 'Prof', 'Sr', 'Jr', 'Inc', 'Ltd', 'Corp', 'Co', 'vs', 'etc', 'i.e', 'e.g'];
+      let processedText = text;
+      
+      // Temporarily replace abbreviations to avoid false sentence breaks
+      abbreviations.forEach(abbr => {
+        const regex = new RegExp(`\\b${abbr}\\.`, 'gi');
+        processedText = processedText.replace(regex, `${abbr}<!DOT!>`);
+      });
+      
+      // Find sentence boundaries
+      const regex = /[.!?](?:\s+|$)/g;
+      let lastIndex = 0;
+      let match;
+      
+      while ((match = regex.exec(processedText)) !== null) {
+        const endIndex = match.index + match[0].length;
+        const sentence = text.substring(lastIndex, endIndex).trim();
+        if (sentence) {
+          sentences.push({
+            sentence: sentence,
+            startPos: lastIndex,
+            endPos: endIndex
+          });
+        }
+        lastIndex = endIndex;
       }
       
-      // Fallback to time-based check if indices are not available
-      const segmentEnd = segment.start + segment.duration;
-      // Only highlight if the segment is mostly within the topic segment time range
-      const overlapStart = Math.max(segment.start, topicSeg.start);
-      const overlapEnd = Math.min(segmentEnd, topicSeg.end);
-      const overlapDuration = Math.max(0, overlapEnd - overlapStart);
-      const overlapRatio = overlapDuration / segment.duration;
-      return overlapRatio > 0.9; // Very strict overlap requirement
-    });
-    
-    if (!shouldHighlight) return null;
-    
-    // Highlight the entire segment
-    return { 
-      highlightedParts: [{ text: segment.text, highlighted: true }] 
+      // Add any remaining text as the last sentence
+      if (lastIndex < text.length) {
+        const remainingText = text.substring(lastIndex).trim();
+        if (remainingText) {
+          sentences.push({
+            sentence: remainingText,
+            startPos: lastIndex,
+            endPos: text.length
+          });
+        }
+      }
+      
+      return sentences;
     };
+    
+    // Find which topic segments this transcript segment overlaps with
+    let highlightedParts: Array<{ text: string; highlighted: boolean }> = [];
+    let anyHighlight = false;
+    
+    for (const topicSeg of selectedTopic.segments) {
+      // Check if this segment should be partially or fully highlighted
+      if (topicSeg.startSegmentIdx !== undefined && topicSeg.endSegmentIdx !== undefined) {
+        // Case 1: This segment is fully within the topic segment range
+        if (segmentIndex > topicSeg.startSegmentIdx && segmentIndex < topicSeg.endSegmentIdx) {
+          // Highlight the entire segment
+          return { 
+            highlightedParts: [{ text: segment.text, highlighted: true }] 
+          };
+        }
+        
+        // Case 2: This is the start segment - may need partial highlighting
+        if (segmentIndex === topicSeg.startSegmentIdx) {
+          // Check if we need to highlight the entire segment or just part of it
+          if (segmentIndex === topicSeg.endSegmentIdx) {
+            // This segment is both start and end - need to find the matching portion
+            // Try to match the topic segment text with the transcript segment text
+            const topicText = topicSeg.text.toLowerCase().trim();
+            const segmentText = segment.text.toLowerCase();
+            
+            // If the topic text is contained within this segment, highlight just that portion
+            const index = segmentText.indexOf(topicText.substring(0, Math.min(50, topicText.length)));
+            if (index !== -1) {
+              // Find sentence boundaries around the match
+              const sentences = splitIntoSentences(segment.text);
+              const matchStart = index;
+              const matchEnd = index + topicText.length;
+              
+              let startSentenceIdx = 0;
+              let endSentenceIdx = sentences.length - 1;
+              
+              // Find which sentences contain the match
+              for (let i = 0; i < sentences.length; i++) {
+                if (sentences[i].startPos <= matchStart && sentences[i].endPos > matchStart) {
+                  startSentenceIdx = i;
+                }
+                if (sentences[i].startPos < matchEnd && sentences[i].endPos >= matchEnd) {
+                  endSentenceIdx = i;
+                  break;
+                }
+              }
+              
+              // Build the highlighted parts
+              let parts: Array<{ text: string; highlighted: boolean }> = [];
+              let currentPos = 0;
+              
+              for (let i = 0; i < sentences.length; i++) {
+                if (i < startSentenceIdx) {
+                  // Before highlight
+                  if (sentences[i].startPos > currentPos) {
+                    parts.push({ text: segment.text.substring(currentPos, sentences[i].startPos), highlighted: false });
+                  }
+                  parts.push({ text: sentences[i].sentence, highlighted: false });
+                  currentPos = sentences[i].endPos;
+                } else if (i >= startSentenceIdx && i <= endSentenceIdx) {
+                  // Within highlight
+                  if (sentences[i].startPos > currentPos) {
+                    parts.push({ text: segment.text.substring(currentPos, sentences[i].startPos), highlighted: true });
+                  }
+                  parts.push({ text: sentences[i].sentence, highlighted: true });
+                  currentPos = sentences[i].endPos;
+                  anyHighlight = true;
+                } else {
+                  // After highlight
+                  if (sentences[i].startPos > currentPos) {
+                    parts.push({ text: segment.text.substring(currentPos, sentences[i].startPos), highlighted: false });
+                  }
+                  parts.push({ text: sentences[i].sentence, highlighted: false });
+                  currentPos = sentences[i].endPos;
+                }
+              }
+              
+              // Add any remaining text
+              if (currentPos < segment.text.length) {
+                parts.push({ text: segment.text.substring(currentPos), highlighted: false });
+              }
+              
+              if (anyHighlight) {
+                return { highlightedParts: parts };
+              }
+            }
+          }
+          
+          // Default: highlight from the beginning of the first complete sentence
+          const sentences = splitIntoSentences(segment.text);
+          if (sentences.length > 0) {
+            // Find where to start highlighting - look for sentence that best matches the topic text start
+            const topicTextStart = topicSeg.text.substring(0, 100).toLowerCase();
+            let bestMatchIdx = 0;
+            let bestMatchScore = 0;
+            
+            for (let i = 0; i < sentences.length; i++) {
+              const sentenceText = sentences[i].sentence.toLowerCase();
+              // Simple matching: count common words
+              const commonWords = topicTextStart.split(/\s+/).filter(word => 
+                word.length > 3 && sentenceText.includes(word)
+              ).length;
+              if (commonWords > bestMatchScore) {
+                bestMatchScore = commonWords;
+                bestMatchIdx = i;
+              }
+            }
+            
+            // Highlight from the best matching sentence onwards
+            let parts: Array<{ text: string; highlighted: boolean }> = [];
+            for (let i = 0; i < sentences.length; i++) {
+              if (i < bestMatchIdx) {
+                parts.push({ text: sentences[i].sentence + ' ', highlighted: false });
+              } else {
+                parts.push({ text: sentences[i].sentence + ' ', highlighted: true });
+                anyHighlight = true;
+              }
+            }
+            
+            if (anyHighlight) {
+              return { highlightedParts: parts };
+            }
+          }
+        }
+        
+        // Case 3: This is the end segment - may need partial highlighting
+        if (segmentIndex === topicSeg.endSegmentIdx) {
+          const sentences = splitIntoSentences(segment.text);
+          if (sentences.length > 0) {
+            // Find where to end highlighting - look for sentence that best matches the topic text end
+            const topicTextEnd = topicSeg.text.substring(Math.max(0, topicSeg.text.length - 100)).toLowerCase();
+            let bestMatchIdx = sentences.length - 1;
+            let bestMatchScore = 0;
+            
+            for (let i = sentences.length - 1; i >= 0; i--) {
+              const sentenceText = sentences[i].sentence.toLowerCase();
+              // Simple matching: count common words
+              const commonWords = topicTextEnd.split(/\s+/).filter(word => 
+                word.length > 3 && sentenceText.includes(word)
+              ).length;
+              if (commonWords > bestMatchScore) {
+                bestMatchScore = commonWords;
+                bestMatchIdx = i;
+              }
+            }
+            
+            // Highlight up to and including the best matching sentence
+            let parts: Array<{ text: string; highlighted: boolean }> = [];
+            for (let i = 0; i < sentences.length; i++) {
+              if (i <= bestMatchIdx) {
+                parts.push({ text: sentences[i].sentence + ' ', highlighted: true });
+                anyHighlight = true;
+              } else {
+                parts.push({ text: sentences[i].sentence + ' ', highlighted: false });
+              }
+            }
+            
+            if (anyHighlight) {
+              return { highlightedParts: parts };
+            }
+          }
+        }
+      }
+    }
+    
+    // Fallback to time-based highlighting if segment indices aren't available
+    if (!anyHighlight) {
+      const segmentEnd = segment.start + segment.duration;
+      const shouldHighlight = selectedTopic.segments.some(topicSeg => {
+        const overlapStart = Math.max(segment.start, topicSeg.start);
+        const overlapEnd = Math.min(segmentEnd, topicSeg.end);
+        const overlapDuration = Math.max(0, overlapEnd - overlapStart);
+        const overlapRatio = overlapDuration / segment.duration;
+        return overlapRatio > 0.9;
+      });
+      
+      if (shouldHighlight) {
+        return { 
+          highlightedParts: [{ text: segment.text, highlighted: true }] 
+        };
+      }
+    }
+    
+    return null;
   };
   
   

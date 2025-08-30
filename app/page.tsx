@@ -30,7 +30,7 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(0);
   const [transcriptHeight, setTranscriptHeight] = useState<string>("auto");
   const [selectedModel, setSelectedModel] = useState<GeminiModel>('gemini-2.5-flash');
-  const [citationHighlight, setCitationHighlight] = useState<{ start: number; end?: number } | null>(null);
+  const [citationHighlight, setCitationHighlight] = useState<{ start: number; end?: number; text?: string } | null>(null);
 
   const processVideo = async (url: string) => {
     setIsLoading(true);
