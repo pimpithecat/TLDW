@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Topic, TranscriptSegment } from "@/lib/types";
 import { formatDuration, getTopicHSLColor } from "@/lib/utils";
+import { TopicCard } from "@/components/topic-card";
 import {
   Tooltip,
   TooltipContent,
@@ -173,52 +174,19 @@ export function VideoProgressBar({
         </div>
 
         {/* Topic insights list */}
-        <div className="mt-4 space-y-3 bg-muted/30 rounded-lg p-4">
+        <div className="mt-4 space-y-2">
           {topics.map((topic, index) => {
-            const topicColor = getTopicHSLColor(index);
             const isSelected = selectedTopic?.id === topic.id;
             
             return (
-              <div
+              <TopicCard
                 key={topic.id}
-                className={cn(
-                  "flex items-start gap-3 transition-all",
-                  isSelected && "scale-[1.02]"
-                )}
-              >
-                {/* Topic title */}
-                <div className="flex-1">
-                  <span 
-                    className="text-sm font-medium"
-                    style={{ color: `hsl(${topicColor})` }}
-                  >
-                    {topic.title}
-                  </span>
-                </div>
-                
-                {/* Play button with duration */}
-                <button
-                  className={cn(
-                    "px-3 py-1 rounded-md text-sm font-medium transition-all",
-                    "hover:scale-105 active:scale-95",
-                    isSelected && "ring-2"
-                  )}
-                  style={{
-                    backgroundColor: `hsl(${topicColor} / 0.15)`,
-                    color: `hsl(${topicColor})`,
-                    borderColor: `hsl(${topicColor})`,
-                    borderWidth: "1px",
-                    borderStyle: "solid",
-                    "--tw-ring-color": `hsl(${topicColor})`,
-                  } as React.CSSProperties}
-                  onClick={() => {
-                    onTopicSelect?.(topic);
-                    onPlayTopic?.(topic);
-                  }}
-                >
-                  Play ({formatDuration(topic.duration)})
-                </button>
-              </div>
+                topic={topic}
+                isSelected={isSelected}
+                onClick={() => onTopicSelect?.(topic)}
+                topicIndex={index}
+                onPlayTopic={() => onPlayTopic?.(topic)}
+              />
             );
           })}
         </div>
