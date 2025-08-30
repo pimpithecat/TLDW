@@ -15,6 +15,11 @@ export interface Topic {
     text: string;
     startSegmentIdx?: number;
     endSegmentIdx?: number;
+    // Character offsets within the start/end segments for precise highlighting
+    startCharOffset?: number;
+    endCharOffset?: number;
+    // Whether the text includes complete sentences
+    hasCompleteSentences?: boolean;
   }[];
   keywords?: string[]; // Optional for backward compatibility
   quotes?: {

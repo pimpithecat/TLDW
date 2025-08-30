@@ -130,7 +130,7 @@ export default function Home() {
       setGenerationStartTime(Date.now());
       setElapsedTime(0);
       const controller2 = new AbortController();
-      const timeoutId2 = setTimeout(() => controller2.abort(), 60000); // 60 second timeout for AI generation
+      const timeoutId2 = setTimeout(() => controller2.abort(), 600000); // 60 second timeout for AI generation
       
       console.log("Generating topics for video:", extractedVideoId);
       const topicsRes = await fetch("/api/generate-topics", {

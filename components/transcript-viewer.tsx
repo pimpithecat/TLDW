@@ -192,13 +192,78 @@ export function TranscriptViewer({
     
     // Check each topic segment to see if this transcript segment should be highlighted
     for (const topicSeg of selectedTopic.segments) {
-      // Use segment indices if available for precise matching
+      // Use segment indices with character offsets for precise matching
       if (topicSeg.startSegmentIdx !== undefined && topicSeg.endSegmentIdx !== undefined) {
-        // Case 1: This segment is fully within the topic segment range - highlight entirely
-        if (segmentIndex >= topicSeg.startSegmentIdx && segmentIndex <= topicSeg.endSegmentIdx) {
+        
+        // Case 1: This segment is between start and end (not at boundaries)
+        if (segmentIndex > topicSeg.startSegmentIdx && segmentIndex < topicSeg.endSegmentIdx) {
           return { 
             highlightedParts: [{ text: segment.text, highlighted: true }] 
           };
+        }
+        
+        // Case 2: This is the start segment - may need partial highlighting
+        if (segmentIndex === topicSeg.startSegmentIdx) {
+          if (topicSeg.startCharOffset !== undefined && topicSeg.startCharOffset > 0) {
+            // Partial highlight from character offset to end
+            const beforeHighlight = segment.text.substring(0, topicSeg.startCharOffset);
+            const highlighted = segment.text.substring(topicSeg.startCharOffset);
+            
+            // If this is also the end segment, apply end offset
+            if (segmentIndex === topicSeg.endSegmentIdx && topicSeg.endCharOffset !== undefined) {
+              const actualHighlighted = segment.text.substring(
+                topicSeg.startCharOffset, 
+                Math.min(topicSeg.endCharOffset, segment.text.length)
+              );
+              const afterHighlight = segment.text.substring(Math.min(topicSeg.endCharOffset, segment.text.length));
+              
+              const parts: Array<{ text: string; highlighted: boolean }> = [];
+              if (beforeHighlight) parts.push({ text: beforeHighlight, highlighted: false });
+              if (actualHighlighted) parts.push({ text: actualHighlighted, highlighted: true });
+              if (afterHighlight) parts.push({ text: afterHighlight, highlighted: false });
+              return { highlightedParts: parts };
+            }
+            
+            const parts: Array<{ text: string; highlighted: boolean }> = [];
+            if (beforeHighlight) parts.push({ text: beforeHighlight, highlighted: false });
+            if (highlighted) parts.push({ text: highlighted, highlighted: true });
+            return { highlightedParts: parts };
+          } else {
+            // No offset or offset is 0, highlight from beginning
+            if (segmentIndex === topicSeg.endSegmentIdx && topicSeg.endCharOffset !== undefined) {
+              // This is both start and end segment
+              const highlighted = segment.text.substring(0, topicSeg.endCharOffset);
+              const afterHighlight = segment.text.substring(topicSeg.endCharOffset);
+              
+              const parts: Array<{ text: string; highlighted: boolean }> = [];
+              if (highlighted) parts.push({ text: highlighted, highlighted: true });
+              if (afterHighlight) parts.push({ text: afterHighlight, highlighted: false });
+              return { highlightedParts: parts };
+            }
+            // Highlight entire segment
+            return { 
+              highlightedParts: [{ text: segment.text, highlighted: true }] 
+            };
+          }
+        }
+        
+        // Case 3: This is the end segment - may need partial highlighting
+        if (segmentIndex === topicSeg.endSegmentIdx) {
+          if (topicSeg.endCharOffset !== undefined && topicSeg.endCharOffset < segment.text.length) {
+            // Partial highlight from beginning to character offset
+            const highlighted = segment.text.substring(0, topicSeg.endCharOffset);
+            const afterHighlight = segment.text.substring(topicSeg.endCharOffset);
+            
+            const parts: Array<{ text: string; highlighted: boolean }> = [];
+            if (highlighted) parts.push({ text: highlighted, highlighted: true });
+            if (afterHighlight) parts.push({ text: afterHighlight, highlighted: false });
+            return { highlightedParts: parts };
+          } else {
+            // No offset or offset covers entire segment
+            return { 
+              highlightedParts: [{ text: segment.text, highlighted: true }] 
+            };
+          }
         }
       }
     }
@@ -225,30 +290,83 @@ export function TranscriptViewer({
   
   
 
-  const getCitationHighlightedText = (segment: TranscriptSegment): { highlightedParts: Array<{ text: string; highlighted: boolean; isCitation: boolean }> } | null => {
+  const getCitationHighlightedText = (segment: TranscriptSegment, segmentIndex: number): { highlightedParts: Array<{ text: string; highlighted: boolean; isCitation: boolean }> } | null => {
     if (!citationHighlight) return null;
     
     const segmentEnd = segment.start + segment.duration;
     const citationEnd = citationHighlight.end || citationHighlight.start + 30;
     
-    // Check if segment overlaps significantly with citation time range
+    // Check if segment overlaps with citation time range
     const overlapStart = Math.max(segment.start, citationHighlight.start);
     const overlapEnd = Math.min(segmentEnd, citationEnd);
     const overlapDuration = Math.max(0, overlapEnd - overlapStart);
     const overlapRatio = overlapDuration / segment.duration;
     
-    // Only highlight if there's significant overlap
-    if (overlapRatio > 0.8) {
-      return { 
-        highlightedParts: [{ text: segment.text, highlighted: true, isCitation: true }] 
-      };
+    // For citations, we can be more lenient with partial overlaps
+    // since we don't have character-level offsets for citations yet
+    if (overlapRatio > 0.5) {
+      // Try to find sentence boundaries within the segment
+      // This is a simplified approach for citations
+      const sentences = segment.text.split(/(?<=[.!?])\s+/);
+      if (sentences.length > 1 && overlapRatio < 0.9) {
+        // Partial segment - try to highlight only relevant sentences
+        const parts: Array<{ text: string; highlighted: boolean; isCitation: boolean }> = [];
+        let currentPos = 0;
+        
+        for (const sentence of sentences) {
+          const sentenceStart = segment.text.indexOf(sentence, currentPos);
+          if (sentenceStart === -1) continue;
+          
+          // Estimate time position of this sentence within the segment
+          const sentenceTimeRatio = sentenceStart / segment.text.length;
+          const sentenceTime = segment.start + (segment.duration * sentenceTimeRatio);
+          
+          // Check if this sentence falls within citation range
+          const shouldHighlight = sentenceTime >= citationHighlight.start && sentenceTime <= citationEnd;
+          
+          if (shouldHighlight) {
+            // Add any text before this sentence as non-highlighted
+            if (sentenceStart > currentPos) {
+              parts.push({ 
+                text: segment.text.substring(currentPos, sentenceStart), 
+                highlighted: false, 
+                isCitation: false 
+              });
+            }
+            parts.push({ text: sentence, highlighted: true, isCitation: true });
+          } else if (parts.length === 0) {
+            // Haven't started highlighting yet
+            parts.push({ text: sentence, highlighted: false, isCitation: false });
+          }
+          
+          currentPos = sentenceStart + sentence.length;
+        }
+        
+        // Add any remaining text
+        if (currentPos < segment.text.length && parts.length > 0) {
+          parts.push({ 
+            text: segment.text.substring(currentPos), 
+            highlighted: false, 
+            isCitation: false 
+          });
+        }
+        
+        if (parts.some(p => p.highlighted)) {
+          return { highlightedParts: parts };
+        }
+      } else {
+        // Highlight entire segment
+        return { 
+          highlightedParts: [{ text: segment.text, highlighted: true, isCitation: true }] 
+        };
+      }
     }
     
     return null;
   };
   
-  const isCitationHighlighted = (segment: TranscriptSegment): boolean => {
-    return getCitationHighlightedText(segment) !== null;
+  const isCitationHighlighted = (segment: TranscriptSegment, segmentIndex: number): boolean => {
+    return getCitationHighlightedText(segment, segmentIndex) !== null;
   };
 
   // Find the single best matching segment for the current time
@@ -374,7 +492,7 @@ export function TranscriptViewer({
               
               return transcript.map((segment, index) => {
                 const topicHighlightedText = getHighlightedText(segment, index);
-                const citationHighlightedText = getCitationHighlightedText(segment);
+                const citationHighlightedText = getCitationHighlightedText(segment, index);
                 const isCurrent = index === currentSegmentIndex;
                 const topicInfo = getSegmentTopic(segment);
                 const isHovered = hoveredSegment === index;
