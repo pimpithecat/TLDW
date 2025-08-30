@@ -169,7 +169,7 @@ export default function Home() {
     }
   };
 
-  const handleTimestampClick = (seconds: number, endSeconds?: number, isCitation: boolean = false) => {
+  const handleTimestampClick = (seconds: number, endSeconds?: number, isCitation: boolean = false, citationText?: string) => {
     // Prevent rapid sequential clicks and state updates
     if (seekToTime === seconds) return;
     
@@ -178,7 +178,7 @@ export default function Home() {
     
     // Only set citation highlight for actual citations from chat
     if (isCitation) {
-      setCitationHighlight({ start: seconds, end: endSeconds });
+      setCitationHighlight({ start: seconds, end: endSeconds, text: citationText });
       
       // Clear citation highlight after 10 seconds
       setTimeout(() => {

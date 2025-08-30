@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 interface ChatMessageProps {
   message: ChatMessage;
-  onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean) => void;
+  onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean, citationText?: string) => void;
 }
 
 function formatTimestamp(seconds: number): string {
@@ -47,8 +47,8 @@ export function ChatMessageComponent({ message, onTimestampClick }: ChatMessageP
     const handleClick = React.useCallback((e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      onTimestampClick(citation.timestamp, citation.endTime, true);
-    }, [citation.timestamp, citation.endTime]);
+      onTimestampClick(citation.timestamp, citation.endTime, true, citation.text);
+    }, [citation.timestamp, citation.endTime, citation.text]);
 
     const handleMouseDown = React.useCallback((e: React.MouseEvent) => {
       e.preventDefault();

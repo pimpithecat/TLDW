@@ -34,8 +34,8 @@ function formatTime(seconds: number): string {
 function findExactQuotes(
   transcript: TranscriptSegment[],
   timestampRanges: Array<{ start: string; end: string }>
-): { start: number; end: number; text: string }[] {
-  const quotes: { start: number; end: number; text: string }[] = [];
+): { start: number; end: number; text: string; startSegmentIdx?: number; endSegmentIdx?: number }[] {
+  const quotes: { start: number; end: number; text: string; startSegmentIdx?: number; endSegmentIdx?: number }[] = [];
   
   // Helper function to split text into sentences with improved detection
   const splitIntoSentences = (text: string): string[] => {
@@ -223,14 +223,16 @@ function findExactQuotes(
       quotes.push({
         start: actualStart,
         end: actualEnd,
-        text: boundedText
+        text: boundedText,
+        startSegmentIdx: boundedStartIdx,
+        endSegmentIdx: boundedEndIdx
       });
     }
   }
   
   // Merge nearby quotes (within 5 seconds) to avoid fragmentation
-  const mergedQuotes: { start: number; end: number; text: string }[] = [];
-  let currentQuote: { start: number; end: number; text: string } | null = null;
+  const mergedQuotes: { start: number; end: number; text: string; startSegmentIdx?: number; endSegmentIdx?: number }[] = [];
+  let currentQuote: { start: number; end: number; text: string; startSegmentIdx?: number; endSegmentIdx?: number } | null = null;
   
   for (const quote of quotes) {
     if (!currentQuote) {
@@ -241,6 +243,10 @@ function findExactQuotes(
       const sentences = splitIntoSentences(combinedText);
       currentQuote.end = quote.end;
       currentQuote.text = sentences.join(' ').trim();
+      // Update end segment index when merging
+      if (quote.endSegmentIdx !== undefined) {
+        currentQuote.endSegmentIdx = quote.endSegmentIdx;
+      }
     } else {
       // Save current and start new
       mergedQuotes.push(currentQuote);

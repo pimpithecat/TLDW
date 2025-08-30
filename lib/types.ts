@@ -13,6 +13,8 @@ export interface Topic {
     start: number;
     end: number;
     text: string;
+    startSegmentIdx?: number;
+    endSegmentIdx?: number;
   }[];
   keywords?: string[]; // Optional for backward compatibility
   quotes?: {

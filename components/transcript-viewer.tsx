@@ -13,10 +13,10 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/comp
 interface TranscriptViewerProps {
   transcript: TranscriptSegment[];
   selectedTopic: Topic | null;
-  onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean) => void;
+  onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean, citationText?: string) => void;
   currentTime?: number;
   topics?: Topic[];
-  citationHighlight?: { start: number; end?: number } | null;
+  citationHighlight?: { start: number; end?: number; text?: string } | null;
 }
 
 export function TranscriptViewer({
@@ -187,17 +187,60 @@ export function TranscriptViewer({
     );
   };
 
-  const isCitationHighlighted = (segment: TranscriptSegment): boolean => {
-    if (!citationHighlight) return false;
-    const segmentEnd = segment.start + segment.duration;
-    const citationEnd = citationHighlight.end || citationHighlight.start + 30; // Default 30 second range if no end
+  const getHighlightedText = (segment: TranscriptSegment, segmentIndex: number): { highlightedParts: Array<{ text: string; highlighted: boolean }> } | null => {
+    if (!selectedTopic) return null;
     
-    // Check if segment overlaps with citation highlight range
-    return (
-      (segment.start >= citationHighlight.start && segment.start < citationEnd) ||
-      (segmentEnd > citationHighlight.start && segmentEnd <= citationEnd) ||
-      (segment.start <= citationHighlight.start && segmentEnd >= citationEnd)
-    );
+    // Check if this segment index falls within any of the topic segments
+    const shouldHighlight = selectedTopic.segments.some(topicSeg => {
+      // If we have segment indices, use them
+      if (topicSeg.startSegmentIdx !== undefined && topicSeg.endSegmentIdx !== undefined) {
+        return segmentIndex >= topicSeg.startSegmentIdx && segmentIndex <= topicSeg.endSegmentIdx;
+      }
+      
+      // Fallback to time-based check if indices are not available
+      const segmentEnd = segment.start + segment.duration;
+      // Only highlight if the segment is mostly within the topic segment time range
+      const overlapStart = Math.max(segment.start, topicSeg.start);
+      const overlapEnd = Math.min(segmentEnd, topicSeg.end);
+      const overlapDuration = Math.max(0, overlapEnd - overlapStart);
+      const overlapRatio = overlapDuration / segment.duration;
+      return overlapRatio > 0.9; // Very strict overlap requirement
+    });
+    
+    if (!shouldHighlight) return null;
+    
+    // Highlight the entire segment
+    return { 
+      highlightedParts: [{ text: segment.text, highlighted: true }] 
+    };
+  };
+  
+  
+
+  const getCitationHighlightedText = (segment: TranscriptSegment): { highlightedParts: Array<{ text: string; highlighted: boolean; isCitation: boolean }> } | null => {
+    if (!citationHighlight) return null;
+    
+    const segmentEnd = segment.start + segment.duration;
+    const citationEnd = citationHighlight.end || citationHighlight.start + 30;
+    
+    // Check if segment overlaps significantly with citation time range
+    const overlapStart = Math.max(segment.start, citationHighlight.start);
+    const overlapEnd = Math.min(segmentEnd, citationEnd);
+    const overlapDuration = Math.max(0, overlapEnd - overlapStart);
+    const overlapRatio = overlapDuration / segment.duration;
+    
+    // Only highlight if there's significant overlap
+    if (overlapRatio > 0.8) {
+      return { 
+        highlightedParts: [{ text: segment.text, highlighted: true, isCitation: true }] 
+      };
+    }
+    
+    return null;
+  };
+  
+  const isCitationHighlighted = (segment: TranscriptSegment): boolean => {
+    return getCitationHighlightedText(segment) !== null;
   };
 
   // Find the single best matching segment for the current time
@@ -322,18 +365,34 @@ export function TranscriptViewer({
               const currentSegmentIndex = getCurrentSegmentIndex();
               
               return transcript.map((segment, index) => {
-                const isHighlighted = isSegmentHighlighted(segment);
+                const topicHighlightedText = getHighlightedText(segment, index);
+                const citationHighlightedText = getCitationHighlightedText(segment);
                 const isCurrent = index === currentSegmentIndex;
-                const isCitationHighlight = isCitationHighlighted(segment);
                 const topicInfo = getSegmentTopic(segment);
                 const isHovered = hoveredSegment === index;
+                
+                // Merge highlights if both exist
+                let finalHighlightedParts: Array<{ text: string; highlighted: boolean; isCitation?: boolean }> | null = null;
+                
+                if (citationHighlightedText) {
+                  // Citation takes priority
+                  finalHighlightedParts = citationHighlightedText.highlightedParts;
+                } else if (topicHighlightedText) {
+                  // Use topic highlights
+                  finalHighlightedParts = topicHighlightedText.highlightedParts.map(part => ({
+                    ...part,
+                    isCitation: false
+                  }));
+                }
+                
+                const hasHighlight = finalHighlightedParts !== null;
 
             return (
               <Tooltip key={index} delayDuration={300}>
                 <TooltipTrigger asChild>
                   <div
                     ref={(el) => {
-                      if (isHighlighted || isCitationHighlight) {
+                      if (hasHighlight) {
                         const highlightIndex = highlightedRefs.current.length;
                         highlightedRefs.current[highlightIndex] = el;
                       }
@@ -347,18 +406,8 @@ export function TranscriptViewer({
                       isHovered && "bg-muted"
                     )}
                     style={{
-                      backgroundColor: isCitationHighlight
-                        ? "hsl(48, 100%, 80%)" // Yellow highlight for citations
-                        : isHighlighted && topicInfo
-                        ? `hsl(${getTopicHSLColor(topicInfo.index)} / 0.1)`
-                        : undefined,
-                      borderLeft: isCitationHighlight
-                        ? "4px solid hsl(48, 100%, 50%)" // Yellow border for citations
-                        : isHighlighted && topicInfo
+                      borderLeft: hasHighlight && topicInfo && !citationHighlightedText
                         ? `3px solid hsl(${getTopicHSLColor(topicInfo.index)})`
-                        : undefined,
-                      boxShadow: isCitationHighlight
-                        ? "0 0 0 1px hsl(48, 100%, 50%, 0.5), 0 2px 8px hsl(48, 100%, 50%, 0.3)" // Yellow glow for citations
                         : undefined,
                     }}
                     onClick={() => handleSegmentClick(segment)}
@@ -373,15 +422,47 @@ export function TranscriptViewer({
                     )}
 
 
-                    {/* Transcript text */}
+                    {/* Transcript text with partial highlighting */}
                     <p 
                       className={cn(
                         "text-sm leading-relaxed",
-                        isCurrent ? "text-foreground font-medium" : "text-muted-foreground",
-                        isHighlighted && "text-foreground"
+                        isCurrent ? "text-foreground font-medium" : "text-muted-foreground"
                       )}
                     >
-                      {segment.text}
+                      {finalHighlightedParts ? (
+                        finalHighlightedParts.map((part, partIndex) => {
+                          const isCitation = 'isCitation' in part && part.isCitation;
+                          
+                          return (
+                            <span
+                              key={partIndex}
+                              className={part.highlighted ? "text-foreground" : ""}
+                              style={
+                                part.highlighted
+                                  ? isCitation
+                                    ? {
+                                        backgroundColor: 'hsl(48, 100%, 85%)',
+                                        padding: '1px 3px',
+                                        borderRadius: '3px',
+                                        boxShadow: '0 0 0 1px hsl(48, 100%, 50%, 0.3)',
+                                      }
+                                    : topicInfo
+                                    ? {
+                                        backgroundColor: `hsl(${getTopicHSLColor(topicInfo.index)} / 0.2)`,
+                                        padding: '0 2px',
+                                        borderRadius: '2px',
+                                      }
+                                    : undefined
+                                  : undefined
+                              }
+                            >
+                              {part.text}
+                            </span>
+                          );
+                        })
+                      ) : (
+                        segment.text
+                      )}
                     </p>
 
                   </div>
