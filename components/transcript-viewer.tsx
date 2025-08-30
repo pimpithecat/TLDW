@@ -13,7 +13,7 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/comp
 interface TranscriptViewerProps {
   transcript: TranscriptSegment[];
   selectedTopic: Topic | null;
-  onTimestampClick: (seconds: number) => void;
+  onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean) => void;
   currentTime?: number;
   topics?: Topic[];
   citationHighlight?: { start: number; end?: number } | null;
@@ -228,7 +228,7 @@ export function TranscriptViewer({
 
   const handleSegmentClick = useCallback(
     (segment: TranscriptSegment) => {
-      onTimestampClick(segment.start);
+      onTimestampClick(segment.start, undefined, false);
     },
     [onTimestampClick]
   );

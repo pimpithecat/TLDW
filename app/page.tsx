@@ -169,15 +169,25 @@ export default function Home() {
     }
   };
 
-  const handleTimestampClick = (seconds: number, endSeconds?: number) => {
+  const handleTimestampClick = (seconds: number, endSeconds?: number, isCitation: boolean = false) => {
     // Prevent rapid sequential clicks and state updates
     if (seekToTime === seconds) return;
     
     // Clear any existing topic selection
     setSelectedTopic(null);
     
-    // Set citation highlight with yellow color
-    setCitationHighlight({ start: seconds, end: endSeconds });
+    // Only set citation highlight for actual citations from chat
+    if (isCitation) {
+      setCitationHighlight({ start: seconds, end: endSeconds });
+      
+      // Clear citation highlight after 10 seconds
+      setTimeout(() => {
+        setCitationHighlight(null);
+      }, 10000);
+    } else {
+      // Clear any existing citation highlight for regular clicks
+      setCitationHighlight(null);
+    }
     
     // Scroll to video player
     const videoContainer = document.getElementById("video-container");
@@ -192,11 +202,6 @@ export default function Home() {
     setTimeout(() => {
       setSeekToTime(undefined);
     }, 100);
-    
-    // Clear citation highlight after 10 seconds
-    setTimeout(() => {
-      setCitationHighlight(null);
-    }, 10000);
   };
 
   const handleTimeUpdate = (seconds: number) => {

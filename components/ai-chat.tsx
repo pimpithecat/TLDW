@@ -16,7 +16,7 @@ interface AIChatProps {
   transcript: TranscriptSegment[];
   topics: Topic[];
   videoId: string;
-  onTimestampClick: (seconds: number, endSeconds?: number) => void;
+  onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean) => void;
 }
 
 export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChatProps) {
