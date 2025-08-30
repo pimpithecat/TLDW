@@ -167,11 +167,6 @@ export function VideoProgressBar({
           </div>
         </div>
 
-        {/* Time labels */}
-        <div className="flex justify-between text-xs text-muted-foreground px-1">
-          <span>{formatDuration(currentTime)}</span>
-          <span>{formatDuration(videoDuration)}</span>
-        </div>
 
         {/* Topic insights list */}
         <div className="mt-4 space-y-2">
