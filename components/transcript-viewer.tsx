@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { TranscriptSegment, Topic } from "@/lib/types";
-import { getTopicHSLColor } from "@/lib/utils";
+import { getTopicHSLColor, formatDuration } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Play, Eye, EyeOff, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 
 interface TranscriptViewerProps {
   transcript: TranscriptSegment[];
@@ -233,9 +234,10 @@ export function TranscriptViewer({
   );
 
   return (
-    <div className="h-full max-h-full flex flex-col rounded-lg border bg-card shadow-sm overflow-hidden">
-      {/* Header */}
-      <div className="p-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <TooltipProvider delayDuration={300}>
+      <div className="h-full max-h-full flex flex-col rounded-lg border bg-card shadow-sm overflow-hidden">
+        {/* Header */}
+        <div className="p-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <h3 className="font-semibold text-sm">Transcript</h3>
@@ -327,61 +329,67 @@ export function TranscriptViewer({
                 const isHovered = hoveredSegment === index;
 
             return (
-              <div
-                key={index}
-                ref={(el) => {
-                  if (isHighlighted || isCitationHighlight) {
-                    const highlightIndex = highlightedRefs.current.length;
-                    highlightedRefs.current[highlightIndex] = el;
-                  }
-                  if (isCurrent) {
-                    currentSegmentRef.current = el;
-                  }
-                }}
-                className={cn(
-                  "group relative px-3 py-2 rounded-lg transition-all duration-200 cursor-pointer select-none",
-                  "hover:bg-muted/50",
-                  isHovered && "bg-muted"
-                )}
-                style={{
-                  backgroundColor: isCitationHighlight
-                    ? "hsl(48, 100%, 80%)" // Yellow highlight for citations
-                    : isHighlighted && topicInfo
-                    ? `hsl(${getTopicHSLColor(topicInfo.index)} / 0.1)`
-                    : undefined,
-                  borderLeft: isCitationHighlight
-                    ? "4px solid hsl(48, 100%, 50%)" // Yellow border for citations
-                    : isHighlighted && topicInfo
-                    ? `3px solid hsl(${getTopicHSLColor(topicInfo.index)})`
-                    : undefined,
-                  boxShadow: isCitationHighlight
-                    ? "0 0 0 1px hsl(48, 100%, 50%, 0.5), 0 2px 8px hsl(48, 100%, 50%, 0.3)" // Yellow glow for citations
-                    : undefined,
-                }}
-                onClick={() => handleSegmentClick(segment)}
-                onMouseEnter={() => setHoveredSegment(index)}
-                onMouseLeave={() => setHoveredSegment(null)}
-              >
-                {/* Play indicator on hover */}
-                {isHovered && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Play className="w-4 h-4 text-primary" />
+              <Tooltip key={index} delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <div
+                    ref={(el) => {
+                      if (isHighlighted || isCitationHighlight) {
+                        const highlightIndex = highlightedRefs.current.length;
+                        highlightedRefs.current[highlightIndex] = el;
+                      }
+                      if (isCurrent) {
+                        currentSegmentRef.current = el;
+                      }
+                    }}
+                    className={cn(
+                      "group relative px-3 py-2 rounded-lg transition-all duration-200 cursor-pointer select-none",
+                      "hover:bg-muted/50",
+                      isHovered && "bg-muted"
+                    )}
+                    style={{
+                      backgroundColor: isCitationHighlight
+                        ? "hsl(48, 100%, 80%)" // Yellow highlight for citations
+                        : isHighlighted && topicInfo
+                        ? `hsl(${getTopicHSLColor(topicInfo.index)} / 0.1)`
+                        : undefined,
+                      borderLeft: isCitationHighlight
+                        ? "4px solid hsl(48, 100%, 50%)" // Yellow border for citations
+                        : isHighlighted && topicInfo
+                        ? `3px solid hsl(${getTopicHSLColor(topicInfo.index)})`
+                        : undefined,
+                      boxShadow: isCitationHighlight
+                        ? "0 0 0 1px hsl(48, 100%, 50%, 0.5), 0 2px 8px hsl(48, 100%, 50%, 0.3)" // Yellow glow for citations
+                        : undefined,
+                    }}
+                    onClick={() => handleSegmentClick(segment)}
+                    onMouseEnter={() => setHoveredSegment(index)}
+                    onMouseLeave={() => setHoveredSegment(null)}
+                  >
+                    {/* Play indicator on hover */}
+                    {isHovered && (
+                      <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Play className="w-4 h-4 text-primary" />
+                      </div>
+                    )}
+
+
+                    {/* Transcript text */}
+                    <p 
+                      className={cn(
+                        "text-sm leading-relaxed",
+                        isCurrent ? "text-foreground font-medium" : "text-muted-foreground",
+                        isHighlighted && "text-foreground"
+                      )}
+                    >
+                      {segment.text}
+                    </p>
+
                   </div>
-                )}
-
-
-                {/* Transcript text */}
-                <p 
-                  className={cn(
-                    "text-sm leading-relaxed",
-                    isCurrent ? "text-foreground font-medium" : "text-muted-foreground",
-                    isHighlighted && "text-foreground"
-                  )}
-                >
-                  {segment.text}
-                </p>
-
-              </div>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="font-mono text-xs">
+                  {formatDuration(segment.start)} - {formatDuration(segment.start + segment.duration)}
+                </TooltipContent>
+              </Tooltip>
             );
           });
             })()
@@ -389,5 +397,6 @@ export function TranscriptViewer({
         </div>
       </ScrollArea>
     </div>
+    </TooltipProvider>
   );
 }

@@ -93,7 +93,7 @@ function extractCitations(response: string, transcript: TranscriptSegment[]): {
       const timestamps = content.split(',').map((t: string) => t.trim());
       const citationNumbers: string[] = [];
       
-      timestamps.forEach(timestamp => {
+      timestamps.forEach((timestamp: string) => {
         // Parse each timestamp
         const timeMatch = timestamp.match(/(\d{1,2}:\d{2})(?:-(\d{1,2}:\d{2}))?/);
         if (timeMatch) {

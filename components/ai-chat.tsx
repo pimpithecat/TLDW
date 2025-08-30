@@ -185,7 +185,7 @@ export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChat
   };
 
   return (
-    <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+    <TooltipProvider delayDuration={0} skipDelayDuration={0} disableHoverableContent={false}>
       <Card className="w-full h-[600px] flex flex-col">
         <div className="p-4 border-b">
           <div className="flex items-center justify-between">

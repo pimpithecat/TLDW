@@ -67,18 +67,28 @@ export function YouTubePlayer({
             setIsPlaying(playing);
             
             if (playing) {
-              // Start time update interval
+              // Start time update interval with throttling
               if (timeUpdateIntervalRef.current) {
                 clearInterval(timeUpdateIntervalRef.current);
               }
+              
+              let lastUpdateTime = 0;
               timeUpdateIntervalRef.current = setInterval(() => {
                 // Skip updates while seeking to prevent feedback loops
                 if (isSeekingRef.current) return;
                 
                 if (playerRef.current?.getCurrentTime) {
                   const time = playerRef.current.getCurrentTime();
+                  
+                  // Always update internal current time for progress bar
                   setCurrentTime(time);
-                  onTimeUpdate?.(time);
+                  
+                  // Throttle external updates to reduce re-renders (update every 500ms instead of 100ms)
+                  const timeDiff = Math.abs(time - lastUpdateTime);
+                  if (timeDiff >= 0.5) {
+                    lastUpdateTime = time;
+                    onTimeUpdate?.(time);
+                  }
                 }
               }, 100);
             } else {

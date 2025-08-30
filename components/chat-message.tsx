@@ -1,12 +1,12 @@
 "use client";
 
+import React, { useMemo, ReactNode } from "react";
 import { ChatMessage, Citation } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { User, Bot } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { useMemo, ReactNode } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ChatMessageProps {
@@ -36,48 +36,52 @@ export function ChatMessageComponent({ message, onTimestampClick }: ChatMessageP
     return map;
   }, [message.citations]);
 
-  // Citation component with tooltip
-  const CitationComponent = ({ citationNumber }: { citationNumber: number }) => {
+  // Memoized citation component with optimized tooltip
+  const CitationComponent = React.memo(({ citationNumber }: { citationNumber: number }) => {
     const citation = citationMap.get(citationNumber);
     
     if (!citation) {
       return <span>[{citationNumber}]</span>;
     }
 
+    const handleClick = React.useCallback((e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onTimestampClick(citation.timestamp, citation.endTime);
+    }, [citation.timestamp, citation.endTime]);
+
+    const handleMouseDown = React.useCallback((e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    }, []);
+
     return (
-      <Tooltip delayDuration={0} disableHoverableContent={false}>
+      <Tooltip delayDuration={0} disableHoverableContent={true}>
         <TooltipTrigger asChild>
           <sup className="inline-block ml-0.5 relative z-50">
             <Button
               variant="link"
               size="sm"
-              className="h-auto p-0 text-[10px] text-primary hover:text-primary/80 font-bold no-underline hover:underline relative cursor-pointer"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onTimestampClick(citation.timestamp, citation.endTime);
-              }}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
+              className="h-auto p-0 text-[10px] text-primary hover:text-primary/80 font-bold no-underline hover:underline relative cursor-pointer pointer-events-auto"
+              onClick={handleClick}
+              onMouseDown={handleMouseDown}
               tabIndex={0}
               data-citation={citationNumber}
-              style={{ pointerEvents: 'auto', userSelect: 'none' }}
+              style={{ userSelect: 'none' }}
             >
               [{citationNumber}]
             </Button>
           </sup>
         </TooltipTrigger>
-        <TooltipContent className="p-2 z-[100]" sideOffset={5}>
-          <div className="font-semibold text-xs">
+        <TooltipContent className="p-2 z-[100] pointer-events-none" sideOffset={5}>
+          <div className="font-semibold text-xs whitespace-nowrap">
             {formatTimestamp(citation.timestamp)}
             {citation.endTime && ` - ${formatTimestamp(citation.endTime)}`}
           </div>
         </TooltipContent>
       </Tooltip>
     );
-  };
+  }, (prevProps, nextProps) => prevProps.citationNumber === nextProps.citationNumber);
 
   // Process text to replace citation patterns with components
   const processTextWithCitations = (text: string): ReactNode[] => {
@@ -93,7 +97,7 @@ export function ChatMessageComponent({ message, onTimestampClick }: ChatMessageP
     const allMatches: Array<{index: number, length: number, element: ReactNode}> = [];
     
     // Find numbered citations
-    let match;
+    let match: RegExpExecArray | null;
     citationPattern.lastIndex = 0;
     while ((match = citationPattern.exec(text)) !== null) {
       const citationNumber = parseInt(match[1], 10);
@@ -109,7 +113,7 @@ export function ChatMessageComponent({ message, onTimestampClick }: ChatMessageP
     while ((match = rawTimestampPattern.exec(text)) !== null) {
       // Check if this position already has a numbered citation
       const hasNumberedCitation = allMatches.some(m => 
-        m.index === match.index && m.length === match[0].length
+        m.index === match!.index && m.length === match![0].length
       );
       
       if (!hasNumberedCitation) {
