@@ -31,6 +31,20 @@ export default function Home() {
   const [transcriptHeight, setTranscriptHeight] = useState<string>("auto");
   const [selectedModel, setSelectedModel] = useState<GeminiModel>('gemini-2.5-flash');
   const [citationHighlight, setCitationHighlight] = useState<{ start: number; end?: number; text?: string } | null>(null);
+  const [generationStartTime, setGenerationStartTime] = useState<number | null>(null);
+  const [elapsedTime, setElapsedTime] = useState<number>(0);
+
+  // Timer effect for tracking generation time
+  useEffect(() => {
+    if (generationStartTime) {
+      const interval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - generationStartTime) / 1000);
+        setElapsedTime(elapsed);
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [generationStartTime]);
 
   const processVideo = async (url: string) => {
     setIsLoading(true);
@@ -113,6 +127,8 @@ export default function Home() {
       
       // Generate topics with timeout
       setLoadingStage('generating');
+      setGenerationStartTime(Date.now());
+      setElapsedTime(0);
       const controller2 = new AbortController();
       const timeoutId2 = setTimeout(() => controller2.abort(), 60000); // 60 second timeout for AI generation
       
@@ -166,6 +182,8 @@ export default function Home() {
       console.error("Error processing video:", err);
     } finally {
       setIsLoading(false);
+      setGenerationStartTime(null);
+      setElapsedTime(0);
     }
   };
 
@@ -289,6 +307,7 @@ export default function Home() {
               videoInfo={videoInfo}
               preview={videoPreview}
               stage={loadingStage}
+              elapsedTime={loadingStage === 'generating' ? elapsedTime : undefined}
             />
             
             <LoadingTips />

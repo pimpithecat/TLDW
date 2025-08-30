@@ -9,9 +9,10 @@ interface LoadingContextProps {
   videoInfo?: VideoInfo | null;
   preview?: string;
   stage: 'fetching' | 'understanding' | 'generating';
+  elapsedTime?: number;
 }
 
-export function LoadingContext({ videoInfo, preview, stage }: LoadingContextProps) {
+export function LoadingContext({ videoInfo, preview, stage, elapsedTime }: LoadingContextProps) {
   const stageMessages = {
     fetching: 'Fetching transcript...',
     understanding: 'Understanding content...',
@@ -89,7 +90,10 @@ export function LoadingContext({ videoInfo, preview, stage }: LoadingContextProp
       <Card className="p-4">
         <div className="space-y-3">
           <div className="flex justify-between items-center">
-            <span className="text-sm font-medium">{stageMessages[stage]}</span>
+            <span className="text-sm font-medium">
+              {stageMessages[stage]}
+              {elapsedTime !== undefined && ` (${elapsedTime} seconds)`}
+            </span>
             <span className="text-sm text-muted-foreground">{stageProgress[stage]}%</span>
           </div>
           <div className="w-full bg-secondary rounded-full h-2">
