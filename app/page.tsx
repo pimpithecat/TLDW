@@ -197,11 +197,6 @@ export default function Home() {
     // Only set citation highlight for actual citations from chat
     if (isCitation) {
       setCitationHighlight({ start: seconds, end: endSeconds, text: citationText });
-      
-      // Clear citation highlight after 10 seconds
-      setTimeout(() => {
-        setCitationHighlight(null);
-      }, 10000);
     } else {
       // Clear any existing citation highlight for regular clicks
       setCitationHighlight(null);
