@@ -30,6 +30,7 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(0);
   const [transcriptHeight, setTranscriptHeight] = useState<string>("auto");
   const [selectedModel, setSelectedModel] = useState<GeminiModel>('gemini-2.5-flash');
+  const [citationHighlight, setCitationHighlight] = useState<{ start: number; end?: number } | null>(null);
 
   const processVideo = async (url: string) => {
     setIsLoading(true);
@@ -168,15 +169,34 @@ export default function Home() {
     }
   };
 
-  const handleTimestampClick = (seconds: number) => {
+  const handleTimestampClick = (seconds: number, endSeconds?: number) => {
     // Prevent rapid sequential clicks and state updates
     if (seekToTime === seconds) return;
     
+    // Clear any existing topic selection
+    setSelectedTopic(null);
+    
+    // Set citation highlight with yellow color
+    setCitationHighlight({ start: seconds, end: endSeconds });
+    
+    // Scroll to video player
+    const videoContainer = document.getElementById("video-container");
+    if (videoContainer) {
+      videoContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    
+    // Seek video to timestamp
     setSeekToTime(seconds);
-    // Use setTimeout instead of nested requestAnimationFrame to avoid rapid state updates
+    
+    // Clear seek state after a short delay
     setTimeout(() => {
       setSeekToTime(undefined);
     }, 100);
+    
+    // Clear citation highlight after 10 seconds
+    setTimeout(() => {
+      setCitationHighlight(null);
+    }, 10000);
   };
 
   const handleTimeUpdate = (seconds: number) => {
@@ -301,6 +321,7 @@ export default function Home() {
                     onTimestampClick={handleTimestampClick}
                     currentTime={currentTime}
                     topics={topics}
+                    citationHighlight={citationHighlight}
                   />
                 </div>
               </div>

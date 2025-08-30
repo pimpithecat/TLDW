@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 interface ChatMessageProps {
   message: ChatMessage;
-  onTimestampClick: (seconds: number) => void;
+  onTimestampClick: (seconds: number, endSeconds?: number) => void;
 }
 
 function formatTimestamp(seconds: number): string {
@@ -45,31 +45,34 @@ export function ChatMessageComponent({ message, onTimestampClick }: ChatMessageP
     }
 
     return (
-      <Tooltip>
+      <Tooltip delayDuration={0} disableHoverableContent={false}>
         <TooltipTrigger asChild>
-          <sup className="inline-block ml-0.5">
+          <sup className="inline-block ml-0.5 relative z-50">
             <Button
               variant="link"
               size="sm"
-              className="h-auto p-0 text-[10px] text-primary hover:text-primary/80 font-bold no-underline hover:underline"
+              className="h-auto p-0 text-[10px] text-primary hover:text-primary/80 font-bold no-underline hover:underline relative cursor-pointer"
               onClick={(e) => {
                 e.preventDefault();
-                onTimestampClick(citation.timestamp);
+                e.stopPropagation();
+                onTimestampClick(citation.timestamp, citation.endTime);
               }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              tabIndex={0}
+              data-citation={citationNumber}
+              style={{ pointerEvents: 'auto', userSelect: 'none' }}
             >
               [{citationNumber}]
             </Button>
           </sup>
         </TooltipTrigger>
-        <TooltipContent className="max-w-xs p-2">
-          <div className="space-y-1">
-            <div className="font-semibold text-xs">
-              {formatTimestamp(citation.timestamp)}
-              {citation.endTime && ` - ${formatTimestamp(citation.endTime)}`}
-            </div>
-            <div className="text-xs text-muted-foreground line-clamp-3">
-              "{citation.text}"
-            </div>
+        <TooltipContent className="p-2 z-[100]" sideOffset={5}>
+          <div className="font-semibold text-xs">
+            {formatTimestamp(citation.timestamp)}
+            {citation.endTime && ` - ${formatTimestamp(citation.endTime)}`}
           </div>
         </TooltipContent>
       </Tooltip>
@@ -78,24 +81,89 @@ export function ChatMessageComponent({ message, onTimestampClick }: ChatMessageP
 
   // Process text to replace citation patterns with components
   const processTextWithCitations = (text: string): ReactNode[] => {
+    // Pattern for numbered citations [1], [2], etc.
     const citationPattern = /\[(\d+)\]/g;
+    // Pattern for raw timestamps [MM:SS] or [MM:SS-MM:SS]
+    const rawTimestampPattern = /\[(\d{1,2}:\d{2})(?:-(\d{1,2}:\d{2}))?\]/g;
+    
     const parts: ReactNode[] = [];
     let lastIndex = 0;
+    
+    // First, find all patterns and their positions
+    const allMatches: Array<{index: number, length: number, element: ReactNode}> = [];
+    
+    // Find numbered citations
     let match;
-
+    citationPattern.lastIndex = 0;
     while ((match = citationPattern.exec(text)) !== null) {
-      // Add text before citation
-      if (match.index > lastIndex) {
-        parts.push(text.slice(lastIndex, match.index));
-      }
-
-      // Add citation component
       const citationNumber = parseInt(match[1], 10);
-      parts.push(<CitationComponent key={`citation-${match.index}`} citationNumber={citationNumber} />);
-
-      lastIndex = match.index + match[0].length;
+      allMatches.push({
+        index: match.index,
+        length: match[0].length,
+        element: <CitationComponent key={`citation-${match.index}`} citationNumber={citationNumber} />
+      });
     }
-
+    
+    // Find raw timestamps (as fallback for unprocessed timestamps)
+    rawTimestampPattern.lastIndex = 0;
+    while ((match = rawTimestampPattern.exec(text)) !== null) {
+      // Check if this position already has a numbered citation
+      const hasNumberedCitation = allMatches.some(m => 
+        m.index === match.index && m.length === match[0].length
+      );
+      
+      if (!hasNumberedCitation) {
+        const [fullMatch, startTime, endTime] = match;
+        const [startMin, startSec] = startTime.split(':').map(Number);
+        const startSeconds = startMin * 60 + startSec;
+        
+        // Create a clickable timestamp without citation data
+        allMatches.push({
+          index: match.index,
+          length: match[0].length,
+          element: (
+            <sup key={`raw-timestamp-${match.index}`} className="inline-block ml-0.5 relative z-50">
+              <Button
+                variant="link"
+                size="sm"
+                className="h-auto p-0 text-[10px] text-primary hover:text-primary/80 font-bold no-underline hover:underline relative cursor-pointer"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onTimestampClick(startSeconds);
+                }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                tabIndex={0}
+                data-timestamp={fullMatch}
+                style={{ pointerEvents: 'auto', userSelect: 'none' }}
+              >
+                {fullMatch}
+              </Button>
+            </sup>
+          )
+        });
+      }
+    }
+    
+    // Sort matches by index
+    allMatches.sort((a, b) => a.index - b.index);
+    
+    // Build the parts array
+    allMatches.forEach(matchInfo => {
+      // Add text before this match
+      if (matchInfo.index > lastIndex) {
+        parts.push(text.slice(lastIndex, matchInfo.index));
+      }
+      
+      // Add the citation/timestamp element
+      parts.push(matchInfo.element);
+      
+      lastIndex = matchInfo.index + matchInfo.length;
+    });
+    
     // Add remaining text
     if (lastIndex < text.length) {
       parts.push(text.slice(lastIndex));

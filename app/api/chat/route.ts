@@ -21,9 +21,23 @@ function extractCitations(response: string, transcript: TranscriptSegment[]): {
   const citationMap = new Map<number, Citation>();
   let processedContent = response;
   
-  // First, extract all timestamps and create citations
+  // First, handle comma-separated timestamps by splitting them
+  // Pattern to match [MM:SS, MM:SS, ...] or [MM:SS-MM:SS, MM:SS, ...]
+  const commaSeparatedPattern = /\[([^\]]+)\]/g;
+  const preprocessedResponse = response.replace(commaSeparatedPattern, (match, content) => {
+    // Check if this contains commas (multiple timestamps)
+    if (content.includes(',')) {
+      // Split by comma and create individual timestamp brackets
+      const timestamps = content.split(',').map((t: string) => t.trim());
+      return timestamps.map((t: string) => `[${t}]`).join(' ');
+    }
+    // Return original if no commas
+    return match;
+  });
+  
+  // Now extract all timestamps and create citations
   const timestampPattern = /\[(\d{1,2}:\d{2})(?:-(\d{1,2}:\d{2}))?\]/g;
-  const timestampMatches = Array.from(response.matchAll(timestampPattern));
+  const timestampMatches = Array.from(preprocessedResponse.matchAll(timestampPattern));
   
   // Track citation numbers for each unique timestamp
   const timestampToCitationNumber = new Map<string, number>();
@@ -51,10 +65,11 @@ function extractCitations(response: string, transcript: TranscriptSegment[]): {
         const citationNumber = citationCounter++;
         timestampToCitationNumber.set(timestampKey, citationNumber);
         
-        // Extract context around the timestamp
-        const startIndex = Math.max(0, match.index! - 150);
-        const endIndex = Math.min(response.length, match.index! + fullMatch.length + 150);
-        const contextText = response.substring(startIndex, endIndex).replace(timestampPattern, '').trim();
+        // Extract context around the timestamp from original response
+        const originalIndex = response.indexOf(startTime);
+        const startIndex = Math.max(0, originalIndex - 150);
+        const endIndex = Math.min(response.length, originalIndex + startTime.length + 150);
+        const contextText = response.substring(startIndex, endIndex).replace(/\[[^\]]+\]/g, '').trim();
         const words = contextText.split(' ').slice(0, 40).join(' ');
         
         const citation: Citation = {
@@ -71,23 +86,60 @@ function extractCitations(response: string, transcript: TranscriptSegment[]): {
     }
   });
   
-  // Replace timestamps with inline citation numbers
-  processedContent = response.replace(timestampPattern, (match, startTime, endTime) => {
-    const [startMin, startSec] = startTime.split(':').map(Number);
-    const startSeconds = startMin * 60 + startSec;
-    
-    let endSeconds: number | undefined;
-    if (endTime) {
-      const [endMin, endSec] = endTime.split(':').map(Number);
-      endSeconds = endMin * 60 + endSec;
+  // Replace timestamps with inline citation numbers in the original response
+  // First handle comma-separated timestamps
+  processedContent = response.replace(commaSeparatedPattern, (match, content) => {
+    if (content.includes(',')) {
+      const timestamps = content.split(',').map((t: string) => t.trim());
+      const citationNumbers: string[] = [];
+      
+      timestamps.forEach(timestamp => {
+        // Parse each timestamp
+        const timeMatch = timestamp.match(/(\d{1,2}:\d{2})(?:-(\d{1,2}:\d{2}))?/);
+        if (timeMatch) {
+          const [, startTime, endTime] = timeMatch;
+          const [startMin, startSec] = startTime.split(':').map(Number);
+          const startSeconds = startMin * 60 + startSec;
+          
+          let endSeconds: number | undefined;
+          if (endTime) {
+            const [endMin, endSec] = endTime.split(':').map(Number);
+            endSeconds = endMin * 60 + endSec;
+          }
+          
+          const timestampKey = `${startSeconds}-${endSeconds || ''}`;
+          const citationNumber = timestampToCitationNumber.get(timestampKey);
+          
+          if (citationNumber) {
+            citationNumbers.push(`[${citationNumber}]`);
+          }
+        }
+      });
+      
+      return citationNumbers.join(' ');
     }
     
-    const timestampKey = `${startSeconds}-${endSeconds || ''}`;
-    const citationNumber = timestampToCitationNumber.get(timestampKey);
-    
-    if (citationNumber) {
-      return `[${citationNumber}]`;
+    // Handle single timestamps
+    const timeMatch = content.match(/(\d{1,2}:\d{2})(?:-(\d{1,2}:\d{2}))?/);
+    if (timeMatch) {
+      const [, startTime, endTime] = timeMatch;
+      const [startMin, startSec] = startTime.split(':').map(Number);
+      const startSeconds = startMin * 60 + startSec;
+      
+      let endSeconds: number | undefined;
+      if (endTime) {
+        const [endMin, endSec] = endTime.split(':').map(Number);
+        endSeconds = endMin * 60 + endSec;
+      }
+      
+      const timestampKey = `${startSeconds}-${endSeconds || ''}`;
+      const citationNumber = timestampToCitationNumber.get(timestampKey);
+      
+      if (citationNumber) {
+        return `[${citationNumber}]`;
+      }
     }
+    
     return '';
   });
   
@@ -144,17 +196,19 @@ ${message}
    - Keep paragraphs concise and scannable
 
 ### Citation Requirements:
-3. ALWAYS include inline citations using [MM:SS] timestamps
-4. Place citations immediately after relevant statements: "The speaker explains [02:45]"
-5. For bullet points, add citations at the end: "• Key point [01:23]"
-6. When quoting, place timestamp after the quote
-7. Cite multiple sections when they provide different perspectives
+3. ALWAYS include inline citations using [MM:SS] format for single timestamps
+4. For time ranges, use [MM:SS-MM:SS] format (e.g., [02:30-03:15])
+5. NEVER use comma-separated timestamps like [MM:SS, MM:SS] - instead use separate brackets: [02:45] [03:30]
+6. Place citations immediately after relevant statements: "The speaker explains [02:45]"
+7. For bullet points, add citations at the end: "• Key point [01:23]"
+8. When quoting, place timestamp after the quote
+9. Cite multiple sections using separate brackets: "First point [02:15] and second point [05:30]"
 
 ### Response Guidelines:
-8. Be concise yet comprehensive - aim for clarity over length
-9. If the question cannot be answered from the transcript, state this clearly
-10. Focus on the most relevant and valuable information
-11. Use natural, conversational language while maintaining accuracy
+10. Be concise yet comprehensive - aim for clarity over length
+11. If the question cannot be answered from the transcript, state this clearly
+12. Focus on the most relevant and valuable information
+13. Use natural, conversational language while maintaining accuracy
 
 ### Formatting Examples:
 Good: "The speaker introduces **three main concepts** [02:15]. First, they discuss..."

@@ -16,7 +16,7 @@ interface AIChatProps {
   transcript: TranscriptSegment[];
   topics: Topic[];
   videoId: string;
-  onTimestampClick: (seconds: number) => void;
+  onTimestampClick: (seconds: number, endSeconds?: number) => void;
 }
 
 export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChatProps) {
@@ -185,7 +185,7 @@ export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChat
   };
 
   return (
-    <TooltipProvider>
+    <TooltipProvider delayDuration={0} skipDelayDuration={0}>
       <Card className="w-full h-[600px] flex flex-col">
         <div className="p-4 border-b">
           <div className="flex items-center justify-between">

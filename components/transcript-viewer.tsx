@@ -15,6 +15,7 @@ interface TranscriptViewerProps {
   onTimestampClick: (seconds: number) => void;
   currentTime?: number;
   topics?: Topic[];
+  citationHighlight?: { start: number; end?: number } | null;
 }
 
 export function TranscriptViewer({
@@ -23,6 +24,7 @@ export function TranscriptViewer({
   onTimestampClick,
   currentTime = 0,
   topics = [],
+  citationHighlight,
 }: TranscriptViewerProps) {
   const highlightedRefs = useRef<(HTMLDivElement | null)[]>([]);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -38,6 +40,27 @@ export function TranscriptViewer({
   useEffect(() => {
     highlightedRefs.current = [];
   }, [selectedTopic]);
+
+  // Scroll to citation highlight when it changes
+  useEffect(() => {
+    if (citationHighlight && highlightedRefs.current.length > 0) {
+      const firstHighlighted = highlightedRefs.current[0];
+      if (firstHighlighted && scrollViewportRef.current) {
+        const viewport = scrollViewportRef.current;
+        const elementTop = firstHighlighted.offsetTop;
+        const viewportHeight = viewport.clientHeight;
+        const scrollPosition = elementTop - viewportHeight / 3; // Position in upper third
+        
+        viewport.scrollTo({
+          top: scrollPosition,
+          behavior: 'smooth'
+        });
+        
+        // Temporarily disable auto-scroll
+        lastUserScrollTime.current = Date.now();
+      }
+    }
+  }, [citationHighlight]);
 
   // Detect user scroll and temporarily disable auto-scroll with debouncing
   const handleUserScroll = useCallback(() => {
@@ -163,6 +186,19 @@ export function TranscriptViewer({
     );
   };
 
+  const isCitationHighlighted = (segment: TranscriptSegment): boolean => {
+    if (!citationHighlight) return false;
+    const segmentEnd = segment.start + segment.duration;
+    const citationEnd = citationHighlight.end || citationHighlight.start + 30; // Default 30 second range if no end
+    
+    // Check if segment overlaps with citation highlight range
+    return (
+      (segment.start >= citationHighlight.start && segment.start < citationEnd) ||
+      (segmentEnd > citationHighlight.start && segmentEnd <= citationEnd) ||
+      (segment.start <= citationHighlight.start && segmentEnd >= citationEnd)
+    );
+  };
+
   const isCurrentSegment = (segment: TranscriptSegment): boolean => {
     return currentTime >= segment.start && currentTime < segment.start + segment.duration;
   };
@@ -260,6 +296,7 @@ export function TranscriptViewer({
             transcript.map((segment, index) => {
               const isHighlighted = isSegmentHighlighted(segment);
               const isCurrent = isCurrentSegment(segment);
+              const isCitationHighlight = isCitationHighlighted(segment);
               const topicInfo = getSegmentTopic(segment);
               const isHovered = hoveredSegment === index;
 
@@ -267,7 +304,7 @@ export function TranscriptViewer({
               <div
                 key={index}
                 ref={(el) => {
-                  if (isHighlighted) {
+                  if (isHighlighted || isCitationHighlight) {
                     const highlightIndex = highlightedRefs.current.length;
                     highlightedRefs.current[highlightIndex] = el;
                   }
@@ -281,21 +318,27 @@ export function TranscriptViewer({
                   isHovered && "bg-muted"
                 )}
                 style={{
-                  backgroundColor: isCurrent 
+                  backgroundColor: isCitationHighlight
+                    ? "hsl(48, 100%, 80%)" // Yellow highlight for citations
+                    : isCurrent 
                     ? topicInfo
                       ? `hsl(${getTopicHSLColor(topicInfo.index)} / 0.25)`
                       : "hsl(221, 83%, 53%, 0.25)"
                     : isHighlighted && topicInfo
                     ? `hsl(${getTopicHSLColor(topicInfo.index)} / 0.1)`
                     : undefined,
-                  borderLeft: isCurrent
+                  borderLeft: isCitationHighlight
+                    ? "4px solid hsl(48, 100%, 50%)" // Yellow border for citations
+                    : isCurrent
                     ? topicInfo
                       ? `4px solid hsl(${getTopicHSLColor(topicInfo.index)})`
                       : "4px solid hsl(221, 83%, 53%)"
                     : isHighlighted && topicInfo
                     ? `3px solid hsl(${getTopicHSLColor(topicInfo.index)})`
                     : undefined,
-                  boxShadow: isCurrent 
+                  boxShadow: isCitationHighlight
+                    ? "0 0 0 1px hsl(48, 100%, 50%, 0.5), 0 2px 8px hsl(48, 100%, 50%, 0.3)" // Yellow glow for citations
+                    : isCurrent 
                     ? topicInfo
                       ? `0 0 0 1px hsl(${getTopicHSLColor(topicInfo.index)} / 0.3), 0 2px 4px hsl(${getTopicHSLColor(topicInfo.index)} / 0.1)`
                       : "0 0 0 1px hsl(221, 83%, 53%, 0.3), 0 2px 4px hsl(221, 83%, 53%, 0.1)"
