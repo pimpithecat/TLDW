@@ -611,11 +611,6 @@ export function TranscriptViewer({
                       "hover:bg-muted/50",
                       isHovered && "bg-muted"
                     )}
-                    style={{
-                      borderLeft: hasHighlight && topicInfo && !citationHighlightedText
-                        ? `3px solid hsl(${getTopicHSLColor(topicInfo.index)})`
-                        : undefined,
-                    }}
                     onClick={() => handleSegmentClick(segment)}
                     onMouseEnter={() => setHoveredSegment(index)}
                     onMouseLeave={() => setHoveredSegment(null)}
