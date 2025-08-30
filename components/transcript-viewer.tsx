@@ -449,9 +449,9 @@ export function TranscriptViewer({
                                         borderRadius: '3px',
                                         boxShadow: '0 0 0 1px hsl(48, 100%, 50%, 0.3)',
                                       }
-                                    : topicInfo
+                                    : selectedTopic
                                     ? {
-                                        backgroundColor: `hsl(${getTopicHSLColor(topicInfo.index)} / 0.2)`,
+                                        backgroundColor: `hsl(${getTopicHSLColor(topics.indexOf(selectedTopic))} / 0.2)`,
                                         padding: '0 2px',
                                         borderRadius: '2px',
                                       }
