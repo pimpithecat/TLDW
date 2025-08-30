@@ -12,7 +12,7 @@ interface LoadingContextProps {
 
 export function LoadingContext({ videoInfo, preview }: LoadingContextProps) {
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-2xl mx-auto space-y-6">
       {/* Video Info Card */}
       {videoInfo ? (
         <Card className="p-6">

@@ -41,6 +41,7 @@ export function LoadingTips() {
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
   const [shuffledTips, setShuffledTips] = useState(TIPS);
+  const [isPaused, setIsPaused] = useState(false);
 
   // Shuffle tips on mount
   useEffect(() => {
@@ -50,6 +51,8 @@ export function LoadingTips() {
 
   // Rotate tips
   useEffect(() => {
+    if (isPaused) return;
+
     const interval = setInterval(() => {
       setIsVisible(false);
       
@@ -60,13 +63,28 @@ export function LoadingTips() {
     }, 4000);
 
     return () => clearInterval(interval);
-  }, [shuffledTips.length]);
+  }, [shuffledTips.length, isPaused]);
+
+  const handleDotClick = (index: number) => {
+    if (index === currentTipIndex) return;
+    
+    setIsVisible(false);
+    
+    setTimeout(() => {
+      setCurrentTipIndex(index);
+      setIsVisible(true);
+    }, 300);
+  };
 
   const currentTip = shuffledTips[currentTipIndex];
   const Icon = currentTip.icon;
 
   return (
-    <Card className="p-6 max-w-2xl mx-auto mt-6">
+    <Card 
+      className="p-6 max-w-2xl mx-auto mt-6 relative"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+    >
       <div
         className={`transition-all duration-300 ${
           isVisible ? "opacity-100 transform translate-y-0" : "opacity-0 transform -translate-y-2"
@@ -90,16 +108,18 @@ export function LoadingTips() {
         </div>
       </div>
 
-      {/* Tip indicator dots */}
+      {/* Tip indicator dots - clickable */}
       <div className="flex justify-center gap-1.5 mt-4">
         {shuffledTips.map((_, index) => (
-          <div
+          <button
             key={index}
-            className={`h-1.5 rounded-full transition-all duration-300 ${
+            onClick={() => handleDotClick(index)}
+            className={`h-1.5 rounded-full transition-all duration-300 hover:scale-125 ${
               index === currentTipIndex 
                 ? "w-6 bg-primary" 
-                : "w-1.5 bg-muted-foreground/30"
+                : "w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50"
             }`}
+            aria-label={`Go to tip ${index + 1}`}
           />
         ))}
       </div>
