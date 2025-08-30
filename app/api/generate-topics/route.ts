@@ -1,12 +1,6 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { TranscriptSegment, Topic } from '@/lib/types';
-import { 
-  splitIntoSentences, 
-  endsWithCompleteSentence, 
-  startsWithSentenceBeginning,
-  extendToSentenceBoundaries 
-} from '@/lib/sentence-utils';
 
 interface ParsedTopic {
   title: string;
@@ -37,9 +31,18 @@ function formatTime(seconds: number): string {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
+// Helper function to normalize text for matching
+function normalizeText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[.,!?;:'"()[\]{}]/g, '') // Remove punctuation
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .trim();
+}
+
 function findExactQuotes(
   transcript: TranscriptSegment[],
-  timestampRanges: Array<{ start: string; end: string }>
+  quotes: Array<{ timestamp: string; text: string }>
 ): { 
   start: number; 
   end: number; 
@@ -50,7 +53,7 @@ function findExactQuotes(
   endCharOffset?: number;
   hasCompleteSentences?: boolean;
 }[] {
-  const quotes: { 
+  const result: { 
     start: number; 
     end: number; 
     text: string; 
@@ -61,286 +64,84 @@ function findExactQuotes(
     hasCompleteSentences?: boolean;
   }[] = [];
   
-  // Helper function to find segment index by time
-  const findSegmentIndex = (time: number): number => {
+  for (const quote of quotes) {
+    // Parse timestamp if provided
+    const timestampMatch = quote.timestamp?.match(/\[?(\d{1,2}:\d{2})-(\d{1,2}:\d{2})\]?/);
+    if (!timestampMatch) continue;
+    
+    const [startMin, startSec] = timestampMatch[1].split(':').map(Number);
+    const [endMin, endSec] = timestampMatch[2].split(':').map(Number);
+    const timestampStart = startMin * 60 + startSec;
+    const timestampEnd = endMin * 60 + endSec;
+    
+    // Use the exact text from the quote
+    const quoteText = quote.text.trim();
+    if (!quoteText) continue;
+    
+    // Normalize quote text for matching
+    const normalizedQuote = normalizeText(quoteText);
+    
+    // Find all segments within the timestamp range
+    const segmentsInRange: { idx: number; segment: TranscriptSegment }[] = [];
     for (let i = 0; i < transcript.length; i++) {
-      const segEnd = transcript[i].start + transcript[i].duration;
-      if (transcript[i].start <= time && segEnd >= time) {
-        return i;
-      }
-    }
-    return -1;
-  };
-  
-  // Helper function to find sentence boundaries within a range of segments
-  const findSentenceBoundaries = (startIdx: number, endIdx: number): { 
-    startIdx: number; 
-    endIdx: number; 
-    text: string;
-    startCharOffset: number;
-    endCharOffset: number;
-    hasCompleteSentences: boolean;
-  } => {
-    // Expand the range to capture more context for finding sentence boundaries
-    const contextStartIdx = Math.max(0, startIdx - 10);
-    const contextEndIdx = Math.min(transcript.length - 1, endIdx + 10);
-    
-    // Combine all segments in the context range
-    let fullContext = '';
-    let segmentStartPositions: number[] = [];
-    
-    for (let i = contextStartIdx; i <= contextEndIdx; i++) {
-      segmentStartPositions[i] = fullContext.length;
-      fullContext += (i > contextStartIdx ? ' ' : '') + transcript[i].text;
-    }
-    
-    // Find the position of the target content within the full context
-    const targetStartPos = segmentStartPositions[startIdx];
-    const targetEndPos = segmentStartPositions[endIdx] + transcript[endIdx].text.length;
-    
-    // Split the full context into sentences
-    const sentences = splitIntoSentences(fullContext);
-    let currentPos = 0;
-    let selectedSentences: string[] = [];
-    let foundStart = false;
-    let newStartIdx = startIdx;
-    let newEndIdx = endIdx;
-    
-    // Find sentences that overlap with our target range
-    for (const sentence of sentences) {
-      const sentenceEnd = currentPos + sentence.length;
+      const segment = transcript[i];
+      const segmentEnd = segment.start + segment.duration;
       
-      // Check if this sentence overlaps with our target range
-      if (sentenceEnd >= targetStartPos && currentPos <= targetEndPos) {
-        selectedSentences.push(sentence);
-        
-        // Track the actual segment indices for the first and last sentences
-        if (!foundStart) {
-          // Find which segment this sentence starts in
-          for (let i = contextStartIdx; i <= contextEndIdx; i++) {
-            if (segmentStartPositions[i] <= currentPos && 
-                (i === contextEndIdx || segmentStartPositions[i + 1] > currentPos)) {
-              newStartIdx = i;
-              foundStart = true;
-              break;
-            }
-          }
-        }
-        
-        // Update end index for each included sentence
-        for (let i = contextStartIdx; i <= contextEndIdx; i++) {
-          if (segmentStartPositions[i] <= sentenceEnd && 
-              (i === contextEndIdx || segmentStartPositions[i + 1] > sentenceEnd)) {
-            newEndIdx = i;
-            break;
-          }
-        }
+      // Include segments that overlap with timestamp range
+      if (segment.start <= timestampEnd && segmentEnd >= timestampStart) {
+        segmentsInRange.push({ idx: i, segment });
       }
+    }
+    
+    if (segmentsInRange.length === 0) continue;
+    
+    // Join all segments in range to create searchable text
+    const joinedText = segmentsInRange.map(s => s.segment.text).join(' ');
+    const normalizedJoined = normalizeText(joinedText);
+    
+    // Try to find the normalized quote within the normalized joined text
+    const normalizedPos = normalizedJoined.indexOf(normalizedQuote);
+    
+    if (normalizedPos !== -1) {
+      // Found a match! Now we need to map back to the original text positions
+      // For simplicity, we'll highlight all segments in the timestamp range
+      // This is more accurate than trying to map normalized positions back
+      const firstSegment = segmentsInRange[0];
+      const lastSegment = segmentsInRange[segmentsInRange.length - 1];
       
-      currentPos = sentenceEnd + 1; // +1 for the space between sentences
-    }
-    
-    // If we found complete sentences, use them
-    if (selectedSentences.length > 0) {
-      const completeText = selectedSentences.join(' ').trim();
+      result.push({
+        start: firstSegment.segment.start,
+        end: lastSegment.segment.start + lastSegment.segment.duration,
+        text: quoteText,
+        startSegmentIdx: firstSegment.idx,
+        endSegmentIdx: lastSegment.idx,
+        startCharOffset: 0,
+        endCharOffset: lastSegment.segment.text.length,
+        hasCompleteSentences: false
+      });
+    } else {
+      // Fallback: If we can't find the text even with normalization,
+      // highlight all segments within the timestamp range
+      console.log(`Could not find normalized text match for quote: "${quoteText.substring(0, 50)}..."`);
+      console.log(`Falling back to timestamp-based highlighting for range [${timestampMatch[1]}-${timestampMatch[2]}]`);
       
-      // Ensure we have substantial content
-      if (completeText.length > 50) {
-        // Calculate character offsets within the start and end segments
-        const startSegmentText = transcript[newStartIdx].text;
-        const endSegmentText = transcript[newEndIdx].text;
-        
-        // Find where the selected text starts within the first segment
-        const firstSentence = selectedSentences[0];
-        const startCharOffset = startSegmentText.indexOf(firstSentence.substring(0, Math.min(20, firstSentence.length)));
-        
-        // Find where the selected text ends within the last segment
-        const lastSentence = selectedSentences[selectedSentences.length - 1];
-        const lastSentenceEnd = lastSentence.substring(Math.max(0, lastSentence.length - 20));
-        const endCharOffset = endSegmentText.lastIndexOf(lastSentenceEnd);
-        
-        return {
-          startIdx: newStartIdx,
-          endIdx: newEndIdx,
-          text: completeText,
-          startCharOffset: startCharOffset >= 0 ? startCharOffset : 0,
-          endCharOffset: endCharOffset >= 0 ? endCharOffset + lastSentenceEnd.length : endSegmentText.length,
-          hasCompleteSentences: true
-        };
-      }
-    }
-    
-    // Fallback: use original range but try to complete sentences
-    let fallbackText = '';
-    let fallbackStartIdx = startIdx;
-    let fallbackEndIdx = endIdx;
-    
-    // Extend backward to find sentence beginning
-    for (let i = startIdx; i >= Math.max(0, startIdx - 5); i--) {
-      const testText = transcript.slice(i, endIdx + 1).map(s => s.text).join(' ');
-      if (i === 0 || endsWithCompleteSentence(transcript[i - 1].text) || startsWithSentenceBeginning(transcript[i].text)) {
-        fallbackStartIdx = i;
-        fallbackText = testText;
-        break;
-      }
-    }
-    
-    // Extend forward to find sentence ending
-    for (let i = endIdx; i <= Math.min(transcript.length - 1, endIdx + 5); i++) {
-      if (endsWithCompleteSentence(transcript[i].text)) {
-        fallbackEndIdx = i;
-        break;
-      }
-    }
-    
-    // Build the final text
-    const segments: string[] = [];
-    for (let i = fallbackStartIdx; i <= fallbackEndIdx; i++) {
-      segments.push(transcript[i].text);
-    }
-    
-    const finalText = segments.join(' ').trim();
-    
-    // Calculate character offsets for fallback
-    let startCharOffset = 0;
-    let endCharOffset = transcript[fallbackEndIdx].text.length;
-    
-    // Try to find sentence boundaries within the segments
-    if (fallbackStartIdx === startIdx) {
-      // Find first sentence start in the segment
-      const segmentSentences = splitIntoSentences(transcript[fallbackStartIdx].text);
-      if (segmentSentences.length > 0) {
-        const firstSentenceStart = transcript[fallbackStartIdx].text.indexOf(segmentSentences[0]);
-        if (firstSentenceStart > 0) {
-          startCharOffset = firstSentenceStart;
-        }
-      }
-    }
-    
-    if (fallbackEndIdx === endIdx) {
-      // Find last sentence end in the segment
-      const segmentSentences = splitIntoSentences(transcript[fallbackEndIdx].text);
-      if (segmentSentences.length > 0) {
-        const lastSentence = segmentSentences[segmentSentences.length - 1];
-        const lastSentenceEnd = transcript[fallbackEndIdx].text.lastIndexOf(lastSentence);
-        if (lastSentenceEnd >= 0) {
-          endCharOffset = lastSentenceEnd + lastSentence.length;
-        }
-      }
-    }
-    
-    return {
-      startIdx: fallbackStartIdx,
-      endIdx: fallbackEndIdx,
-      text: finalText,
-      startCharOffset,
-      endCharOffset,
-      hasCompleteSentences: endsWithCompleteSentence(finalText) && startsWithSentenceBeginning(finalText)
-    };
-  };
-  
-  for (const range of timestampRanges) {
-    // Parse timestamp strings (format: "MM:SS")
-    const [startMin, startSec] = range.start.split(':').map(Number);
-    const [endMin, endSec] = range.end.split(':').map(Number);
-    const startTime = startMin * 60 + startSec;
-    const endTime = endMin * 60 + endSec;
-    
-    // Find the segment indices for start and end times
-    let startIdx = findSegmentIndex(startTime);
-    let endIdx = findSegmentIndex(endTime);
-    
-    if (startIdx === -1 || endIdx === -1) {
-      // If we can't find exact segments, find the nearest ones
-      startIdx = transcript.findIndex(seg => seg.start >= startTime);
-      endIdx = transcript.findIndex(seg => seg.start + seg.duration >= endTime);
-      if (startIdx === -1) startIdx = 0;
-      if (endIdx === -1) endIdx = transcript.length - 1;
-    }
-    
-    // Find proper sentence boundaries for this range
-    const { 
-      startIdx: boundedStartIdx, 
-      endIdx: boundedEndIdx, 
-      text: boundedText,
-      startCharOffset,
-      endCharOffset,
-      hasCompleteSentences
-    } = findSentenceBoundaries(startIdx, endIdx);
-    
-    // Calculate actual timestamps
-    const actualStart = transcript[boundedStartIdx].start;
-    const actualEnd = transcript[boundedEndIdx].start + transcript[boundedEndIdx].duration;
-    
-    // Only add if we have substantial content (at least 50 characters)
-    if (boundedText.length > 50) {
-      quotes.push({
-        start: actualStart,
-        end: actualEnd,
-        text: boundedText,
-        startSegmentIdx: boundedStartIdx,
-        endSegmentIdx: boundedEndIdx,
-        startCharOffset,
-        endCharOffset,
-        hasCompleteSentences
+      const firstSegment = segmentsInRange[0];
+      const lastSegment = segmentsInRange[segmentsInRange.length - 1];
+      
+      result.push({
+        start: firstSegment.segment.start,
+        end: lastSegment.segment.start + lastSegment.segment.duration,
+        text: joinedText, // Use the actual joined text from segments
+        startSegmentIdx: firstSegment.idx,
+        endSegmentIdx: lastSegment.idx,
+        startCharOffset: 0,
+        endCharOffset: lastSegment.segment.text.length,
+        hasCompleteSentences: false
       });
     }
   }
   
-  // Merge nearby quotes (within 5 seconds) to avoid fragmentation
-  const mergedQuotes: { 
-    start: number; 
-    end: number; 
-    text: string; 
-    startSegmentIdx?: number; 
-    endSegmentIdx?: number;
-    startCharOffset?: number;
-    endCharOffset?: number;
-    hasCompleteSentences?: boolean;
-  }[] = [];
-  let currentQuote: { 
-    start: number; 
-    end: number; 
-    text: string; 
-    startSegmentIdx?: number; 
-    endSegmentIdx?: number;
-    startCharOffset?: number;
-    endCharOffset?: number;
-    hasCompleteSentences?: boolean;
-  } | null = null;
-  
-  for (const quote of quotes) {
-    if (!currentQuote) {
-      currentQuote = { ...quote };
-    } else if (quote.start - currentQuote.end <= 5) {
-      // Merge quotes but ensure we maintain sentence boundaries
-      const combinedText = currentQuote.text + ' ' + quote.text;
-      const sentences = splitIntoSentences(combinedText);
-      currentQuote.end = quote.end;
-      currentQuote.text = sentences.join(' ').trim();
-      // Update end segment index and char offset when merging
-      if (quote.endSegmentIdx !== undefined) {
-        currentQuote.endSegmentIdx = quote.endSegmentIdx;
-      }
-      if (quote.endCharOffset !== undefined) {
-        currentQuote.endCharOffset = quote.endCharOffset;
-      }
-      // Preserve hasCompleteSentences if both have it
-      if (currentQuote.hasCompleteSentences && quote.hasCompleteSentences) {
-        currentQuote.hasCompleteSentences = endsWithCompleteSentence(currentQuote.text);
-      }
-    } else {
-      // Save current and start new
-      mergedQuotes.push(currentQuote);
-      currentQuote = { ...quote };
-    }
-  }
-  
-  if (currentQuote) {
-    mergedQuotes.push(currentQuote);
-  }
-  
-  return mergedQuotes;
+  return result;
 }
 
 export async function POST(request: Request) {
@@ -546,26 +347,13 @@ ${transcriptWithTimestamps}
     const topicsWithSegments = topicsArray.map((topic: ParsedTopic, index: number) => {
       console.log(`\nProcessing Highlight Reel ${index + 1}: "${topic.title}"`);
       
-      // Extract timestamp ranges from quotes
-      const timestampRanges: Array<{ start: string; end: string }> = [];
+      // Pass the quotes directly to findExactQuotes
+      const quotesArray = topic.quotes && Array.isArray(topic.quotes) ? topic.quotes : [];
       
-      if (topic.quotes && Array.isArray(topic.quotes)) {
-        topic.quotes.forEach((quote: any) => {
-          // Parse timestamp format "[MM:SS-MM:SS]" or "MM:SS-MM:SS"
-          const timestampMatch = quote.timestamp?.match(/\[?(\d{1,2}:\d{2})-(\d{1,2}:\d{2})\]?/);
-          if (timestampMatch) {
-            timestampRanges.push({
-              start: timestampMatch[1],
-              end: timestampMatch[2]
-            });
-          }
-        });
-      }
+      console.log(`Found ${quotesArray.length} quotes with timestamps`);
       
-      console.log(`Found ${timestampRanges.length} quotes with timestamps`);
-      
-      // Find the exact segments for these timestamps
-      const segments = findExactQuotes(transcript, timestampRanges);
+      // Find the exact segments for these quotes
+      const segments = findExactQuotes(transcript, quotesArray);
       const totalDuration = segments.reduce((sum, seg) => sum + (seg.end - seg.start), 0);
       
       console.log(`Result: Found ${segments.length} quote segments covering ${Math.round(totalDuration)} seconds`);
