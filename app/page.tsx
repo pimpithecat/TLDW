@@ -106,6 +106,8 @@ export default function Home() {
       
       const { transcript: fetchedTranscript } = await transcriptRes.json();
       setTranscript(fetchedTranscript);
+      
+      // Move to understanding stage
       setLoadingStage('understanding');
       
       // Generate quick preview (non-blocking)
@@ -300,15 +302,17 @@ export default function Home() {
             <div className="flex flex-col items-center justify-center mb-8">
               <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
               <p className="text-foreground font-medium">Analyzing video and generating highlight reels</p>
-              <p className="text-sm text-muted-foreground mt-2">This typically takes 30-60 seconds</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                {loadingStage === 'fetching' && 'Fetching transcript...'}
+                {loadingStage === 'understanding' && 'Fetching transcript...'}
+                {loadingStage === 'generating' && `Creating highlight reels... (${elapsedTime} seconds)`}
+              </p>
             </div>
             
             {/* Enhanced Loading Experience */}
             <LoadingContext 
               videoInfo={videoInfo}
               preview={videoPreview}
-              stage={loadingStage}
-              elapsedTime={loadingStage === 'generating' ? elapsedTime : undefined}
             />
             
             <LoadingTips />

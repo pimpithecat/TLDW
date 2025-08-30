@@ -8,23 +8,9 @@ import { Clock, User, FileText } from "lucide-react";
 interface LoadingContextProps {
   videoInfo?: VideoInfo | null;
   preview?: string;
-  stage: 'fetching' | 'understanding' | 'generating';
-  elapsedTime?: number;
 }
 
-export function LoadingContext({ videoInfo, preview, stage, elapsedTime }: LoadingContextProps) {
-  const stageMessages = {
-    fetching: 'Fetching transcript...',
-    understanding: 'Understanding content...',
-    generating: 'Creating highlight reels...'
-  };
-
-  const stageProgress = {
-    fetching: 33,
-    understanding: 66,
-    generating: 90
-  };
-
+export function LoadingContext({ videoInfo, preview }: LoadingContextProps) {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       {/* Video Info Card */}
@@ -86,24 +72,6 @@ export function LoadingContext({ videoInfo, preview, stage, elapsedTime }: Loadi
         </Card>
       )}
 
-      {/* Progress Indicator */}
-      <Card className="p-4">
-        <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-sm font-medium">
-              {stageMessages[stage]}
-              {elapsedTime !== undefined && ` (${elapsedTime} seconds)`}
-            </span>
-            <span className="text-sm text-muted-foreground">{stageProgress[stage]}%</span>
-          </div>
-          <div className="w-full bg-secondary rounded-full h-2">
-            <div 
-              className="bg-primary h-2 rounded-full transition-all duration-500 ease-out"
-              style={{ width: `${stageProgress[stage]}%` }}
-            />
-          </div>
-        </div>
-      </Card>
     </div>
   );
 }
