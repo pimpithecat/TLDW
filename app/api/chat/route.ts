@@ -13,7 +13,7 @@ function formatTranscriptForContext(segments: TranscriptSegment[]): string {
   }).join('\n');
 }
 
-function extractCitations(response: string, transcript: TranscriptSegment[]): {
+function extractCitations(response: string, transcript: TranscriptSegment[], maxCitations: number = 10): {
   content: string;
   citations: Citation[];
 } {
@@ -43,7 +43,10 @@ function extractCitations(response: string, transcript: TranscriptSegment[]): {
   const timestampToCitationNumber = new Map<string, number>();
   let citationCounter = 1;
   
-  timestampMatches.forEach(match => {
+  // Limit citations to avoid overwhelming the response
+  const limitedMatches = timestampMatches.slice(0, maxCitations);
+  
+  limitedMatches.forEach(match => {
     const [fullMatch, startTime, endTime] = match;
     const [startMin, startSec] = startTime.split(':').map(Number);
     const startSeconds = startMin * 60 + startSec;
@@ -61,7 +64,7 @@ function extractCitations(response: string, transcript: TranscriptSegment[]): {
     if (segment) {
       const timestampKey = `${startSeconds}-${endSeconds || ''}`;
       
-      if (!timestampToCitationNumber.has(timestampKey)) {
+      if (!timestampToCitationNumber.has(timestampKey) && citationCounter <= maxCitations) {
         const citationNumber = citationCounter++;
         timestampToCitationNumber.set(timestampKey, citationNumber);
         
@@ -170,7 +173,7 @@ export async function POST(request: Request) {
       `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
     ).join('\n\n') || '';
 
-    const prompt = `You are an AI assistant helping users understand a video transcript. Your role is to provide accurate, helpful answers based on the video content.
+    const prompt = `You are a concise AI assistant helping users understand a video transcript.
 
 ## Video Topics
 ${topicsContext}
@@ -184,38 +187,29 @@ ${chatHistoryContext}
 ## User Question
 ${message}
 
-## Instructions for Response Format
+## Response Instructions
 
-### Content Structure:
-1. Answer based ONLY on the video transcript provided
-2. Structure your response for maximum readability:
-   - Use **bold** for key terms and important concepts
-   - Break content into clear paragraphs (max 3-4 sentences each)
-   - Use bullet points for lists or multiple related items
-   - Add section headers (##) if covering multiple aspects
-   - Keep paragraphs concise and scannable
+BE CONCISE AND DIRECT. Get to the point immediately.
 
-### Citation Requirements:
-3. ALWAYS include inline citations using [MM:SS] format for single timestamps
-4. For time ranges, use [MM:SS-MM:SS] format (e.g., [02:30-03:15])
-5. NEVER use comma-separated timestamps like [MM:SS, MM:SS] - instead use separate brackets: [02:45] [03:30]
-6. Place citations immediately after relevant statements: "The speaker explains [02:45]"
-7. For bullet points, add citations at the end: "• Key point [01:23]"
-8. When quoting, place timestamp after the quote
-9. Cite multiple sections using separate brackets: "First point [02:15] and second point [05:30]"
+### Content Guidelines:
+- Answer ONLY from the transcript provided
+- Use **bold** for key terms only when essential
+- Keep responses short (2-3 paragraphs max)
+- Use bullet points for multiple items
+- Avoid unnecessary elaboration
 
-### Response Guidelines:
-10. Be concise yet comprehensive - aim for clarity over length
-11. If the question cannot be answered from the transcript, state this clearly
-12. Focus on the most relevant and valuable information
-13. Use natural, conversational language while maintaining accuracy
+### Citation Rules:
+- Include ONLY 1-2 most relevant citations per main point
+- Use [MM:SS] format for timestamps
+- Place citations at the end of statements
+- DO NOT over-cite - quality over quantity
+- Only cite when it adds real value
 
-### Formatting Examples:
-Good: "The speaker introduces **three main concepts** [02:15]. First, they discuss..."
-Good: "• **Performance optimization** involves caching [05:30]\n• **Memory management** requires careful planning [06:45]"
-Bad: "The speaker talks about many things in the video and mentions several concepts..."
+### Examples:
+Good: "The speaker explains **the main concept** clearly [02:15]."
+Bad: "The speaker discusses [01:23] and elaborates [01:45] while also mentioning [02:03] the concept [02:15]."
 
-Provide a well-structured, easy-to-read response with proper formatting and citations.`;
+Focus on giving a clear, direct answer with minimal but meaningful citations.`;
 
     const selectedModel = model && ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-2.0-flash'].includes(model) 
       ? model 
@@ -226,8 +220,8 @@ Provide a well-structured, easy-to-read response with proper formatting and cita
     const aiModel = genAI.getGenerativeModel({ 
       model: selectedModel,
       generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: Math.min(2048, maxOutputTokens),
+        temperature: 0.6,
+        maxOutputTokens: Math.min(1024, maxOutputTokens),
       }
     });
 
@@ -275,7 +269,7 @@ Provide a well-structured, easy-to-read response with proper formatting and cita
       });
     }
 
-    const { content, citations } = extractCitations(response, transcript);
+    const { content, citations } = extractCitations(response, transcript, 6);
 
     return NextResponse.json({ 
       content,
