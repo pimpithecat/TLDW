@@ -221,6 +221,12 @@ export default function Home() {
     setCurrentTime(seconds);
   };
 
+  const handleTopicSelect = (topic: Topic | null) => {
+    // Clear citation highlight when selecting a topic
+    setCitationHighlight(null);
+    setSelectedTopic(topic);
+  };
+
   const handlePlayTopic = () => {
     if (selectedTopic && selectedTopic.segments.length > 0) {
       setSeekToTime(selectedTopic.segments[0].start);
@@ -320,7 +326,7 @@ export default function Home() {
                     selectedTopic={selectedTopic}
                     seekToTime={seekToTime}
                     topics={topics}
-                    onTopicSelect={setSelectedTopic}
+                    onTopicSelect={handleTopicSelect}
                     onTimeUpdate={handleTimeUpdate}
                     transcript={transcript}
                   />
