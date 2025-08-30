@@ -31,13 +31,328 @@ function formatTime(seconds: number): string {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-// Helper function to normalize text for matching
-function normalizeText(text: string): string {
+// Text normalization utilities
+function normalizeWhitespace(text: string): string {
+  return text
+    .replace(/[\r\n]+/g, ' ') // Replace newlines with spaces
+    .replace(/\s+/g, ' ')     // Collapse multiple spaces
+    .trim();
+}
+
+function normalizeForMatching(text: string): string {
   return text
     .toLowerCase()
-    .replace(/[.,!?;:'"()[\]{}]/g, '') // Remove punctuation
-    .replace(/\s+/g, ' ') // Normalize whitespace
+    .replace(/['']/g, "'")     // Normalize quotes
+    .replace(/[""]/g, '"')     // Normalize double quotes
+    .replace(/…/g, '...')      // Normalize ellipsis
+    .replace(/—/g, '-')        // Normalize dashes
+    .replace(/\s+/g, ' ')      // Normalize whitespace
     .trim();
+}
+
+// Calculate similarity between two strings (0-1)
+function calculateSimilarity(str1: string, str2: string): number {
+  const longer = str1.length > str2.length ? str1 : str2;
+  const shorter = str1.length > str2.length ? str2 : str1;
+  
+  if (longer.length === 0) return 1.0;
+  
+  const editDistance = levenshteinDistance(longer, shorter);
+  return (longer.length - editDistance) / longer.length;
+}
+
+// Levenshtein distance for fuzzy matching
+function levenshteinDistance(str1: string, str2: string): number {
+  const matrix: number[][] = [];
+  
+  for (let i = 0; i <= str2.length; i++) {
+    matrix[i] = [i];
+  }
+  
+  for (let j = 0; j <= str1.length; j++) {
+    matrix[0][j] = j;
+  }
+  
+  for (let i = 1; i <= str2.length; i++) {
+    for (let j = 1; j <= str1.length; j++) {
+      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+  
+  return matrix[str2.length][str1.length];
+}
+
+// Build a comprehensive index of the transcript
+interface TranscriptIndex {
+  fullTextSpace: string;
+  fullTextNewline: string;
+  segmentBoundaries: Array<{
+    segmentIdx: number;
+    startPos: number;
+    endPos: number;
+    text: string;
+  }>;
+}
+
+function buildTranscriptIndex(transcript: TranscriptSegment[]): TranscriptIndex {
+  const segmentBoundaries: Array<{
+    segmentIdx: number;
+    startPos: number;
+    endPos: number;
+    text: string;
+  }> = [];
+  
+  let fullTextSpace = '';
+  let fullTextNewline = '';
+  
+  transcript.forEach((segment, idx) => {
+    const startPosSpace = fullTextSpace.length;
+    
+    if (idx > 0) {
+      fullTextSpace += ' ';
+      fullTextNewline += '\n';
+    }
+    
+    fullTextSpace += segment.text;
+    fullTextNewline += segment.text;
+    
+    segmentBoundaries.push({
+      segmentIdx: idx,
+      startPos: startPosSpace + (idx > 0 ? 1 : 0),
+      endPos: fullTextSpace.length,
+      text: segment.text
+    });
+  });
+  
+  return {
+    fullTextSpace,
+    fullTextNewline,
+    segmentBoundaries
+  };
+}
+
+// Enhanced text matching with multiple strategies
+function findTextInTranscript(
+  transcript: TranscriptSegment[],
+  targetText: string,
+  options: {
+    startIdx?: number;
+    strategy?: 'exact' | 'normalized' | 'fuzzy' | 'all';
+    minSimilarity?: number;
+    maxSegmentWindow?: number;
+  } = {}
+): {
+  found: boolean;
+  startSegmentIdx: number;
+  endSegmentIdx: number;
+  startCharOffset: number;
+  endCharOffset: number;
+  matchStrategy: string;
+  similarity: number;
+} | null {
+  const {
+    startIdx = 0,
+    strategy = 'all',
+    minSimilarity = 0.85,
+    maxSegmentWindow = 30
+  } = options;
+  
+  // Build transcript index for efficient searching
+  const index = buildTranscriptIndex(transcript);
+  
+  // Try different strategies based on option
+  const strategies = strategy === 'all' 
+    ? ['exact', 'normalized', 'fuzzy']
+    : [strategy];
+  
+  for (const currentStrategy of strategies) {
+    console.log(`  Trying ${currentStrategy} matching...`);
+    
+    let searchText = '';
+    let targetSearchText = '';
+    
+    if (currentStrategy === 'exact') {
+      // Try both space and newline joined versions
+      for (const fullText of [index.fullTextSpace, index.fullTextNewline]) {
+        searchText = fullText;
+        targetSearchText = targetText;
+        
+        const matchIdx = searchText.indexOf(targetSearchText);
+        if (matchIdx !== -1) {
+          const result = mapMatchToSegments(matchIdx, targetSearchText.length, index);
+          if (result) {
+            return {
+              ...result,
+              matchStrategy: 'exact',
+              similarity: 1.0
+            };
+          }
+        }
+      }
+    } else if (currentStrategy === 'normalized') {
+      // Normalize whitespace and try again
+      searchText = normalizeWhitespace(index.fullTextSpace);
+      targetSearchText = normalizeWhitespace(targetText);
+      
+      const matchIdx = searchText.indexOf(targetSearchText);
+      if (matchIdx !== -1) {
+        // Map back to original positions (approximate)
+        const result = mapNormalizedMatchToSegments(
+          matchIdx,
+          targetSearchText,
+          index,
+          targetText
+        );
+        if (result) {
+          return {
+            ...result,
+            matchStrategy: 'normalized',
+            similarity: 0.95
+          };
+        }
+      }
+    } else if (currentStrategy === 'fuzzy') {
+      // Try fuzzy matching with sliding window
+      const normalizedTarget = normalizeForMatching(targetText);
+      const targetWords = normalizedTarget.split(' ').filter(w => w.length > 0);
+      
+      if (targetWords.length === 0) continue;
+      
+      // Slide through the transcript
+      for (let i = startIdx; i < transcript.length; i++) {
+        let combinedText = '';
+        let segmentSpan: { idx: number; text: string }[] = [];
+        
+        // Build window
+        for (let j = i; j < Math.min(i + maxSegmentWindow, transcript.length); j++) {
+          if (combinedText.length > 0) combinedText += ' ';
+          combinedText += transcript[j].text;
+          segmentSpan.push({ idx: j, text: transcript[j].text });
+          
+          // Check similarity
+          const normalizedCombined = normalizeForMatching(combinedText);
+          const similarity = calculateSimilarity(normalizedTarget, normalizedCombined);
+          
+          if (similarity >= minSimilarity) {
+            // Found a fuzzy match
+            console.log(`    Found fuzzy match with ${Math.round(similarity * 100)}% similarity`);
+            
+            return {
+              found: true,
+              startSegmentIdx: segmentSpan[0].idx,
+              endSegmentIdx: segmentSpan[segmentSpan.length - 1].idx,
+              startCharOffset: 0,
+              endCharOffset: segmentSpan[segmentSpan.length - 1].text.length,
+              matchStrategy: 'fuzzy',
+              similarity
+            };
+          }
+          
+          // Stop if we've built too much text
+          if (combinedText.length > targetText.length * 2) {
+            break;
+          }
+        }
+      }
+    }
+  }
+  
+  return null;
+}
+
+// Map a match position in the full text to segment boundaries
+function mapMatchToSegments(
+  matchStart: number,
+  matchLength: number,
+  index: TranscriptIndex
+): {
+  found: boolean;
+  startSegmentIdx: number;
+  endSegmentIdx: number;
+  startCharOffset: number;
+  endCharOffset: number;
+} | null {
+  const matchEnd = matchStart + matchLength;
+  let startSegmentIdx = -1;
+  let endSegmentIdx = -1;
+  let startCharOffset = 0;
+  let endCharOffset = 0;
+  
+  for (const boundary of index.segmentBoundaries) {
+    // Find start segment
+    if (startSegmentIdx === -1 && matchStart >= boundary.startPos && matchStart < boundary.endPos) {
+      startSegmentIdx = boundary.segmentIdx;
+      startCharOffset = matchStart - boundary.startPos;
+    }
+    
+    // Find end segment
+    if (matchEnd > boundary.startPos && matchEnd <= boundary.endPos) {
+      endSegmentIdx = boundary.segmentIdx;
+      endCharOffset = matchEnd - boundary.startPos;
+      break;
+    } else if (matchEnd > boundary.endPos) {
+      endSegmentIdx = boundary.segmentIdx;
+      endCharOffset = boundary.text.length;
+    }
+  }
+  
+  if (startSegmentIdx !== -1 && endSegmentIdx !== -1) {
+    return {
+      found: true,
+      startSegmentIdx,
+      endSegmentIdx,
+      startCharOffset,
+      endCharOffset
+    };
+  }
+  
+  return null;
+}
+
+// Map normalized match back to original segments
+function mapNormalizedMatchToSegments(
+  normalizedMatchIdx: number,
+  _normalizedTargetText: string,
+  index: TranscriptIndex,
+  originalTargetText: string
+): {
+  found: boolean;
+  startSegmentIdx: number;
+  endSegmentIdx: number;
+  startCharOffset: number;
+  endCharOffset: number;
+} | null {
+  // This is approximate - we find the best match in the original text
+  const normalizedFull = normalizeWhitespace(index.fullTextSpace);
+  
+  // Find corresponding position in original text
+  let originalPos = 0;
+  let normalizedPos = 0;
+  
+  for (let i = 0; i < index.fullTextSpace.length; i++) {
+    if (normalizedPos === normalizedMatchIdx) {
+      originalPos = i;
+      break;
+    }
+    
+    const originalChar = index.fullTextSpace[i];
+    const normalizedChar = normalizedFull[normalizedPos];
+    
+    if (normalizeWhitespace(originalChar) === normalizedChar) {
+      normalizedPos++;
+    }
+  }
+  
+  // Now map from original position
+  return mapMatchToSegments(originalPos, originalTargetText.length, index);
 }
 
 function findExactQuotes(
@@ -78,66 +393,151 @@ function findExactQuotes(
     const quoteText = quote.text.trim();
     if (!quoteText) continue;
     
-    // Normalize quote text for matching
-    const normalizedQuote = normalizeText(quoteText);
+    console.log(`\n[Quote ${quotes.indexOf(quote) + 1}] Searching for text:`);
+    console.log(`  Text: "${quoteText.substring(0, 100)}${quoteText.length > 100 ? '...' : ''}"`);
+    console.log(`  Length: ${quoteText.length} characters`);
+    console.log(`  Timestamp: ${timestampMatch[1]}-${timestampMatch[2]}`);
     
-    // Find all segments within the timestamp range
-    const segmentsInRange: { idx: number; segment: TranscriptSegment }[] = [];
-    for (let i = 0; i < transcript.length; i++) {
-      const segment = transcript[i];
-      const segmentEnd = segment.start + segment.duration;
-      
-      // Include segments that overlap with timestamp range
-      if (segment.start <= timestampEnd && segmentEnd >= timestampStart) {
-        segmentsInRange.push({ idx: i, segment });
-      }
+    // Show first and last parts for debugging
+    if (quoteText.length > 100) {
+      console.log(`  First 50 chars: "${quoteText.substring(0, 50)}"`);
+      console.log(`  Last 50 chars: "${quoteText.substring(quoteText.length - 50)}"`);
     }
     
-    if (segmentsInRange.length === 0) continue;
+    // Try to find text match using multiple strategies
+    const match = findTextInTranscript(transcript, quoteText, {
+      strategy: 'all',
+      minSimilarity: 0.85,
+      maxSegmentWindow: 30
+    });
     
-    // Join all segments in range to create searchable text
-    const joinedText = segmentsInRange.map(s => s.segment.text).join(' ');
-    const normalizedJoined = normalizeText(joinedText);
-    
-    // Try to find the normalized quote within the normalized joined text
-    const normalizedPos = normalizedJoined.indexOf(normalizedQuote);
-    
-    if (normalizedPos !== -1) {
-      // Found a match! Now we need to map back to the original text positions
-      // For simplicity, we'll highlight all segments in the timestamp range
-      // This is more accurate than trying to map normalized positions back
-      const firstSegment = segmentsInRange[0];
-      const lastSegment = segmentsInRange[segmentsInRange.length - 1];
+    if (match) {
+      console.log(`  ✓ Found match using ${match.matchStrategy} strategy!`);
+      console.log(`    Segments: ${match.startSegmentIdx}-${match.endSegmentIdx}`);
+      console.log(`    Char offsets: ${match.startCharOffset}-${match.endCharOffset}`);
+      console.log(`    Similarity: ${Math.round(match.similarity * 100)}%`);
+      
+      // Get the actual timestamps from the segments
+      const startSegment = transcript[match.startSegmentIdx];
+      const endSegment = transcript[match.endSegmentIdx];
       
       result.push({
-        start: firstSegment.segment.start,
-        end: lastSegment.segment.start + lastSegment.segment.duration,
+        start: startSegment.start,
+        end: endSegment.start + endSegment.duration,
         text: quoteText,
-        startSegmentIdx: firstSegment.idx,
-        endSegmentIdx: lastSegment.idx,
-        startCharOffset: 0,
-        endCharOffset: lastSegment.segment.text.length,
-        hasCompleteSentences: false
+        startSegmentIdx: match.startSegmentIdx,
+        endSegmentIdx: match.endSegmentIdx,
+        startCharOffset: match.startCharOffset,
+        endCharOffset: match.endCharOffset,
+        hasCompleteSentences: match.matchStrategy !== 'fuzzy'
       });
     } else {
-      // Fallback: If we can't find the text even with normalization,
-      // highlight all segments within the timestamp range
-      console.log(`Could not find normalized text match for quote: "${quoteText.substring(0, 50)}..."`);
-      console.log(`Falling back to timestamp-based highlighting for range [${timestampMatch[1]}-${timestampMatch[2]}]`);
+      console.log(`  ✗ No match found with primary strategies`);
+      console.log(`  Analyzing text differences...`);
       
-      const firstSegment = segmentsInRange[0];
-      const lastSegment = segmentsInRange[segmentsInRange.length - 1];
+      // Debug: Show potential issues
+      const index = buildTranscriptIndex(transcript);
+      const quoteNormalized = normalizeWhitespace(quoteText);
+      const transcriptNormalized = normalizeWhitespace(index.fullTextSpace);
       
-      result.push({
-        start: firstSegment.segment.start,
-        end: lastSegment.segment.start + lastSegment.segment.duration,
-        text: joinedText, // Use the actual joined text from segments
-        startSegmentIdx: firstSegment.idx,
-        endSegmentIdx: lastSegment.idx,
-        startCharOffset: 0,
-        endCharOffset: lastSegment.segment.text.length,
-        hasCompleteSentences: false
+      // Check if normalized version exists
+      if (transcriptNormalized.includes(quoteNormalized)) {
+        console.log(`  ⚠ Quote exists in normalized form but not exact - whitespace issue`);
+      } else {
+        // Check for partial matches
+        const quoteWords = quoteNormalized.split(' ').filter(w => w.length > 3);
+        const firstWords = quoteWords.slice(0, 5).join(' ');
+        const lastWords = quoteWords.slice(-5).join(' ');
+        
+        if (transcriptNormalized.includes(firstWords)) {
+          console.log(`  ⚠ Found beginning of quote but not full text`);
+        }
+        if (transcriptNormalized.includes(lastWords)) {
+          console.log(`  ⚠ Found end of quote but not full text`);
+        }
+      }
+      
+      console.log(`  Trying to find match within timestamp range...`);
+      
+      // Find segments within the timestamp range
+      const segmentsInRange: { idx: number; segment: TranscriptSegment }[] = [];
+      for (let i = 0; i < transcript.length; i++) {
+        const segment = transcript[i];
+        const segmentEnd = segment.start + segment.duration;
+        
+        // Include segments that overlap with timestamp range
+        if (segment.start <= timestampEnd && segmentEnd >= timestampStart) {
+          segmentsInRange.push({ idx: i, segment });
+        }
+      }
+      
+      if (segmentsInRange.length === 0) {
+        console.log(`No segments found in timestamp range`);
+        continue;
+      }
+      
+      // Try to find match within the timestamp range segments
+      const startSearchIdx = segmentsInRange[0].idx;
+      const endSearchIdx = segmentsInRange[segmentsInRange.length - 1].idx;
+      
+      // Search within a constrained range with more lenient matching
+      let foundInRange = false;
+      const rangeMatch = findTextInTranscript(transcript, quoteText, {
+        startIdx: Math.max(0, startSearchIdx - 2),
+        strategy: 'all',
+        minSimilarity: 0.80, // More lenient for timestamp range
+        maxSegmentWindow: Math.min(30, endSearchIdx - startSearchIdx + 5)
       });
+      
+      if (rangeMatch && rangeMatch.startSegmentIdx <= endSearchIdx + 2) {
+        console.log(`  ✓ Found match near timestamp range using ${rangeMatch.matchStrategy}!`);
+        console.log(`    Segments: ${rangeMatch.startSegmentIdx}-${rangeMatch.endSegmentIdx}`);
+        console.log(`    Similarity: ${Math.round(rangeMatch.similarity * 100)}%`);
+        
+        const startSegment = transcript[rangeMatch.startSegmentIdx];
+        const endSegment = transcript[rangeMatch.endSegmentIdx];
+        
+        result.push({
+          start: startSegment.start,
+          end: endSegment.start + endSegment.duration,
+          text: quoteText,
+          startSegmentIdx: rangeMatch.startSegmentIdx,
+          endSegmentIdx: rangeMatch.endSegmentIdx,
+          startCharOffset: rangeMatch.startCharOffset,
+          endCharOffset: rangeMatch.endCharOffset,
+          hasCompleteSentences: rangeMatch.matchStrategy !== 'fuzzy'
+        });
+        foundInRange = true;
+      }
+      
+      if (!foundInRange) {
+        // Final fallback: Use timestamp range
+        console.log(`  ⚠ Using timestamp-based fallback`);
+        
+        const firstSegment = segmentsInRange[0];
+        const lastSegment = segmentsInRange[segmentsInRange.length - 1];
+        const joinedText = segmentsInRange.map(s => s.segment.text).join(' ');
+        
+        // Show why matching failed for debugging
+        console.log(`  Debug: Comparing quote vs transcript in range`);
+        console.log(`    Quote first 50: "${quoteText.substring(0, 50)}"`);
+        console.log(`    Range first 50: "${joinedText.substring(0, 50)}"`);
+        if (quoteText.length > 100 && joinedText.length > 100) {
+          console.log(`    Quote last 50: "${quoteText.substring(quoteText.length - 50)}"`);
+          console.log(`    Range last 50: "${joinedText.substring(joinedText.length - 50)}"`);
+        }
+        
+        result.push({
+          start: firstSegment.segment.start,
+          end: lastSegment.segment.start + lastSegment.segment.duration,
+          text: joinedText, // Use the actual joined text from segments
+          startSegmentIdx: firstSegment.idx,
+          endSegmentIdx: lastSegment.idx,
+          startCharOffset: 0,
+          endCharOffset: lastSegment.segment.text.length,
+          hasCompleteSentences: false
+        });
+      }
     }
   }
   
@@ -194,7 +594,16 @@ Analyze the entire transcript to identify 5 key themes that are most valuable an
 For each theme, select 1 to 5 direct passages from the transcript that powerfully illustrate the core idea.
 
 **CRITICAL Passage Selection Criteria:**
-- **Direct Quotes Only:** Use complete, unedited sentences from the transcript. Do NOT summarize, paraphrase, or use ellipses.
+- **EXACT VERBATIM QUOTES:** You MUST copy the text EXACTLY as it appears in the transcript. This means:
+  - DO NOT fix grammar mistakes (keep "gonna" not "going to")
+  - DO NOT fix spelling errors or typos
+  - DO NOT clean up incomplete sentences or fragments
+  - DO NOT add or remove punctuation
+  - DO NOT change capitalization
+  - DO NOT normalize spaces or formatting
+  - DO NOT use ellipsis (...) to skip parts
+  - The text must be a CONTINUOUS passage from the transcript
+- **CHARACTER-PERFECT ACCURACY:** Your quote text MUST be found as an exact substring in the transcript. We will search for it using string.indexOf() - if it returns -1, your quote is wrong.
 - **LENGTH REQUIREMENT:** Each passage MUST be substantial enough to convey a complete thought or idea. Minimum 15-30 seconds of content. Short fragments are unacceptable.
 - **Complete Thoughts:** ALWAYS extend the timestamp range to capture the FULL idea being expressed. Include the entire explanation, example, or argument - not just a fragment.
 - **Self-Contained:** Each passage must be fully understandable on its own. If the speaker references something earlier, extend the passage backward to include that context.
@@ -204,9 +613,16 @@ For each theme, select 1 to 5 direct passages from the transcript that powerfull
 - **Avoid Redundancy:** Within a single reel, ensure each selected passage offers a unique angle on the theme.
 - **Chronological:** Within each reel, list the passages in the order they appear in the video.
 
-**Examples of Good vs Bad Passages:**
-❌ BAD: [02:15-02:25] "The problem with traditional education is that it doesn't..."
-✅ GOOD: [02:15-03:10] "The problem with traditional education is that it doesn't prepare you for the real world. When I graduated from Stanford, I realized I had memorized hundreds of formulas but couldn't negotiate a salary, manage my finances, or build meaningful relationships. The system optimizes for test scores, not life skills. We spend 16 years in school learning calculus we'll never use, but zero hours learning how to handle failure, manage emotions, or think critically about the media we consume."
+**Examples of EXACT copying:**
+If the transcript says: "so um basically what we're gonna do is uh we're gonna like optimize the the system"
+❌ BAD: "So basically what we're going to do is optimize the system"
+✅ GOOD: "so um basically what we're gonna do is uh we're gonna like optimize the the system"
+
+If the transcript says: "The problem with traditional education   is that it doesn't prepare"
+❌ BAD: "The problem with traditional education is that it doesn't prepare"
+✅ GOOD: "The problem with traditional education   is that it doesn't prepare" (keep extra spaces)
+
+IMPORTANT: Copy EXACTLY what you see between the timestamp brackets, character for character!
 
 ## Quality Control
 - **Distinct Themes:** Each highlight reel's title must represent a clearly distinct theme. While themes can be related, their core ideas should be unique.
@@ -221,11 +637,13 @@ You must return a JSON array with this EXACT structure:
     "quotes": [
       {
         "timestamp": "[MM:SS-MM:SS]",
-        "text": "Exact transcript of passage as it appears"
+        "text": "EXACT verbatim text from transcript - must be a perfect character-by-character match"
       }
     ]
   }
 ]
+
+IMPORTANT: The "text" field MUST contain the exact text as it appears in the transcript. Do not clean up, correct, or modify the text in any way.
 
 ## Video Transcript (with timestamps)
 ${transcriptWithTimestamps}
