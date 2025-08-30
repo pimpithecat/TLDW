@@ -199,8 +199,30 @@ export function TranscriptViewer({
     );
   };
 
-  const isCurrentSegment = (segment: TranscriptSegment): boolean => {
-    return currentTime >= segment.start && currentTime < segment.start + segment.duration;
+  // Find the single best matching segment for the current time
+  const getCurrentSegmentIndex = (): number => {
+    if (currentTime === 0) return -1;
+    
+    // Find all segments that contain the current time
+    const matchingIndices: number[] = [];
+    transcript.forEach((segment, index) => {
+      if (currentTime >= segment.start && currentTime < segment.start + segment.duration) {
+        matchingIndices.push(index);
+      }
+    });
+    
+    // If no matches, return -1
+    if (matchingIndices.length === 0) return -1;
+    
+    // If only one match, return it
+    if (matchingIndices.length === 1) return matchingIndices[0];
+    
+    // If multiple matches, return the one whose start time is closest to current time
+    return matchingIndices.reduce((closest, current) => {
+      const closestDiff = Math.abs(transcript[closest].start - currentTime);
+      const currentDiff = Math.abs(transcript[current].start - currentTime);
+      return currentDiff < closestDiff ? current : closest;
+    });
   };
 
   const handleSegmentClick = useCallback(
@@ -293,12 +315,16 @@ export function TranscriptViewer({
               No transcript available
             </div>
           ) : (
-            transcript.map((segment, index) => {
-              const isHighlighted = isSegmentHighlighted(segment);
-              const isCurrent = isCurrentSegment(segment);
-              const isCitationHighlight = isCitationHighlighted(segment);
-              const topicInfo = getSegmentTopic(segment);
-              const isHovered = hoveredSegment === index;
+            (() => {
+              // Calculate current segment index once for all segments
+              const currentSegmentIndex = getCurrentSegmentIndex();
+              
+              return transcript.map((segment, index) => {
+                const isHighlighted = isSegmentHighlighted(segment);
+                const isCurrent = index === currentSegmentIndex;
+                const isCitationHighlight = isCitationHighlighted(segment);
+                const topicInfo = getSegmentTopic(segment);
+                const isHovered = hoveredSegment === index;
 
             return (
               <div
@@ -320,28 +346,16 @@ export function TranscriptViewer({
                 style={{
                   backgroundColor: isCitationHighlight
                     ? "hsl(48, 100%, 80%)" // Yellow highlight for citations
-                    : isCurrent 
-                    ? topicInfo
-                      ? `hsl(${getTopicHSLColor(topicInfo.index)} / 0.25)`
-                      : "hsl(221, 83%, 53%, 0.25)"
                     : isHighlighted && topicInfo
                     ? `hsl(${getTopicHSLColor(topicInfo.index)} / 0.1)`
                     : undefined,
                   borderLeft: isCitationHighlight
                     ? "4px solid hsl(48, 100%, 50%)" // Yellow border for citations
-                    : isCurrent
-                    ? topicInfo
-                      ? `4px solid hsl(${getTopicHSLColor(topicInfo.index)})`
-                      : "4px solid hsl(221, 83%, 53%)"
                     : isHighlighted && topicInfo
                     ? `3px solid hsl(${getTopicHSLColor(topicInfo.index)})`
                     : undefined,
                   boxShadow: isCitationHighlight
                     ? "0 0 0 1px hsl(48, 100%, 50%, 0.5), 0 2px 8px hsl(48, 100%, 50%, 0.3)" // Yellow glow for citations
-                    : isCurrent 
-                    ? topicInfo
-                      ? `0 0 0 1px hsl(${getTopicHSLColor(topicInfo.index)} / 0.3), 0 2px 4px hsl(${getTopicHSLColor(topicInfo.index)} / 0.1)`
-                      : "0 0 0 1px hsl(221, 83%, 53%, 0.3), 0 2px 4px hsl(221, 83%, 53%, 0.1)"
                     : undefined,
                 }}
                 onClick={() => handleSegmentClick(segment)}
@@ -367,30 +381,10 @@ export function TranscriptViewer({
                   {segment.text}
                 </p>
 
-                {/* Current playback indicator with pulse animation */}
-                {isCurrent && (
-                  <>
-                    <div 
-                      className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg" 
-                      style={{ 
-                        backgroundColor: topicInfo 
-                          ? `hsl(${getTopicHSLColor(topicInfo.index)})` 
-                          : "hsl(221, 83%, 53%)" 
-                      }} 
-                    />
-                    <div 
-                      className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg animate-pulse opacity-50" 
-                      style={{ 
-                        backgroundColor: topicInfo 
-                          ? `hsl(${getTopicHSLColor(topicInfo.index)})` 
-                          : "hsl(221, 83%, 53%)" 
-                      }} 
-                    />
-                  </>
-                )}
               </div>
             );
-          })
+          });
+            })()
           )}
         </div>
       </ScrollArea>
