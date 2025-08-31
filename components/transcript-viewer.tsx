@@ -443,7 +443,7 @@ export function TranscriptViewer({
       const isWithinHighlightReel = selectedTopic && isTopicHighlighted;
       // Check if this segment is within a citation highlight
       const isWithinCitationHighlight = citationHighlight && isCitationHighlighted;
-      onTimestampClick(segment.start, undefined, false, undefined, isWithinHighlightReel, isWithinCitationHighlight);
+      onTimestampClick(segment.start, undefined, false, undefined, isWithinHighlightReel, isWithinCitationHighlight || undefined);
     },
     [onTimestampClick, selectedTopic, citationHighlight]
   );
