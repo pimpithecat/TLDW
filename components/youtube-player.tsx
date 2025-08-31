@@ -149,6 +149,64 @@ export function YouTubePlayer({
     }
   }, [selectedTopic]);
 
+  // Auto-jump monitoring for normal playback with selected topic
+  useEffect(() => {
+    if (!selectedTopic || !isPlaying || !playerRef.current) return;
+    
+    // Don't set up monitoring if playSegments/playTopic interval is already running
+    if (intervalRef.current) return;
+    
+    // Set up monitoring interval for auto-jumping between segments
+    const monitoringInterval = setInterval(() => {
+      if (!playerRef.current?.getCurrentTime) return;
+      
+      const currentPlayTime = playerRef.current.getCurrentTime();
+      
+      // Find which segment we're currently in or just passed
+      let currentSegIdx = -1;
+      for (let i = 0; i < selectedTopic.segments.length; i++) {
+        const segment = selectedTopic.segments[i];
+        // Check if we're in this segment or just passed it
+        if (currentPlayTime >= segment.start && currentPlayTime <= segment.end + 0.3) {
+          currentSegIdx = i;
+          break;
+        }
+      }
+      
+      // Check if we've reached or passed the end of a segment
+      if (currentSegIdx >= 0) {
+        const currentSegment = selectedTopic.segments[currentSegIdx];
+        
+        // If we've reached the end of this segment
+        if (currentPlayTime >= currentSegment.end) {
+          // Check if there's a next segment
+          const nextSegmentIdx = currentSegIdx + 1;
+          if (nextSegmentIdx < selectedTopic.segments.length) {
+            const nextSegment = selectedTopic.segments[nextSegmentIdx];
+            
+            // Jump to next segment if there's a gap (segments are not contiguous)
+            // Adding small tolerance for floating point comparison
+            if (Math.abs(nextSegment.start - currentSegment.end) > 0.1) {
+              // Clear this monitoring interval to prevent multiple jumps
+              clearInterval(monitoringInterval);
+              
+              // Jump to next segment
+              playerRef.current.seekTo(nextSegment.start, true);
+              setCurrentSegmentIndex(nextSegmentIdx);
+              
+              // Note: A new monitoring interval will be created by this effect re-running
+            }
+          }
+        }
+      }
+    }, 100); // Check every 100ms for more responsive jumping
+    
+    // Clean up on unmount or when dependencies change
+    return () => {
+      clearInterval(monitoringInterval);
+    };
+  }, [selectedTopic, isPlaying, currentSegmentIndex]);
+
 
   const playTopic = (topic: Topic) => {
     if (!playerRef.current || !topic) return;
@@ -175,15 +233,19 @@ export function YouTubePlayer({
         if (playerRef.current?.getCurrentTime) {
           const currentTime = playerRef.current.getCurrentTime();
           if (currentTime >= segment.end) {
+            // Clear interval immediately to prevent multiple triggers
             if (intervalRef.current) {
               clearInterval(intervalRef.current);
               intervalRef.current = null;
             }
+            
             const nextIndex = segmentIndex + 1;
             if (nextIndex < topic.segments.length) {
               setCurrentSegmentIndex(nextIndex);
+              // Recursively play next segment, which will seek to its start
               playTopicSegment(nextIndex);
             } else {
+              // All segments played, pause the video
               playerRef.current.pauseVideo();
               setCurrentSegmentIndex(0);
             }
@@ -217,21 +279,25 @@ export function YouTubePlayer({
         if (playerRef.current?.getCurrentTime) {
           const currentTime = playerRef.current.getCurrentTime();
           if (currentTime >= segment.end) {
+            // Clear interval immediately to prevent multiple triggers
             if (intervalRef.current) {
               clearInterval(intervalRef.current);
               intervalRef.current = null;
             }
+            
             const nextIndex = index + 1;
             if (nextIndex < selectedTopic.segments.length) {
               setCurrentSegmentIndex(nextIndex);
+              // Recursively play next segment, which will seek to its start
               playSegments(nextIndex);
             } else {
+              // All segments played, pause the video
               playerRef.current.pauseVideo();
               setCurrentSegmentIndex(0);
             }
           }
         }
-      }, 1000);
+      }, 100);
     }
   };
 
