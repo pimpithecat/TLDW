@@ -121,9 +121,9 @@ Return ONLY a JSON array with 3 question strings, no other text:
     if (!response) {
       return NextResponse.json({ 
         questions: [
-          "What are the key insights about execution speed in startups?",
-          "How does agentic AI differ from traditional AI workflows?",
-          "Why is learning to code still valuable in the AI era?"
+          "What contrarian or surprising insights challenge conventional thinking?",
+          "What specific examples or case studies illustrate the key concepts?",
+          "What are the practical implications for someone in my field?"
         ]
       });
     }
@@ -167,9 +167,9 @@ Return ONLY a JSON array with 3 question strings, no other text:
     
     if (questions.length === 0) {
       questions = [
-        "What are the main topics discussed in this video?",
-        "Can you summarize the key points made?",
-        "What are the most important takeaways?"
+        "What's the most actionable advice I can apply immediately?",
+        "Which ideas challenge my current assumptions?",
+        "What evidence or data supports the main arguments?"
       ];
     }
 
@@ -177,9 +177,9 @@ Return ONLY a JSON array with 3 question strings, no other text:
   } catch (error) {
     return NextResponse.json(
       { questions: [
-        "What are the main topics discussed in this video?",
-        "Can you summarize the key points made?",
-        "What are the most important takeaways?"
+        "What's the most actionable advice I can apply immediately?",
+        "Which ideas challenge my current assumptions?",
+        "What evidence or data supports the main arguments?"
       ] },
       { status: 200 }
     );
