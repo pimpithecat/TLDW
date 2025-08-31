@@ -43,17 +43,12 @@ export function TranscriptViewer({
     
     // Debug: Verify segment indices match content
     if (selectedTopic && selectedTopic.segments.length > 0 && transcript.length > 0) {
-      console.log(`🎯 [Topic Selected] "${selectedTopic.title}"`);
       
       const firstSeg = selectedTopic.segments[0];
       if (firstSeg.startSegmentIdx !== undefined && firstSeg.endSegmentIdx !== undefined) {
-        console.log(`🔍 Verifying segment index alignment:`);
-        console.log(`  Topic expects indices: ${firstSeg.startSegmentIdx}-${firstSeg.endSegmentIdx}`);
-        console.log(`  Quote text starts with: "${firstSeg.text.substring(0, 60)}..."`);        
         
         // Check what's actually at those indices
         if (transcript[firstSeg.startSegmentIdx]) {
-          console.log(`  Segment at index ${firstSeg.startSegmentIdx}: "${transcript[firstSeg.startSegmentIdx].text.substring(0, 60)}..."`);
           
           // Try to find where the quote actually is
           const quoteStart = firstSeg.text.substring(0, 30).toLowerCase().replace(/[^a-z0-9 ]/g, '');
@@ -64,13 +59,11 @@ export function TranscriptViewer({
             const segTextNorm = segText.toLowerCase().replace(/[^a-z0-9 ]/g, '');
             if (segTextNorm.includes(quoteStart)) {
               foundAt = i;
-              console.log(`  ✅ Found quote at index ${i}: "${segText.substring(0, 50)}..."`);
               break;
             }
           }
           
           if (foundAt !== -1 && foundAt !== firstSeg.startSegmentIdx) {
-            console.log(`  ⚠️ INDEX MISMATCH: Quote is at index ${foundAt} but expected at ${firstSeg.startSegmentIdx} (off by ${foundAt - firstSeg.startSegmentIdx})`);
           }
         }
       }

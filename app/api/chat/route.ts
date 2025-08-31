@@ -238,7 +238,6 @@ Focus on giving a clear, direct answer with minimal but meaningful citations.`;
           break; // Success, exit retry loop
         }
       } catch (error: any) {
-        console.error(`Gemini API error (attempt ${retryCount + 1}):`, error);
         
         if (retryCount === maxRetries) {
           // Final attempt failed
@@ -262,7 +261,6 @@ Focus on giving a clear, direct answer with minimal but meaningful citations.`;
     }
     
     if (!response) {
-      console.error('Empty response from Gemini model');
       return NextResponse.json({ 
         content: "I couldn't generate a response. Please try rephrasing your question.",
         citations: [],
@@ -276,7 +274,6 @@ Focus on giving a clear, direct answer with minimal but meaningful citations.`;
       citations,
     });
   } catch (error) {
-    console.error('Error in chat API:', error);
     return NextResponse.json(
       { error: 'Failed to generate response' },
       { status: 500 }

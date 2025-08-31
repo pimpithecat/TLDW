@@ -56,7 +56,6 @@ Write the overview in 2-3 sentences:`;
 
       return NextResponse.json({ preview });
     } catch (aiError) {
-      console.error('AI generation error:', aiError);
       // Fallback to a generic message
       return NextResponse.json({ 
         preview: videoTitle 
@@ -66,7 +65,6 @@ Write the overview in 2-3 sentences:`;
     }
 
   } catch (error) {
-    console.error('Error generating quick preview:', error);
     return NextResponse.json(
       { error: 'Failed to generate preview' },
       { status: 500 }

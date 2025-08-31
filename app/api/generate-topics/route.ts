@@ -133,7 +133,6 @@ function buildTranscriptIndex(transcript: TranscriptSegment[]): TranscriptIndex 
     
     // Debug - verify segment indices match
     if (idx >= 40 && idx <= 46) {
-      console.log(`  📍 Index Check - Segment ${idx}: pos=[${boundary.startPos}-${boundary.endPos}], text="${segment.text.substring(0, 40)}..."`);
     }
   });
   
@@ -179,7 +178,6 @@ function findTextInTranscript(
     : [strategy];
   
   for (const currentStrategy of strategies) {
-    console.log(`  Trying ${currentStrategy} matching...`);
     
     let searchText = '';
     let targetSearchText = '';
@@ -248,7 +246,6 @@ function findTextInTranscript(
           
           if (similarity >= minSimilarity) {
             // Found a fuzzy match
-            console.log(`    Found fuzzy match with ${Math.round(similarity * 100)}% similarity`);
             
             return {
               found: true,
@@ -296,15 +293,12 @@ function mapMatchToSegments(
     if (startSegmentIdx === -1 && matchStart >= boundary.startPos && matchStart < boundary.endPos) {
       startSegmentIdx = boundary.segmentIdx;
       startCharOffset = matchStart - boundary.startPos;
-      console.log(`    📍 Found start segment: idx=${boundary.segmentIdx}, matchStart=${matchStart}, boundary=[${boundary.startPos}-${boundary.endPos}], offset=${startCharOffset}`);
-      console.log(`       Segment text: "${boundary.text.substring(0, 50)}..."`);
     }
     
     // Find end segment
     if (matchEnd > boundary.startPos && matchEnd <= boundary.endPos) {
       endSegmentIdx = boundary.segmentIdx;
       endCharOffset = matchEnd - boundary.startPos;
-      console.log(`    📍 Found end segment: idx=${boundary.segmentIdx}, matchEnd=${matchEnd}, boundary=[${boundary.startPos}-${boundary.endPos}], offset=${endCharOffset}`);
       break;
     } else if (matchEnd > boundary.endPos) {
       endSegmentIdx = boundary.segmentIdx;
@@ -365,7 +359,6 @@ function mapNormalizedMatchToSegments(
         originalIdx++;
       } else {
         // Characters don't match - this shouldn't happen
-        console.warn(`Character mismatch at positions: norm[${normIdx}]='${normChar}' orig[${originalIdx}]='${origChar}'`);
         normalizedToOriginal[normIdx] = lastOriginalIdx;
         break;
       }
@@ -378,7 +371,6 @@ function mapNormalizedMatchToSegments(
   const originalEndPos = normalizedToOriginal[Math.min(normalizedEndIdx, normalizedToOriginal.length - 1)];
   
   if (originalStartPos === undefined || originalEndPos === undefined) {
-    console.warn('Could not map normalized position to original position');
     return null;
   }
   
@@ -427,15 +419,9 @@ function findExactQuotes(
     const quoteText = quote.text.trim();
     if (!quoteText) continue;
     
-    console.log(`\n[Quote ${quotes.indexOf(quote) + 1}] Searching for text:`);
-    console.log(`  Text: "${quoteText.substring(0, 100)}${quoteText.length > 100 ? '...' : ''}"`);
-    console.log(`  Length: ${quoteText.length} characters`);
-    console.log(`  Timestamp: ${timestampMatch[1]}-${timestampMatch[2]}`);
     
     // Show first and last parts for debugging
     if (quoteText.length > 100) {
-      console.log(`  First 50 chars: "${quoteText.substring(0, 50)}"`);
-      console.log(`  Last 50 chars: "${quoteText.substring(quoteText.length - 50)}"`);
     }
     
     // Try to find text match using multiple strategies
@@ -446,32 +432,19 @@ function findExactQuotes(
     });
     
     if (match) {
-      console.log(`  ✓ Found match using ${match.matchStrategy} strategy!`);
-      console.log(`    Segments: ${match.startSegmentIdx}-${match.endSegmentIdx}`);
-      console.log(`    Char offsets: ${match.startCharOffset}-${match.endCharOffset}`);
-      console.log(`    Similarity: ${Math.round(match.similarity * 100)}%`);
       
       // Get the actual timestamps from the segments
       const startSegment = transcript[match.startSegmentIdx];
       const endSegment = transcript[match.endSegmentIdx];
       
       // DEBUG: Verify the segment content
-      console.log(`  📍 DEBUG - Verifying segment content:`);
       if (match.startSegmentIdx > 0) {
-        console.log(`    Previous segment [${match.startSegmentIdx - 1}]: "${transcript[match.startSegmentIdx - 1].text.substring(0, 50)}..."`);
       }
-      console.log(`    Start segment [${match.startSegmentIdx}]: "${startSegment.text}"`);
-      console.log(`    Quote should start at char ${match.startCharOffset} in start segment`);
-      console.log(`    Extracted from segment: "${startSegment.text.substring(match.startCharOffset, Math.min(match.startCharOffset + 50, startSegment.text.length))}..."`);
-      console.log(`    Quote first 50 chars: "${quoteText.substring(0, 50)}..."`);
       
       // Check if the quote actually matches what we found
       const extractedText = startSegment.text.substring(match.startCharOffset);
       const quotePortion = quoteText.substring(0, Math.min(50, extractedText.length));
       if (!extractedText.startsWith(quotePortion.substring(0, 20))) {
-        console.log(`    ⚠️ WARNING: Quote text doesn't match segment content!`);
-        console.log(`    Expected quote to start with: "${quotePortion.substring(0, 30)}..."`);
-        console.log(`    But segment contains: "${extractedText.substring(0, 30)}..."`);
       }
       
       result.push({
@@ -485,8 +458,6 @@ function findExactQuotes(
         hasCompleteSentences: match.matchStrategy !== 'fuzzy'
       });
     } else {
-      console.log(`  ✗ No match found with primary strategies`);
-      console.log(`  Analyzing text differences...`);
       
       // Debug: Show potential issues
       const index = buildTranscriptIndex(transcript);
@@ -495,7 +466,6 @@ function findExactQuotes(
       
       // Check if normalized version exists
       if (transcriptNormalized.includes(quoteNormalized)) {
-        console.log(`  ⚠ Quote exists in normalized form but not exact - whitespace issue`);
       } else {
         // Check for partial matches
         const quoteWords = quoteNormalized.split(' ').filter(w => w.length > 3);
@@ -503,14 +473,11 @@ function findExactQuotes(
         const lastWords = quoteWords.slice(-5).join(' ');
         
         if (transcriptNormalized.includes(firstWords)) {
-          console.log(`  ⚠ Found beginning of quote but not full text`);
         }
         if (transcriptNormalized.includes(lastWords)) {
-          console.log(`  ⚠ Found end of quote but not full text`);
         }
       }
       
-      console.log(`  Trying to find match within timestamp range...`);
       
       // Find segments within the timestamp range
       const segmentsInRange: { idx: number; segment: TranscriptSegment }[] = [];
@@ -525,7 +492,6 @@ function findExactQuotes(
       }
       
       if (segmentsInRange.length === 0) {
-        console.log(`No segments found in timestamp range`);
         continue;
       }
       
@@ -543,9 +509,6 @@ function findExactQuotes(
       });
       
       if (rangeMatch && rangeMatch.startSegmentIdx <= endSearchIdx + 2) {
-        console.log(`  ✓ Found match near timestamp range using ${rangeMatch.matchStrategy}!`);
-        console.log(`    Segments: ${rangeMatch.startSegmentIdx}-${rangeMatch.endSegmentIdx}`);
-        console.log(`    Similarity: ${Math.round(rangeMatch.similarity * 100)}%`);
         
         const startSegment = transcript[rangeMatch.startSegmentIdx];
         const endSegment = transcript[rangeMatch.endSegmentIdx];
@@ -565,19 +528,13 @@ function findExactQuotes(
       
       if (!foundInRange) {
         // Final fallback: Use timestamp range
-        console.log(`  ⚠ Using timestamp-based fallback`);
         
         const firstSegment = segmentsInRange[0];
         const lastSegment = segmentsInRange[segmentsInRange.length - 1];
         const joinedText = segmentsInRange.map(s => s.segment.text).join(' ');
         
         // Show why matching failed for debugging
-        console.log(`  Debug: Comparing quote vs transcript in range`);
-        console.log(`    Quote first 50: "${quoteText.substring(0, 50)}"`);
-        console.log(`    Range first 50: "${joinedText.substring(0, 50)}"`);
         if (quoteText.length > 100 && joinedText.length > 100) {
-          console.log(`    Quote last 50: "${quoteText.substring(quoteText.length - 50)}"`);
-          console.log(`    Range last 50: "${joinedText.substring(joinedText.length - 50)}"`);
         }
         
         result.push({
@@ -620,13 +577,9 @@ export async function POST(request: Request) {
     const fullText = combineTranscript(transcript);
     
     // Log a sample of the transcript to help with debugging
-    console.log('Analyzing transcript sample (first 200 chars):', fullText.substring(0, 200) + '...');
-    console.log('Total transcript length:', fullText.length, 'characters');
-    console.log('Total transcript segments in generate-topics:', transcript.length);
     
     // Debug segments around index 40-46
     for (let i = 40; i <= 46 && i < transcript.length; i++) {
-      console.log(`  📍 Generate Topics - Segment ${i}: "${transcript[i].text.substring(0, 40)}..."`);
     }
     
     const transcriptWithTimestamps = formatTranscriptWithTimestamps(transcript);
@@ -711,7 +664,6 @@ ${transcriptWithTimestamps}
     
     
 
-    console.log(`Using model: ${model}`);
     
     const geminiModel = genAI.getGenerativeModel({ 
       model: model,
@@ -728,14 +680,11 @@ ${transcriptWithTimestamps}
       throw new Error('No response from Gemini');
     }
 
-    console.log('Raw Gemini response:', response);
     
     let parsedResponse;
     try {
       parsedResponse = JSON.parse(response);
     } catch (parseError) {
-      console.error('Failed to parse Gemini response:', parseError);
-      console.log('Attempting to extract JSON from response...');
       
       // Try to extract JSON array from the response
       const jsonMatch = response.match(/\[[\s\S]*\]/);
@@ -743,7 +692,6 @@ ${transcriptWithTimestamps}
         try {
           parsedResponse = JSON.parse(jsonMatch[0]);
         } catch (e) {
-          console.error('Failed to extract JSON:', e);
           // Create a fallback response
           parsedResponse = [{
             title: "Full Video",
@@ -767,7 +715,6 @@ ${transcriptWithTimestamps}
       }
     }
     
-    console.log('Parsed Gemini response:', JSON.stringify(parsedResponse, null, 2));
     
     // Handle different possible response structures
     let topicsArray = parsedResponse;
@@ -776,13 +723,11 @@ ${transcriptWithTimestamps}
     } else if (parsedResponse.themes && Array.isArray(parsedResponse.themes)) {
       topicsArray = parsedResponse.themes;
     } else if (!Array.isArray(parsedResponse)) {
-      console.error('Unexpected response structure:', parsedResponse);
       throw new Error('Invalid response format from Gemini - not an array');
     }
     
     // If we got an empty array, create a basic structure
     if (topicsArray.length === 0) {
-      console.log('Gemini returned empty array, creating fallback topics');
       
       // Create basic topics based on transcript chunks
       const chunkSize = Math.ceil(transcript.length / 3);
@@ -809,11 +754,9 @@ ${transcriptWithTimestamps}
       }
     }
     
-    console.log(`Found ${topicsArray.length} highlight reels from Gemini`);
     
     // Validate that topics have required fields
     topicsArray.forEach((topic: ParsedTopic, index: number) => {
-      console.log(`Highlight Reel ${index + 1}:`, {
         title: topic.title,
         hasQuotes: !!topic.quotes,
         quoteCount: topic.quotes ? topic.quotes.length : 0
@@ -822,18 +765,15 @@ ${transcriptWithTimestamps}
 
     // Generate topics with segments from quotes
     const topicsWithSegments = topicsArray.map((topic: ParsedTopic, index: number) => {
-      console.log(`\nProcessing Highlight Reel ${index + 1}: "${topic.title}"`);
       
       // Pass the quotes directly to findExactQuotes
       const quotesArray = topic.quotes && Array.isArray(topic.quotes) ? topic.quotes : [];
       
-      console.log(`Found ${quotesArray.length} quotes with timestamps`);
       
       // Find the exact segments for these quotes
       const segments = findExactQuotes(transcript, quotesArray);
       const totalDuration = segments.reduce((sum, seg) => sum + (seg.end - seg.start), 0);
       
-      console.log(`Result: Found ${segments.length} quote segments covering ${Math.round(totalDuration)} seconds`);
       
       return {
         id: `topic-${index}`,
@@ -856,11 +796,9 @@ ${transcriptWithTimestamps}
         quotes: topic.quotes || []
       }));
     
-    console.log(`Total highlight reels: ${topics.length} (${topicsWithSegments.filter((t: Topic) => t.segments.length > 0).length} with segments)`)
 
     return NextResponse.json({ topics });
   } catch (error) {
-    console.error('Error generating topics:', error);
     return NextResponse.json(
       { error: 'Failed to generate topics' },
       { status: 500 }

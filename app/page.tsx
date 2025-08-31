@@ -73,14 +73,13 @@ export default function Home() {
             setVideoInfo(data);
           }
         })
-        .catch(err => console.error("Error fetching video info:", err));
+        .catch(() => {});
       
       // Create AbortController for timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
       
       // Fetch transcript
-      console.log("Fetching transcript for URL:", url);
       const transcriptRes = await fetch("/api/transcript", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -89,10 +88,8 @@ export default function Home() {
       }).catch(err => {
         clearTimeout(timeoutId);
         if (err.name === 'AbortError') {
-          console.error("Request timeout:", err);
           throw new Error("Request timed out. Please try again.");
         }
-        console.error("Network error fetching transcript:", err);
         throw new Error("Network error: Unable to connect to server. Please ensure the server is running.");
       });
       
@@ -100,7 +97,6 @@ export default function Home() {
       
       if (!transcriptRes.ok) {
         const errorData = await transcriptRes.json().catch(() => ({ error: "Unknown error" }));
-        console.error("Transcript API error:", transcriptRes.status, errorData);
         throw new Error(errorData.error || "Failed to fetch transcript");
       }
       
@@ -125,7 +121,7 @@ export default function Home() {
             setVideoPreview(data.preview);
           }
         })
-        .catch(err => console.error("Error generating preview:", err));
+        .catch(() => {});
       
       // Generate topics with timeout
       setLoadingStage('generating');
@@ -134,7 +130,6 @@ export default function Home() {
       const controller2 = new AbortController();
       const timeoutId2 = setTimeout(() => controller2.abort(), 600000); // 60 second timeout for AI generation
       
-      console.log("Generating topics for video:", extractedVideoId);
       const topicsRes = await fetch("/api/generate-topics", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -147,10 +142,8 @@ export default function Home() {
       }).catch(err => {
         clearTimeout(timeoutId2);
         if (err.name === 'AbortError') {
-          console.error("Request timeout:", err);
           throw new Error("Topic generation timed out. The video might be too long. Please try a shorter video.");
         }
-        console.error("Network error generating topics:", err);
         throw new Error("Network error: Unable to generate topics. Please check your connection.");
       });
       
@@ -158,30 +151,14 @@ export default function Home() {
       
       if (!topicsRes.ok) {
         const errorData = await topicsRes.json().catch(() => ({ error: "Unknown error" }));
-        console.error("Topics API error:", topicsRes.status, errorData);
         throw new Error(errorData.error || "Failed to generate topics");
       }
       
       const { topics: generatedTopics } = await topicsRes.json();
-      console.log("Generated topics count:", generatedTopics?.length || 0);
-      console.log("Full topic objects:", JSON.stringify(generatedTopics, null, 2));
-      
-      // Log each topic's structure for debugging
-      generatedTopics?.forEach((topic: any, index: number) => {
-        console.log(`Topic ${index + 1}:`, {
-          title: topic.title,
-          segmentCount: topic.segments?.length || 0,
-          keywordCount: topic.keywords?.length || 0,
-          keywords: topic.keywords || [],
-          duration: topic.duration
-        });
-      });
-      
       setTopics(generatedTopics);
       
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
-      console.error("Error processing video:", err);
     } finally {
       setIsLoading(false);
       setGenerationStartTime(null);

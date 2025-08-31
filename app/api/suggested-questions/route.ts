@@ -71,11 +71,9 @@ Return ONLY a JSON array with 3 question strings, no other text:
         response = result.response?.text() || '';
         
         if (response) {
-          console.log('Gemini suggested questions response:', response);
           break;
         }
       } catch (error: any) {
-        console.error(`Gemini API error for suggested questions (attempt ${retryCount + 1}):`, error);
         
         // Check if it's a rate limit error
         const isRateLimit = error.status === 429 || 
@@ -83,13 +81,10 @@ Return ONLY a JSON array with 3 question strings, no other text:
                           error.message?.includes('quota');
         
         if (isRateLimit) {
-          console.log('Rate limit detected, using extended backoff');
         }
         
         if (retryCount === maxRetries) {
-          console.error('Max retries reached for suggested questions');
           if (isRateLimit) {
-            console.log('Failed due to rate limiting - returning fallback questions');
           }
           break;
         }
@@ -105,7 +100,6 @@ Return ONLY a JSON array with 3 question strings, no other text:
             const delayMatch = retryInfo.retryDelay.match(/(\d+)s/);
             if (delayMatch) {
               delayMs = parseInt(delayMatch[1]) * 1000;
-              console.log(`Using API suggested retry delay: ${delayMs}ms`);
             }
           }
         }
@@ -117,7 +111,6 @@ Return ONLY a JSON array with 3 question strings, no other text:
           // Add jitter (±25%)
           const jitter = delayMs * 0.25 * (Math.random() * 2 - 1);
           delayMs = Math.round(delayMs + jitter);
-          console.log(`Using exponential backoff with jitter: ${delayMs}ms`);
         }
         
         await new Promise(resolve => setTimeout(resolve, delayMs));
@@ -126,7 +119,6 @@ Return ONLY a JSON array with 3 question strings, no other text:
     }
     
     if (!response) {
-      console.log('Using fallback questions due to no AI response');
       return NextResponse.json({ 
         questions: [
           "What are the key insights about execution speed in startups?",
@@ -144,17 +136,13 @@ Return ONLY a JSON array with 3 question strings, no other text:
         throw new Error('Response is not an array');
       }
     } catch (parseError) {
-      console.error('Failed to parse questions as JSON:', parseError);
-      console.log('Attempting to extract JSON array from response...');
       
       // Try to extract JSON array from the response
       const jsonMatch = response.match(/\[[\s\S]*?\]/);
       if (jsonMatch) {
         try {
           questions = JSON.parse(jsonMatch[0]);
-          console.log('Successfully extracted questions from response');
         } catch (extractError) {
-          console.error('Failed to extract JSON array:', extractError);
           // Try to extract questions from a numbered list or line-separated format
           const lines = response.split('\n').filter(line => line.trim());
           questions = lines
@@ -165,7 +153,6 @@ Return ONLY a JSON array with 3 question strings, no other text:
           if (questions.length === 0) {
             throw new Error('Could not extract any questions from response');
           }
-          console.log('Extracted questions from text format:', questions);
         }
       } else {
         throw new Error('No JSON array found in response');
@@ -179,7 +166,6 @@ Return ONLY a JSON array with 3 question strings, no other text:
       .slice(0, 3);
     
     if (questions.length === 0) {
-      console.error('No valid questions after processing');
       questions = [
         "What are the main topics discussed in this video?",
         "Can you summarize the key points made?",
@@ -189,7 +175,6 @@ Return ONLY a JSON array with 3 question strings, no other text:
 
     return NextResponse.json({ questions });
   } catch (error) {
-    console.error('Error generating suggested questions:', error);
     return NextResponse.json(
       { questions: [
         "What are the main topics discussed in this video?",

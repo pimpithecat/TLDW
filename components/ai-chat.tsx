@@ -66,7 +66,6 @@ export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChat
         setSuggestedQuestions(data.questions || []);
       }
     } catch (error) {
-      console.error("Error fetching suggested questions:", error);
     } finally {
       setLoadingQuestions(false);
     }
@@ -140,7 +139,6 @@ export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChat
         fetchSuggestedQuestions();
       }
     } catch (error: any) {
-      console.error("Error sending message:", error);
       
       // Retry logic for temporary failures
       if (retryCount < 2 && (
@@ -148,7 +146,6 @@ export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChat
         error.message?.includes('temporarily unavailable') ||
         error.message?.includes('Empty response')
       )) {
-        console.log(`Retrying message (attempt ${retryCount + 2}/3)...`);
         // Wait before retrying
         await new Promise(resolve => setTimeout(resolve, 1500 * (retryCount + 1)));
         return sendMessage(text, retryCount + 1);

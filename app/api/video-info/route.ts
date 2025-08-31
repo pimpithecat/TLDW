@@ -27,7 +27,6 @@ export async function POST(request: Request) {
       const response = await fetch(oembedUrl);
       
       if (!response.ok) {
-        console.error('YouTube oEmbed API error:', response.status);
         // Return minimal info if oEmbed fails
         return NextResponse.json({
           videoId,
@@ -49,7 +48,6 @@ export async function POST(request: Request) {
       });
       
     } catch (fetchError) {
-      console.error('Error fetching video info:', fetchError);
       // Return minimal info on error
       return NextResponse.json({
         videoId,
@@ -61,7 +59,6 @@ export async function POST(request: Request) {
     }
     
   } catch (error) {
-    console.error('Error in video-info API:', error);
     return NextResponse.json(
       { error: 'Failed to fetch video information' },
       { status: 500 }

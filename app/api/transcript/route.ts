@@ -13,7 +13,6 @@ export async function POST(request: Request) {
     }
 
     const videoId = extractVideoId(url);
-    console.log('Extracted video ID:', videoId, 'from URL:', url);
     
     if (!videoId) {
       return NextResponse.json(
@@ -24,7 +23,6 @@ export async function POST(request: Request) {
 
     const apiKey = process.env.SUPADATA_API_KEY;
     if (!apiKey) {
-      console.error('SUPADATA_API_KEY is not configured');
       return NextResponse.json(
         { error: 'API configuration error' },
         { status: 500 }
@@ -43,7 +41,6 @@ export async function POST(request: Request) {
 
       if (!response.ok) {
         const errorData = await response.text();
-        console.error('Supadata API error:', response.status, errorData);
         
         if (response.status === 404) {
           return NextResponse.json(
@@ -60,7 +57,6 @@ export async function POST(request: Request) {
       transcript = data.content || data.transcript || data;
       
     } catch (fetchError: any) {
-      console.error('Supadata transcript fetch error:', fetchError);
       if (fetchError.message?.includes('404')) {
         return NextResponse.json(
           { error: 'No transcript/captions available for this video. The video may not have subtitles enabled.' },
@@ -79,8 +75,6 @@ export async function POST(request: Request) {
 
     // Log sample of transcript for debugging
     if (Array.isArray(transcript) && transcript.length > 0) {
-      console.log('Sample transcript segment:', transcript[0]);
-      console.log('Total transcript segments BEFORE transformation:', transcript.length);
     }
 
     const transformedTranscript = Array.isArray(transcript) ? transcript.map((item, idx) => {
@@ -94,25 +88,21 @@ export async function POST(request: Request) {
       
       // Check for empty segments
       if (!transformed.text || transformed.text.trim() === '') {
-        console.warn(`  ⚠️ Empty segment at index ${idx}`);
       }
       
       // Debug segments around index 40-46
       if (idx >= 40 && idx <= 46) {
-        console.log(`  📍 Transcript API - Segment ${idx}: "${transformed.text.substring(0, 40)}..."`);
       }
       
       return transformed;
     }) : [];
     
-    console.log('Total transcript segments AFTER transformation:', transformedTranscript.length);
 
     return NextResponse.json({
       videoId,
       transcript: transformedTranscript
     });
   } catch (error) {
-    console.error('Error fetching transcript:', error);
     return NextResponse.json(
       { error: 'Failed to fetch transcript' },
       { status: 500 }
