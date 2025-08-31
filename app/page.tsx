@@ -166,20 +166,26 @@ export default function Home() {
     }
   };
 
-  const handleTimestampClick = (seconds: number, endSeconds?: number, isCitation: boolean = false, citationText?: string) => {
+  const handleTimestampClick = (seconds: number, endSeconds?: number, isCitation: boolean = false, citationText?: string, isWithinHighlightReel: boolean = false, isWithinCitationHighlight: boolean = false) => {
     // Prevent rapid sequential clicks and state updates
     if (seekToTime === seconds) return;
     
-    // Clear any existing topic selection
-    setSelectedTopic(null);
+    // Handle topic selection clearing:
+    // Clear topic if it's a new citation click from AI chat OR
+    // if clicking outside the current highlight reel (and not within a citation)
+    if (isCitation || (!isWithinHighlightReel && !isWithinCitationHighlight)) {
+      setSelectedTopic(null);
+    }
     
-    // Only set citation highlight for actual citations from chat
+    // Handle citation highlight:
     if (isCitation) {
+      // New citation from AI chat - set new citation highlight
       setCitationHighlight({ start: seconds, end: endSeconds, text: citationText });
-    } else {
-      // Clear any existing citation highlight for regular clicks
+    } else if (!isWithinCitationHighlight) {
+      // Clicking outside citation highlight - clear it
       setCitationHighlight(null);
     }
+    // If isWithinCitationHighlight is true, preserve the existing citation highlight
     
     // Scroll to video player
     const videoContainer = document.getElementById("video-container");

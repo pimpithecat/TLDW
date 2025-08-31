@@ -13,7 +13,7 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/comp
 interface TranscriptViewerProps {
   transcript: TranscriptSegment[];
   selectedTopic: Topic | null;
-  onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean, citationText?: string) => void;
+  onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean, citationText?: string, isWithinHighlightReel?: boolean, isWithinCitationHighlight?: boolean) => void;
   currentTime?: number;
   topics?: Topic[];
   citationHighlight?: { start: number; end?: number; text?: string } | null;
@@ -438,10 +438,14 @@ export function TranscriptViewer({
   };
 
   const handleSegmentClick = useCallback(
-    (segment: TranscriptSegment) => {
-      onTimestampClick(segment.start, undefined, false);
+    (segment: TranscriptSegment, isTopicHighlighted: boolean, isCitationHighlighted: boolean) => {
+      // Check if this segment is within the current highlight reel
+      const isWithinHighlightReel = selectedTopic && isTopicHighlighted;
+      // Check if this segment is within a citation highlight
+      const isWithinCitationHighlight = citationHighlight && isCitationHighlighted;
+      onTimestampClick(segment.start, undefined, false, undefined, isWithinHighlightReel, isWithinCitationHighlight);
     },
-    [onTimestampClick]
+    [onTimestampClick, selectedTopic, citationHighlight]
   );
 
   return (
@@ -539,6 +543,10 @@ export function TranscriptViewer({
                 const topicInfo = getSegmentTopic(segment);
                 const isHovered = hoveredSegment === index;
                 
+                // Track highlight states separately
+                const hasTopicHighlight = topicHighlightedText !== null;
+                const hasCitationHighlight = citationHighlightedText !== null;
+                
                 // Merge highlights if both exist
                 let finalHighlightedParts: Array<{ text: string; highlighted: boolean; isCitation?: boolean }> | null = null;
                 
@@ -575,7 +583,7 @@ export function TranscriptViewer({
                       "hover:bg-muted/50",
                       isHovered && "bg-muted"
                     )}
-                    onClick={() => handleSegmentClick(segment)}
+                    onClick={() => handleSegmentClick(segment, hasTopicHighlight, hasCitationHighlight)}
                     onMouseEnter={() => setHoveredSegment(index)}
                     onMouseLeave={() => setHoveredSegment(null)}
                   >
