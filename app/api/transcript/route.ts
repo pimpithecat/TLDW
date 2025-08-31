@@ -80,18 +80,36 @@ export async function POST(request: Request) {
     // Log sample of transcript for debugging
     if (Array.isArray(transcript) && transcript.length > 0) {
       console.log('Sample transcript segment:', transcript[0]);
-      console.log('Total transcript segments:', transcript.length);
+      console.log('Total transcript segments BEFORE transformation:', transcript.length);
     }
 
-    return NextResponse.json({
-      videoId,
-      transcript: Array.isArray(transcript) ? transcript.map(item => ({
+    const transformedTranscript = Array.isArray(transcript) ? transcript.map((item, idx) => {
+      const transformed = {
         text: item.text || item.content || '',
         // Convert milliseconds to seconds for offset/start
         start: (item.offset !== undefined ? item.offset / 1000 : item.start) || 0,
         // Convert milliseconds to seconds for duration
         duration: (item.duration !== undefined ? item.duration / 1000 : 0) || 0
-      })) : []
+      };
+      
+      // Check for empty segments
+      if (!transformed.text || transformed.text.trim() === '') {
+        console.warn(`  ⚠️ Empty segment at index ${idx}`);
+      }
+      
+      // Debug segments around index 40-46
+      if (idx >= 40 && idx <= 46) {
+        console.log(`  📍 Transcript API - Segment ${idx}: "${transformed.text.substring(0, 40)}..."`);
+      }
+      
+      return transformed;
+    }) : [];
+    
+    console.log('Total transcript segments AFTER transformation:', transformedTranscript.length);
+
+    return NextResponse.json({
+      videoId,
+      transcript: transformedTranscript
     });
   } catch (error) {
     console.error('Error fetching transcript:', error);

@@ -40,7 +40,42 @@ export function TranscriptViewer({
   // Clear refs when topic changes
   useEffect(() => {
     highlightedRefs.current = [];
-  }, [selectedTopic]);
+    
+    // Debug: Verify segment indices match content
+    if (selectedTopic && selectedTopic.segments.length > 0 && transcript.length > 0) {
+      console.log(`🎯 [Topic Selected] "${selectedTopic.title}"`);
+      
+      const firstSeg = selectedTopic.segments[0];
+      if (firstSeg.startSegmentIdx !== undefined && firstSeg.endSegmentIdx !== undefined) {
+        console.log(`🔍 Verifying segment index alignment:`);
+        console.log(`  Topic expects indices: ${firstSeg.startSegmentIdx}-${firstSeg.endSegmentIdx}`);
+        console.log(`  Quote text starts with: "${firstSeg.text.substring(0, 60)}..."`);        
+        
+        // Check what's actually at those indices
+        if (transcript[firstSeg.startSegmentIdx]) {
+          console.log(`  Segment at index ${firstSeg.startSegmentIdx}: "${transcript[firstSeg.startSegmentIdx].text.substring(0, 60)}..."`);
+          
+          // Try to find where the quote actually is
+          const quoteStart = firstSeg.text.substring(0, 30).toLowerCase().replace(/[^a-z0-9 ]/g, '');
+          let foundAt = -1;
+          
+          for (let i = Math.max(0, firstSeg.startSegmentIdx - 5); i <= Math.min(firstSeg.startSegmentIdx + 5, transcript.length - 1); i++) {
+            const segText = transcript[i]?.text || '';
+            const segTextNorm = segText.toLowerCase().replace(/[^a-z0-9 ]/g, '');
+            if (segTextNorm.includes(quoteStart)) {
+              foundAt = i;
+              console.log(`  ✅ Found quote at index ${i}: "${segText.substring(0, 50)}..."`);
+              break;
+            }
+          }
+          
+          if (foundAt !== -1 && foundAt !== firstSeg.startSegmentIdx) {
+            console.log(`  ⚠️ INDEX MISMATCH: Quote is at index ${foundAt} but expected at ${firstSeg.startSegmentIdx} (off by ${foundAt - firstSeg.startSegmentIdx})`);
+          }
+        }
+      }
+    }
+  }, [selectedTopic, transcript]);
 
   // Scroll to citation highlight when it changes
   useEffect(() => {
@@ -195,6 +230,13 @@ export function TranscriptViewer({
       // Use segment indices with character offsets for precise matching
       if (topicSeg.startSegmentIdx !== undefined && topicSeg.endSegmentIdx !== undefined) {
         
+        // Skip this debug logging - removed for cleaner output
+        
+        // Skip segments that are before the start or after the end
+        if (segmentIndex < topicSeg.startSegmentIdx || segmentIndex > topicSeg.endSegmentIdx) {
+          continue;
+        }
+        
         // Case 1: This segment is between start and end (not at boundaries)
         if (segmentIndex > topicSeg.startSegmentIdx && segmentIndex < topicSeg.endSegmentIdx) {
           return { 
@@ -247,8 +289,8 @@ export function TranscriptViewer({
           }
         }
         
-        // Case 3: This is the end segment - may need partial highlighting
-        if (segmentIndex === topicSeg.endSegmentIdx) {
+        // Case 3: This is the end segment (only if different from start) - may need partial highlighting
+        if (segmentIndex === topicSeg.endSegmentIdx && segmentIndex !== topicSeg.startSegmentIdx) {
           if (topicSeg.endCharOffset !== undefined && topicSeg.endCharOffset < segment.text.length) {
             // Partial highlight from beginning to character offset
             const highlighted = segment.text.substring(0, topicSeg.endCharOffset);
@@ -268,21 +310,28 @@ export function TranscriptViewer({
       }
     }
     
-    // Fallback to time-based highlighting if segment indices aren't available
-    const segmentEnd = segment.start + segment.duration;
-    const shouldHighlight = selectedTopic.segments.some(topicSeg => {
-      const overlapStart = Math.max(segment.start, topicSeg.start);
-      const overlapEnd = Math.min(segmentEnd, topicSeg.end);
-      const overlapDuration = Math.max(0, overlapEnd - overlapStart);
-      const overlapRatio = overlapDuration / segment.duration;
-      // Highlight if there's significant overlap (more than 50% of the segment)
-      return overlapRatio > 0.5;
-    });
+    // Only use time-based highlighting if NO segments have index information
+    const hasAnySegmentIndices = selectedTopic.segments.some(seg => 
+      seg.startSegmentIdx !== undefined && seg.endSegmentIdx !== undefined
+    );
     
-    if (shouldHighlight) {
-      return { 
-        highlightedParts: [{ text: segment.text, highlighted: true }] 
-      };
+    if (!hasAnySegmentIndices) {
+      // Fallback to time-based highlighting only if segment indices aren't available at all
+      const segmentEnd = segment.start + segment.duration;
+      const shouldHighlight = selectedTopic.segments.some(topicSeg => {
+        const overlapStart = Math.max(segment.start, topicSeg.start);
+        const overlapEnd = Math.min(segmentEnd, topicSeg.end);
+        const overlapDuration = Math.max(0, overlapEnd - overlapStart);
+        const overlapRatio = overlapDuration / segment.duration;
+        // Highlight if there's significant overlap (more than 50% of the segment)
+        return overlapRatio > 0.5;
+      });
+      
+      if (shouldHighlight) {
+        return { 
+          highlightedParts: [{ text: segment.text, highlighted: true }] 
+        };
+      }
     }
     
     return null;
@@ -518,12 +567,14 @@ export function TranscriptViewer({
                 <TooltipTrigger asChild>
                   <div
                     ref={(el) => {
-                      if (hasHighlight) {
-                        const highlightIndex = highlightedRefs.current.length;
-                        highlightedRefs.current[highlightIndex] = el;
-                      }
-                      if (isCurrent) {
-                        currentSegmentRef.current = el;
+                      // Store refs properly
+                      if (el) {
+                        if (hasHighlight && !highlightedRefs.current.includes(el)) {
+                          highlightedRefs.current.push(el);
+                        }
+                        if (isCurrent) {
+                          currentSegmentRef.current = el;
+                        }
                       }
                     }}
                     className={cn(

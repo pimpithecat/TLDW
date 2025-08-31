@@ -114,22 +114,27 @@ function buildTranscriptIndex(transcript: TranscriptSegment[]): TranscriptIndex 
   let fullTextNewline = '';
   
   transcript.forEach((segment, idx) => {
-    const startPosSpace = fullTextSpace.length;
-    
     if (idx > 0) {
       fullTextSpace += ' ';
       fullTextNewline += '\n';
     }
     
+    const segmentStartPos = fullTextSpace.length;
     fullTextSpace += segment.text;
     fullTextNewline += segment.text;
     
-    segmentBoundaries.push({
+    const boundary = {
       segmentIdx: idx,
-      startPos: startPosSpace + (idx > 0 ? 1 : 0),
+      startPos: segmentStartPos,
       endPos: fullTextSpace.length,
       text: segment.text
-    });
+    };
+    segmentBoundaries.push(boundary);
+    
+    // Debug - verify segment indices match
+    if (idx >= 40 && idx <= 46) {
+      console.log(`  📍 Index Check - Segment ${idx}: pos=[${boundary.startPos}-${boundary.endPos}], text="${segment.text.substring(0, 40)}..."`);
+    }
   });
   
   return {
@@ -204,7 +209,7 @@ function findTextInTranscript(
       
       const matchIdx = searchText.indexOf(targetSearchText);
       if (matchIdx !== -1) {
-        // Map back to original positions (approximate)
+        // Map back to original positions
         const result = mapNormalizedMatchToSegments(
           matchIdx,
           targetSearchText,
@@ -291,12 +296,15 @@ function mapMatchToSegments(
     if (startSegmentIdx === -1 && matchStart >= boundary.startPos && matchStart < boundary.endPos) {
       startSegmentIdx = boundary.segmentIdx;
       startCharOffset = matchStart - boundary.startPos;
+      console.log(`    📍 Found start segment: idx=${boundary.segmentIdx}, matchStart=${matchStart}, boundary=[${boundary.startPos}-${boundary.endPos}], offset=${startCharOffset}`);
+      console.log(`       Segment text: "${boundary.text.substring(0, 50)}..."`);
     }
     
     // Find end segment
     if (matchEnd > boundary.startPos && matchEnd <= boundary.endPos) {
       endSegmentIdx = boundary.segmentIdx;
       endCharOffset = matchEnd - boundary.startPos;
+      console.log(`    📍 Found end segment: idx=${boundary.segmentIdx}, matchEnd=${matchEnd}, boundary=[${boundary.startPos}-${boundary.endPos}], offset=${endCharOffset}`);
       break;
     } else if (matchEnd > boundary.endPos) {
       endSegmentIdx = boundary.segmentIdx;
@@ -320,7 +328,7 @@ function mapMatchToSegments(
 // Map normalized match back to original segments
 function mapNormalizedMatchToSegments(
   normalizedMatchIdx: number,
-  _normalizedTargetText: string,
+  normalizedTargetText: string,
   index: TranscriptIndex,
   originalTargetText: string
 ): {
@@ -330,29 +338,55 @@ function mapNormalizedMatchToSegments(
   startCharOffset: number;
   endCharOffset: number;
 } | null {
-  // This is approximate - we find the best match in the original text
+  // Build a mapping between normalized and original positions
   const normalizedFull = normalizeWhitespace(index.fullTextSpace);
+  const originalText = index.fullTextSpace;
   
-  // Find corresponding position in original text
-  let originalPos = 0;
-  let normalizedPos = 0;
+  // Create position mapping arrays
+  const normalizedToOriginal: number[] = [];
+  let originalIdx = 0;
+  let lastOriginalIdx = 0;
   
-  for (let i = 0; i < index.fullTextSpace.length; i++) {
-    if (normalizedPos === normalizedMatchIdx) {
-      originalPos = i;
-      break;
-    }
-    
-    const originalChar = index.fullTextSpace[i];
-    const normalizedChar = normalizedFull[normalizedPos];
-    
-    if (normalizeWhitespace(originalChar) === normalizedChar) {
-      normalizedPos++;
+  // Build the mapping from normalized position to original position
+  for (let normIdx = 0; normIdx < normalizedFull.length; normIdx++) {
+    // Skip whitespace runs in original text
+    while (originalIdx < originalText.length) {
+      const origChar = originalText[originalIdx];
+      const normChar = normalizedFull[normIdx];
+      
+      // Check if we've found the corresponding character
+      if (origChar === normChar) {
+        normalizedToOriginal[normIdx] = originalIdx;
+        lastOriginalIdx = originalIdx;
+        originalIdx++;
+        break;
+      } else if (/\s/.test(origChar)) {
+        // Skip whitespace in original
+        originalIdx++;
+      } else {
+        // Characters don't match - this shouldn't happen
+        console.warn(`Character mismatch at positions: norm[${normIdx}]='${normChar}' orig[${originalIdx}]='${origChar}'`);
+        normalizedToOriginal[normIdx] = lastOriginalIdx;
+        break;
+      }
     }
   }
   
-  // Now map from original position
-  return mapMatchToSegments(originalPos, originalTargetText.length, index);
+  // Find the original start and end positions
+  const originalStartPos = normalizedToOriginal[normalizedMatchIdx];
+  const normalizedEndIdx = normalizedMatchIdx + normalizedTargetText.length - 1;
+  const originalEndPos = normalizedToOriginal[Math.min(normalizedEndIdx, normalizedToOriginal.length - 1)];
+  
+  if (originalStartPos === undefined || originalEndPos === undefined) {
+    console.warn('Could not map normalized position to original position');
+    return null;
+  }
+  
+  // Calculate the actual length in the original text
+  const actualLength = originalEndPos - originalStartPos + 1;
+  
+  // Now map from original position using the actual matched region
+  return mapMatchToSegments(originalStartPos, actualLength, index);
 }
 
 function findExactQuotes(
@@ -420,6 +454,25 @@ function findExactQuotes(
       // Get the actual timestamps from the segments
       const startSegment = transcript[match.startSegmentIdx];
       const endSegment = transcript[match.endSegmentIdx];
+      
+      // DEBUG: Verify the segment content
+      console.log(`  📍 DEBUG - Verifying segment content:`);
+      if (match.startSegmentIdx > 0) {
+        console.log(`    Previous segment [${match.startSegmentIdx - 1}]: "${transcript[match.startSegmentIdx - 1].text.substring(0, 50)}..."`);
+      }
+      console.log(`    Start segment [${match.startSegmentIdx}]: "${startSegment.text}"`);
+      console.log(`    Quote should start at char ${match.startCharOffset} in start segment`);
+      console.log(`    Extracted from segment: "${startSegment.text.substring(match.startCharOffset, Math.min(match.startCharOffset + 50, startSegment.text.length))}..."`);
+      console.log(`    Quote first 50 chars: "${quoteText.substring(0, 50)}..."`);
+      
+      // Check if the quote actually matches what we found
+      const extractedText = startSegment.text.substring(match.startCharOffset);
+      const quotePortion = quoteText.substring(0, Math.min(50, extractedText.length));
+      if (!extractedText.startsWith(quotePortion.substring(0, 20))) {
+        console.log(`    ⚠️ WARNING: Quote text doesn't match segment content!`);
+        console.log(`    Expected quote to start with: "${quotePortion.substring(0, 30)}..."`);
+        console.log(`    But segment contains: "${extractedText.substring(0, 30)}..."`);
+      }
       
       result.push({
         start: startSegment.start,
@@ -569,6 +622,12 @@ export async function POST(request: Request) {
     // Log a sample of the transcript to help with debugging
     console.log('Analyzing transcript sample (first 200 chars):', fullText.substring(0, 200) + '...');
     console.log('Total transcript length:', fullText.length, 'characters');
+    console.log('Total transcript segments in generate-topics:', transcript.length);
+    
+    // Debug segments around index 40-46
+    for (let i = 40; i <= 46 && i < transcript.length; i++) {
+      console.log(`  📍 Generate Topics - Segment ${i}: "${transcript[i].text.substring(0, 40)}..."`);
+    }
     
     const transcriptWithTimestamps = formatTranscriptWithTimestamps(transcript);
 
