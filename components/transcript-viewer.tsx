@@ -440,10 +440,10 @@ export function TranscriptViewer({
   const handleSegmentClick = useCallback(
     (segment: TranscriptSegment, isTopicHighlighted: boolean, isCitationHighlighted: boolean) => {
       // Check if this segment is within the current highlight reel
-      const isWithinHighlightReel = selectedTopic && isTopicHighlighted;
+      const isWithinHighlightReel = selectedTopic ? isTopicHighlighted : undefined;
       // Check if this segment is within a citation highlight
-      const isWithinCitationHighlight = citationHighlight && isCitationHighlighted;
-      onTimestampClick(segment.start, undefined, false, undefined, isWithinHighlightReel, isWithinCitationHighlight || undefined);
+      const isWithinCitationHighlight = citationHighlight ? isCitationHighlighted : undefined;
+      onTimestampClick(segment.start, undefined, false, undefined, isWithinHighlightReel, isWithinCitationHighlight);
     },
     [onTimestampClick, selectedTopic, citationHighlight]
   );
