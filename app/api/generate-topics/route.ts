@@ -757,6 +757,7 @@ ${transcriptWithTimestamps}
     
     // Validate that topics have required fields
     topicsArray.forEach((topic: ParsedTopic, index: number) => {
+      console.log({
         title: topic.title,
         hasQuotes: !!topic.quotes,
         quoteCount: topic.quotes ? topic.quotes.length : 0
