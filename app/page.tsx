@@ -368,6 +368,7 @@ export default function Home() {
                 transcript={transcript}
                 topics={topics}
                 videoId={videoId}
+                videoTitle={videoInfo?.title}
                 onTimestampClick={handleTimestampClick}
               />
             </div>

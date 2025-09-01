@@ -16,10 +16,11 @@ interface AIChatProps {
   transcript: TranscriptSegment[];
   topics: Topic[];
   videoId: string;
+  videoTitle?: string;
   onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean, citationText?: string) => void;
 }
 
-export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChatProps) {
+export function AIChat({ transcript, topics, videoId, videoTitle, onTimestampClick }: AIChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -60,7 +61,7 @@ export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChat
       const response = await fetch("/api/suggested-questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript, topics }),
+        body: JSON.stringify({ transcript, topics, videoTitle }),
       });
       
       if (response.ok) {

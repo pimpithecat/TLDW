@@ -41,12 +41,19 @@ export async function POST(request: Request) {
       });
     }
 
-    const prompt = `Based on the beginning of this video transcript, write a brief 2-3 sentence overview of what this video appears to be about. Focus on the main topic and what viewers can expect to learn. Be concise and engaging.
+    const prompt = `Based on the provided video transcript excerpt, write a concise overview for a potential viewer. Your overview should:
 
-Transcript excerpt:
-${previewText}
+1.  Identify the speaker's apparent role or expertise.
+2.  Introduce the central topic of discussion.
+3.  Summarize the primary viewpoint or argument they are presenting.
 
-Write the overview in 2-3 sentences:`;
+Be concise and engaging.
+
+Transcript:
+${transcript}
+
+Write the overview in 3-4 sentences:
+`;
 
     try {
       // Use the faster Flash model for quick response
