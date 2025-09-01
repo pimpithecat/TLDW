@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingStage, setLoadingStage] = useState<'fetching' | 'understanding' | 'generating'>('fetching');
+  const [loadingStage, setLoadingStage] = useState<'fetching' | 'understanding' | 'generating' | 'processing'>('fetching');
   const [error, setError] = useState("");
   const [videoId, setVideoId] = useState<string | null>(null);
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
@@ -33,6 +33,8 @@ export default function Home() {
   const [citationHighlight, setCitationHighlight] = useState<{ start: number; end?: number; text?: string } | null>(null);
   const [generationStartTime, setGenerationStartTime] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState<number>(0);
+  const [processingStartTime, setProcessingStartTime] = useState<number | null>(null);
+  const [processingElapsedTime, setProcessingElapsedTime] = useState<number>(0);
 
   // Timer effect for tracking generation time
   useEffect(() => {
@@ -45,6 +47,18 @@ export default function Home() {
       return () => clearInterval(interval);
     }
   }, [generationStartTime]);
+
+  // Timer effect for tracking processing time
+  useEffect(() => {
+    if (processingStartTime) {
+      const interval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - processingStartTime) / 1000);
+        setProcessingElapsedTime(elapsed);
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [processingStartTime]);
 
   const processVideo = async (url: string) => {
     setIsLoading(true);
@@ -154,6 +168,12 @@ export default function Home() {
         throw new Error(errorData.error || "Failed to generate topics");
       }
       
+      // Move to processing stage
+      setLoadingStage('processing');
+      setGenerationStartTime(null);
+      setProcessingStartTime(Date.now());
+      setProcessingElapsedTime(0);
+      
       const { topics: generatedTopics } = await topicsRes.json();
       setTopics(generatedTopics);
       
@@ -163,6 +183,8 @@ export default function Home() {
       setIsLoading(false);
       setGenerationStartTime(null);
       setElapsedTime(0);
+      setProcessingStartTime(null);
+      setProcessingElapsedTime(0);
     }
   };
 
@@ -289,6 +311,7 @@ export default function Home() {
                 {loadingStage === 'fetching' && 'Fetching transcript...'}
                 {loadingStage === 'understanding' && 'Fetching transcript...'}
                 {loadingStage === 'generating' && `Creating highlight reels... (${elapsedTime} seconds)`}
+                {loadingStage === 'processing' && `Processing and matching quotes... (${processingElapsedTime} seconds)`}
               </p>
             </div>
             

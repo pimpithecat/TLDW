@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Send, Loader2, MessageSquare } from "lucide-react";
+import { Send, Loader2, MessageSquare, ChevronUp, ChevronDown } from "lucide-react";
 
 interface AIChatProps {
   transcript: TranscriptSegment[];
@@ -26,6 +26,8 @@ export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChat
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [selectedModel, setSelectedModel] = useState<GeminiModel>('gemini-2.5-flash');
+  const [askedQuestions, setAskedQuestions] = useState<Set<string>>(new Set());
+  const [showSuggestions, setShowSuggestions] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -86,6 +88,10 @@ export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChat
     if (retryCount === 0) {
       setMessages(prev => [...prev, userMessage]);
       setInput("");
+      // Track if this was a suggested question
+      if (messageText) {
+        setAskedQuestions(prev => new Set(prev).add(messageText));
+      }
     }
     setIsLoading(true);
 
@@ -134,10 +140,6 @@ export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChat
       };
 
       setMessages(prev => [...prev, assistantMessage]);
-      
-      if (messages.length === 0 && suggestedQuestions.length > 0) {
-        fetchSuggestedQuestions();
-      }
     } catch (error: any) {
       
       // Retry logic for temporary failures
@@ -221,13 +223,25 @@ export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChat
           </div>
         </ScrollArea>
 
-        {messages.length === 0 && (
-          <div className="px-4 pb-2">
-            <SuggestedQuestions
-              questions={suggestedQuestions}
-              onQuestionClick={sendMessage}
-              isLoading={loadingQuestions}
-            />
+        {suggestedQuestions.length > 0 && (
+          <div className="px-4 py-3 border-t">
+            <div className="space-y-2">
+              <button
+                onClick={() => setShowSuggestions(!showSuggestions)}
+                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full"
+              >
+                {showSuggestions ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+                <span className="font-medium">Suggested questions</span>
+              </button>
+              {showSuggestions && (
+                <SuggestedQuestions
+                  questions={suggestedQuestions}
+                  onQuestionClick={sendMessage}
+                  isLoading={loadingQuestions}
+                  askedQuestions={askedQuestions}
+                />
+              )}
+            </div>
           </div>
         )}
 
