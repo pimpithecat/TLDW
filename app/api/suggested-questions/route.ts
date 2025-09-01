@@ -31,7 +31,8 @@ export async function POST(request: Request) {
 
     const prompt = `Based on this video transcript and topics, generate 3 thought-provoking questions that viewers might want to ask about the content.
 
-## Video Topics
+## Highlight Reels Already Covered
+The following topics have been thoroughly explored in highlight reels - AVOID questions about these specific themes:
 ${topicsContext}
 
 ## Transcript Sample
@@ -39,11 +40,20 @@ ${transcriptSample}
 
 ## Instructions
 Generate exactly 3 questions that:
-1. Are specific and relevant to the video content
-2. Encourage deeper understanding of key concepts
-3. Are diverse - covering different aspects or topics from the video
+1. Explore aspects NOT covered in the highlight reels above
+2. Focus on:
+   - Topics mentioned but not explored in depth in the reels
+   - Practical implementation details or "how-to" aspects
+   - Alternative perspectives or potential counterarguments
+   - Connections between different ideas not highlighted in the reels
+   - Background context, prerequisites, or foundational concepts
+   - Future implications or next steps beyond what was discussed
+3. Are specific and relevant to the video content
 4. Are concise (under 15 words each)
 5. Would lead to insightful answers based on the transcript
+6. Complement rather than duplicate the highlight reel insights
+
+IMPORTANT: Do NOT ask questions about the main themes already covered in the highlight reels. Instead, find the gaps, the details, the practical aspects, or the unexplored angles.
 
 Return ONLY a JSON array with 3 question strings, no other text:
 ["Question 1", "Question 2", "Question 3"]`;
