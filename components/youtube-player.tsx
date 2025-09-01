@@ -41,6 +41,7 @@ export function YouTubePlayer({
   const isSeekingRef = useRef(false);
   const lastSeekTimeRef = useRef<number | undefined>(undefined);
   const lastAutoJumpTimeRef = useRef<number>(0);
+  const lastKnownSegmentRef = useRef<number>(-1);
 
   useEffect(() => {
     // Load YouTube IFrame API
@@ -143,6 +144,7 @@ export function YouTubePlayer({
   // Reset segment index when topic changes
   useEffect(() => {
     setCurrentSegmentIndex(0);
+    lastKnownSegmentRef.current = -1;
     // Clear any existing interval
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -167,45 +169,67 @@ export function YouTubePlayer({
       // Prevent jumps within 500ms of last auto-jump to avoid loops
       if (now - lastAutoJumpTimeRef.current < 500) return;
       
-      // Find which segment we're currently in or just passed
+      // Find which segment we're currently in
       let currentSegIdx = -1;
       for (let i = 0; i < selectedTopic.segments.length; i++) {
         const segment = selectedTopic.segments[i];
-        // Check if we're in this segment or just passed it
         if (currentPlayTime >= segment.start && currentPlayTime <= segment.end + 0.1) {
           currentSegIdx = i;
+          lastKnownSegmentRef.current = i; // Track last known segment
           break;
         }
       }
       
-      // Check if we've reached or passed the end of a segment
+      // If we're in a segment, check if we need to jump to next
       if (currentSegIdx >= 0) {
         const currentSegment = selectedTopic.segments[currentSegIdx];
         
-        // Pre-emptive jump: trigger 0.1s before segment actually ends for seamless transition
+        // Pre-emptive jump: trigger 0.1s before segment actually ends
         if (currentPlayTime >= currentSegment.end - 0.1) {
-          // Check if there's a next segment
           const nextSegmentIdx = currentSegIdx + 1;
           if (nextSegmentIdx < selectedTopic.segments.length) {
             const nextSegment = selectedTopic.segments[nextSegmentIdx];
             
-            // Check if we're already playing within the next segment
-            // This prevents jumping when segments are close together
+            // Check if already in next segment
             if (currentPlayTime >= nextSegment.start && currentPlayTime <= nextSegment.end) {
-              // Already in the next segment, just update index
               setCurrentSegmentIndex(nextSegmentIdx);
+              lastKnownSegmentRef.current = nextSegmentIdx;
               return;
             }
             
-            // Only jump if there's a significant gap and we're not already in the next segment
-            // Adding small tolerance for floating point comparison
-            if (Math.abs(nextSegment.start - currentSegment.end) > 0.1 && currentPlayTime < nextSegment.start) {
-              // Record the jump time
+            // Jump to next segment if there's a gap
+            if (currentPlayTime < nextSegment.start) {
               lastAutoJumpTimeRef.current = now;
-              
-              // Jump to next segment
               playerRef.current.seekTo(nextSegment.start, true);
               setCurrentSegmentIndex(nextSegmentIdx);
+              lastKnownSegmentRef.current = nextSegmentIdx;
+            }
+          }
+        }
+      } else {
+        // Fallback: We're between segments, check if we passed a segment end
+        if (lastKnownSegmentRef.current >= 0 && lastKnownSegmentRef.current < selectedTopic.segments.length) {
+          const lastSegment = selectedTopic.segments[lastKnownSegmentRef.current];
+          
+          // If we're past the last known segment's end
+          if (currentPlayTime >= lastSegment.end) {
+            const nextSegmentIdx = lastKnownSegmentRef.current + 1;
+            
+            if (nextSegmentIdx < selectedTopic.segments.length) {
+              const nextSegment = selectedTopic.segments[nextSegmentIdx];
+              
+              // Check if we're already in or past the next segment
+              if (currentPlayTime >= nextSegment.start && currentPlayTime <= nextSegment.end) {
+                // We're in the next segment, update tracking
+                setCurrentSegmentIndex(nextSegmentIdx);
+                lastKnownSegmentRef.current = nextSegmentIdx;
+              } else if (currentPlayTime < nextSegment.start) {
+                // We're in the gap, jump to next segment
+                lastAutoJumpTimeRef.current = now;
+                playerRef.current.seekTo(nextSegment.start, true);
+                setCurrentSegmentIndex(nextSegmentIdx);
+                lastKnownSegmentRef.current = nextSegmentIdx;
+              }
             }
           }
         }
