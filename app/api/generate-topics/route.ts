@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { TranscriptSegment, Topic } from '@/lib/types';
+import { TranscriptSegment } from '@/lib/types';
 
 interface ParsedTopic {
   title: string;
@@ -31,529 +31,6 @@ function formatTime(seconds: number): string {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-// Text normalization utilities
-function normalizeWhitespace(text: string): string {
-  return text
-    .replace(/[\r\n]+/g, ' ') // Replace newlines with spaces
-    .replace(/\s+/g, ' ')     // Collapse multiple spaces
-    .trim();
-}
-
-function normalizeForMatching(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/['']/g, "'")     // Normalize quotes
-    .replace(/[""]/g, '"')     // Normalize double quotes
-    .replace(/…/g, '...')      // Normalize ellipsis
-    .replace(/—/g, '-')        // Normalize dashes
-    .replace(/\s+/g, ' ')      // Normalize whitespace
-    .trim();
-}
-
-// Calculate similarity between two strings (0-1)
-function calculateSimilarity(str1: string, str2: string): number {
-  const longer = str1.length > str2.length ? str1 : str2;
-  const shorter = str1.length > str2.length ? str2 : str1;
-  
-  if (longer.length === 0) return 1.0;
-  
-  const editDistance = levenshteinDistance(longer, shorter);
-  return (longer.length - editDistance) / longer.length;
-}
-
-// Levenshtein distance for fuzzy matching
-function levenshteinDistance(str1: string, str2: string): number {
-  const matrix: number[][] = [];
-  
-  for (let i = 0; i <= str2.length; i++) {
-    matrix[i] = [i];
-  }
-  
-  for (let j = 0; j <= str1.length; j++) {
-    matrix[0][j] = j;
-  }
-  
-  for (let i = 1; i <= str2.length; i++) {
-    for (let j = 1; j <= str1.length; j++) {
-      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-        matrix[i][j] = matrix[i - 1][j - 1];
-      } else {
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1,
-          matrix[i][j - 1] + 1,
-          matrix[i - 1][j] + 1
-        );
-      }
-    }
-  }
-  
-  return matrix[str2.length][str1.length];
-}
-
-// Build a comprehensive index of the transcript
-interface TranscriptIndex {
-  fullTextSpace: string;
-  fullTextNewline: string;
-  segmentBoundaries: Array<{
-    segmentIdx: number;
-    startPos: number;
-    endPos: number;
-    text: string;
-  }>;
-}
-
-function buildTranscriptIndex(transcript: TranscriptSegment[]): TranscriptIndex {
-  const segmentBoundaries: Array<{
-    segmentIdx: number;
-    startPos: number;
-    endPos: number;
-    text: string;
-  }> = [];
-  
-  let fullTextSpace = '';
-  let fullTextNewline = '';
-  
-  transcript.forEach((segment, idx) => {
-    if (idx > 0) {
-      fullTextSpace += ' ';
-      fullTextNewline += '\n';
-    }
-    
-    const segmentStartPos = fullTextSpace.length;
-    fullTextSpace += segment.text;
-    fullTextNewline += segment.text;
-    
-    const boundary = {
-      segmentIdx: idx,
-      startPos: segmentStartPos,
-      endPos: fullTextSpace.length,
-      text: segment.text
-    };
-    segmentBoundaries.push(boundary);
-    
-    // Debug - verify segment indices match
-    if (idx >= 40 && idx <= 46) {
-    }
-  });
-  
-  return {
-    fullTextSpace,
-    fullTextNewline,
-    segmentBoundaries
-  };
-}
-
-// Enhanced text matching with multiple strategies
-function findTextInTranscript(
-  transcript: TranscriptSegment[],
-  targetText: string,
-  options: {
-    startIdx?: number;
-    strategy?: 'exact' | 'normalized' | 'fuzzy' | 'all';
-    minSimilarity?: number;
-    maxSegmentWindow?: number;
-  } = {}
-): {
-  found: boolean;
-  startSegmentIdx: number;
-  endSegmentIdx: number;
-  startCharOffset: number;
-  endCharOffset: number;
-  matchStrategy: string;
-  similarity: number;
-} | null {
-  const {
-    startIdx = 0,
-    strategy = 'all',
-    minSimilarity = 0.85,
-    maxSegmentWindow = 30
-  } = options;
-  
-  // Build transcript index for efficient searching
-  const index = buildTranscriptIndex(transcript);
-  
-  // Try different strategies based on option
-  const strategies = strategy === 'all' 
-    ? ['exact', 'normalized', 'fuzzy']
-    : [strategy];
-  
-  for (const currentStrategy of strategies) {
-    
-    let searchText = '';
-    let targetSearchText = '';
-    
-    if (currentStrategy === 'exact') {
-      // Try both space and newline joined versions
-      for (const fullText of [index.fullTextSpace, index.fullTextNewline]) {
-        searchText = fullText;
-        targetSearchText = targetText;
-        
-        const matchIdx = searchText.indexOf(targetSearchText);
-        if (matchIdx !== -1) {
-          const result = mapMatchToSegments(matchIdx, targetSearchText.length, index);
-          if (result) {
-            return {
-              ...result,
-              matchStrategy: 'exact',
-              similarity: 1.0
-            };
-          }
-        }
-      }
-    } else if (currentStrategy === 'normalized') {
-      // Normalize whitespace and try again
-      searchText = normalizeWhitespace(index.fullTextSpace);
-      targetSearchText = normalizeWhitespace(targetText);
-      
-      const matchIdx = searchText.indexOf(targetSearchText);
-      if (matchIdx !== -1) {
-        // Map back to original positions
-        const result = mapNormalizedMatchToSegments(
-          matchIdx,
-          targetSearchText,
-          index,
-          targetText
-        );
-        if (result) {
-          return {
-            ...result,
-            matchStrategy: 'normalized',
-            similarity: 0.95
-          };
-        }
-      }
-    } else if (currentStrategy === 'fuzzy') {
-      // Try fuzzy matching with sliding window
-      const normalizedTarget = normalizeForMatching(targetText);
-      const targetWords = normalizedTarget.split(' ').filter(w => w.length > 0);
-      
-      if (targetWords.length === 0) continue;
-      
-      // Slide through the transcript
-      for (let i = startIdx; i < transcript.length; i++) {
-        let combinedText = '';
-        let segmentSpan: { idx: number; text: string }[] = [];
-        
-        // Build window
-        for (let j = i; j < Math.min(i + maxSegmentWindow, transcript.length); j++) {
-          if (combinedText.length > 0) combinedText += ' ';
-          combinedText += transcript[j].text;
-          segmentSpan.push({ idx: j, text: transcript[j].text });
-          
-          // Check similarity
-          const normalizedCombined = normalizeForMatching(combinedText);
-          const similarity = calculateSimilarity(normalizedTarget, normalizedCombined);
-          
-          if (similarity >= minSimilarity) {
-            // Found a fuzzy match
-            
-            return {
-              found: true,
-              startSegmentIdx: segmentSpan[0].idx,
-              endSegmentIdx: segmentSpan[segmentSpan.length - 1].idx,
-              startCharOffset: 0,
-              endCharOffset: segmentSpan[segmentSpan.length - 1].text.length,
-              matchStrategy: 'fuzzy',
-              similarity
-            };
-          }
-          
-          // Stop if we've built too much text
-          if (combinedText.length > targetText.length * 2) {
-            break;
-          }
-        }
-      }
-    }
-  }
-  
-  return null;
-}
-
-// Map a match position in the full text to segment boundaries
-function mapMatchToSegments(
-  matchStart: number,
-  matchLength: number,
-  index: TranscriptIndex
-): {
-  found: boolean;
-  startSegmentIdx: number;
-  endSegmentIdx: number;
-  startCharOffset: number;
-  endCharOffset: number;
-} | null {
-  const matchEnd = matchStart + matchLength;
-  let startSegmentIdx = -1;
-  let endSegmentIdx = -1;
-  let startCharOffset = 0;
-  let endCharOffset = 0;
-  
-  for (const boundary of index.segmentBoundaries) {
-    // Find start segment
-    if (startSegmentIdx === -1 && matchStart >= boundary.startPos && matchStart < boundary.endPos) {
-      startSegmentIdx = boundary.segmentIdx;
-      startCharOffset = matchStart - boundary.startPos;
-    }
-    
-    // Find end segment
-    if (matchEnd > boundary.startPos && matchEnd <= boundary.endPos) {
-      endSegmentIdx = boundary.segmentIdx;
-      endCharOffset = matchEnd - boundary.startPos;
-      break;
-    } else if (matchEnd > boundary.endPos) {
-      endSegmentIdx = boundary.segmentIdx;
-      endCharOffset = boundary.text.length;
-    }
-  }
-  
-  if (startSegmentIdx !== -1 && endSegmentIdx !== -1) {
-    return {
-      found: true,
-      startSegmentIdx,
-      endSegmentIdx,
-      startCharOffset,
-      endCharOffset
-    };
-  }
-  
-  return null;
-}
-
-// Map normalized match back to original segments
-function mapNormalizedMatchToSegments(
-  normalizedMatchIdx: number,
-  normalizedTargetText: string,
-  index: TranscriptIndex,
-  originalTargetText: string
-): {
-  found: boolean;
-  startSegmentIdx: number;
-  endSegmentIdx: number;
-  startCharOffset: number;
-  endCharOffset: number;
-} | null {
-  // Build a mapping between normalized and original positions
-  const normalizedFull = normalizeWhitespace(index.fullTextSpace);
-  const originalText = index.fullTextSpace;
-  
-  // Create position mapping arrays
-  const normalizedToOriginal: number[] = [];
-  let originalIdx = 0;
-  let lastOriginalIdx = 0;
-  
-  // Build the mapping from normalized position to original position
-  for (let normIdx = 0; normIdx < normalizedFull.length; normIdx++) {
-    // Skip whitespace runs in original text
-    while (originalIdx < originalText.length) {
-      const origChar = originalText[originalIdx];
-      const normChar = normalizedFull[normIdx];
-      
-      // Check if we've found the corresponding character
-      if (origChar === normChar) {
-        normalizedToOriginal[normIdx] = originalIdx;
-        lastOriginalIdx = originalIdx;
-        originalIdx++;
-        break;
-      } else if (/\s/.test(origChar)) {
-        // Skip whitespace in original
-        originalIdx++;
-      } else {
-        // Characters don't match - this shouldn't happen
-        normalizedToOriginal[normIdx] = lastOriginalIdx;
-        break;
-      }
-    }
-  }
-  
-  // Find the original start and end positions
-  const originalStartPos = normalizedToOriginal[normalizedMatchIdx];
-  const normalizedEndIdx = normalizedMatchIdx + normalizedTargetText.length - 1;
-  const originalEndPos = normalizedToOriginal[Math.min(normalizedEndIdx, normalizedToOriginal.length - 1)];
-  
-  if (originalStartPos === undefined || originalEndPos === undefined) {
-    return null;
-  }
-  
-  // Calculate the actual length in the original text
-  const actualLength = originalEndPos - originalStartPos + 1;
-  
-  // Now map from original position using the actual matched region
-  return mapMatchToSegments(originalStartPos, actualLength, index);
-}
-
-function findExactQuotes(
-  transcript: TranscriptSegment[],
-  quotes: Array<{ timestamp: string; text: string }>
-): { 
-  start: number; 
-  end: number; 
-  text: string; 
-  startSegmentIdx?: number; 
-  endSegmentIdx?: number;
-  startCharOffset?: number;
-  endCharOffset?: number;
-  hasCompleteSentences?: boolean;
-}[] {
-  const result: { 
-    start: number; 
-    end: number; 
-    text: string; 
-    startSegmentIdx?: number; 
-    endSegmentIdx?: number;
-    startCharOffset?: number;
-    endCharOffset?: number;
-    hasCompleteSentences?: boolean;
-  }[] = [];
-  
-  for (const quote of quotes) {
-    // Parse timestamp if provided
-    const timestampMatch = quote.timestamp?.match(/\[?(\d{1,2}:\d{2})-(\d{1,2}:\d{2})\]?/);
-    if (!timestampMatch) continue;
-    
-    const [startMin, startSec] = timestampMatch[1].split(':').map(Number);
-    const [endMin, endSec] = timestampMatch[2].split(':').map(Number);
-    const timestampStart = startMin * 60 + startSec;
-    const timestampEnd = endMin * 60 + endSec;
-    
-    // Use the exact text from the quote
-    const quoteText = quote.text.trim();
-    if (!quoteText) continue;
-    
-    
-    // Show first and last parts for debugging
-    if (quoteText.length > 100) {
-    }
-    
-    // Try to find text match using multiple strategies
-    const match = findTextInTranscript(transcript, quoteText, {
-      strategy: 'all',
-      minSimilarity: 0.85,
-      maxSegmentWindow: 30
-    });
-    
-    if (match) {
-      
-      // Get the actual timestamps from the segments
-      const startSegment = transcript[match.startSegmentIdx];
-      const endSegment = transcript[match.endSegmentIdx];
-      
-      // DEBUG: Verify the segment content
-      if (match.startSegmentIdx > 0) {
-      }
-      
-      // Check if the quote actually matches what we found
-      const extractedText = startSegment.text.substring(match.startCharOffset);
-      const quotePortion = quoteText.substring(0, Math.min(50, extractedText.length));
-      if (!extractedText.startsWith(quotePortion.substring(0, 20))) {
-      }
-      
-      result.push({
-        start: startSegment.start,
-        end: endSegment.start + endSegment.duration,
-        text: quoteText,
-        startSegmentIdx: match.startSegmentIdx,
-        endSegmentIdx: match.endSegmentIdx,
-        startCharOffset: match.startCharOffset,
-        endCharOffset: match.endCharOffset,
-        hasCompleteSentences: match.matchStrategy !== 'fuzzy'
-      });
-    } else {
-      
-      // Debug: Show potential issues
-      const index = buildTranscriptIndex(transcript);
-      const quoteNormalized = normalizeWhitespace(quoteText);
-      const transcriptNormalized = normalizeWhitespace(index.fullTextSpace);
-      
-      // Check if normalized version exists
-      if (transcriptNormalized.includes(quoteNormalized)) {
-      } else {
-        // Check for partial matches
-        const quoteWords = quoteNormalized.split(' ').filter(w => w.length > 3);
-        const firstWords = quoteWords.slice(0, 5).join(' ');
-        const lastWords = quoteWords.slice(-5).join(' ');
-        
-        if (transcriptNormalized.includes(firstWords)) {
-        }
-        if (transcriptNormalized.includes(lastWords)) {
-        }
-      }
-      
-      
-      // Find segments within the timestamp range
-      const segmentsInRange: { idx: number; segment: TranscriptSegment }[] = [];
-      for (let i = 0; i < transcript.length; i++) {
-        const segment = transcript[i];
-        const segmentEnd = segment.start + segment.duration;
-        
-        // Include segments that overlap with timestamp range
-        if (segment.start <= timestampEnd && segmentEnd >= timestampStart) {
-          segmentsInRange.push({ idx: i, segment });
-        }
-      }
-      
-      if (segmentsInRange.length === 0) {
-        continue;
-      }
-      
-      // Try to find match within the timestamp range segments
-      const startSearchIdx = segmentsInRange[0].idx;
-      const endSearchIdx = segmentsInRange[segmentsInRange.length - 1].idx;
-      
-      // Search within a constrained range with more lenient matching
-      let foundInRange = false;
-      const rangeMatch = findTextInTranscript(transcript, quoteText, {
-        startIdx: Math.max(0, startSearchIdx - 2),
-        strategy: 'all',
-        minSimilarity: 0.80, // More lenient for timestamp range
-        maxSegmentWindow: Math.min(30, endSearchIdx - startSearchIdx + 5)
-      });
-      
-      if (rangeMatch && rangeMatch.startSegmentIdx <= endSearchIdx + 2) {
-        
-        const startSegment = transcript[rangeMatch.startSegmentIdx];
-        const endSegment = transcript[rangeMatch.endSegmentIdx];
-        
-        result.push({
-          start: startSegment.start,
-          end: endSegment.start + endSegment.duration,
-          text: quoteText,
-          startSegmentIdx: rangeMatch.startSegmentIdx,
-          endSegmentIdx: rangeMatch.endSegmentIdx,
-          startCharOffset: rangeMatch.startCharOffset,
-          endCharOffset: rangeMatch.endCharOffset,
-          hasCompleteSentences: rangeMatch.matchStrategy !== 'fuzzy'
-        });
-        foundInRange = true;
-      }
-      
-      if (!foundInRange) {
-        // Final fallback: Use timestamp range
-        
-        const firstSegment = segmentsInRange[0];
-        const lastSegment = segmentsInRange[segmentsInRange.length - 1];
-        const joinedText = segmentsInRange.map(s => s.segment.text).join(' ');
-        
-        // Show why matching failed for debugging
-        if (quoteText.length > 100 && joinedText.length > 100) {
-        }
-        
-        result.push({
-          start: firstSegment.segment.start,
-          end: lastSegment.segment.start + lastSegment.segment.duration,
-          text: joinedText, // Use the actual joined text from segments
-          startSegmentIdx: firstSegment.idx,
-          endSegmentIdx: lastSegment.idx,
-          startCharOffset: 0,
-          endCharOffset: lastSegment.segment.text.length,
-          hasCompleteSentences: false
-        });
-      }
-    }
-  }
-  
-  return result;
-}
-
 export async function POST(request: Request) {
   try {
     const { transcript, model = 'gemini-2.5-flash' } = await request.json();
@@ -575,13 +52,6 @@ export async function POST(request: Request) {
     }
 
     const fullText = combineTranscript(transcript);
-    
-    // Log a sample of the transcript to help with debugging
-    
-    // Debug segments around index 40-46
-    for (let i = 40; i <= 46 && i < transcript.length; i++) {
-    }
-    
     const transcriptWithTimestamps = formatTranscriptWithTimestamps(transcript);
 
     const prompt = `## Role and Goal
@@ -638,10 +108,6 @@ export async function POST(request: Request) {
     ${transcriptWithTimestamps}
     `;
     
-    
-    
-
-    
     const geminiModel = genAI.getGenerativeModel({ 
       model: model,
       generationConfig: {
@@ -664,7 +130,6 @@ export async function POST(request: Request) {
       throw new Error('No response from Gemini');
     }
 
-    
     let parsedResponse;
     try {
       parsedResponse = JSON.parse(response);
@@ -712,7 +177,6 @@ export async function POST(request: Request) {
       }
     }
     
-    
     // Handle different possible response structures
     let topicsArray = parsedResponse;
     if (parsedResponse.topics && Array.isArray(parsedResponse.topics)) {
@@ -725,7 +189,6 @@ export async function POST(request: Request) {
     
     // If we got an empty array, create a basic structure
     if (topicsArray.length === 0) {
-      
       // Create basic topics based on transcript chunks
       const chunkSize = Math.ceil(transcript.length / 3);
       topicsArray = [];
@@ -739,18 +202,20 @@ export async function POST(request: Request) {
           const startTime = chunkSegments[0].start;
           const endTime = chunkSegments[chunkSegments.length - 1].start + chunkSegments[chunkSegments.length - 1].duration;
           
+          const chunkText = chunkSegments.map(s => s.text).join(' ');
+          const snippet = chunkText.substring(0, 200) + (chunkText.length > 200 ? '...' : '');
+          
           topicsArray.push({
             title: `Part ${i + 1}`,
             description: `Section ${i + 1} of the video`,
             quotes: [{
               timestamp: `[${formatTime(startTime)}-${formatTime(endTime)}]`,
-              text: chunkSegments.map(s => s.text).join(' ').substring(0, 200) + '...'
+              text: snippet
             }]
           });
         }
       }
     }
-    
     
     // Validate that topics have required fields
     topicsArray.forEach((topic: ParsedTopic, index: number) => {
@@ -761,40 +226,14 @@ export async function POST(request: Request) {
       });
     });
 
-    // Generate topics with segments from quotes
-    const topicsWithSegments = topicsArray.map((topic: ParsedTopic, index: number) => {
-      
-      // Pass the quotes directly to findExactQuotes
-      const quotesArray = topic.quotes && Array.isArray(topic.quotes) ? topic.quotes : [];
-      
-      
-      // Find the exact segments for these quotes
-      const segments = findExactQuotes(transcript, quotesArray);
-      const totalDuration = segments.reduce((sum, seg) => sum + (seg.end - seg.start), 0);
-      
-      
-      return {
-        id: `topic-${index}`,
-        title: topic.title,
-        description: topic.description || '',
-        duration: Math.round(totalDuration),
-        segments: segments,
-        quotes: topic.quotes // Store original quotes for display
-      };
-    });
+    // Return topics without segments - segments will be processed separately
+    const topics = topicsArray.map((topic: ParsedTopic, index: number) => ({
+      id: `topic-${index}`,
+      title: topic.title,
+      description: topic.description || '',
+      quotes: topic.quotes || []
+    }));
     
-    // Keep all topics, even those without segments (they can still be displayed)
-    const topics = topicsWithSegments.length > 0 ? topicsWithSegments : 
-      topicsArray.map((topic: ParsedTopic, index: number) => ({
-        id: `topic-${index}`,
-        title: topic.title,
-        description: topic.description || '',
-        duration: 0,
-        segments: [],
-        quotes: topic.quotes || []
-      }));
-    
-
     return NextResponse.json({ topics });
   } catch (error) {
     return NextResponse.json(
