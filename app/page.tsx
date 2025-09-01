@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingStage, setLoadingStage] = useState<'fetching' | 'generating' | 'processing'>('fetching');
+  const [loadingStage, setLoadingStage] = useState<'fetching' | 'understanding' | 'generating' | 'processing'>('fetching');
   const [error, setError] = useState("");
   const [videoId, setVideoId] = useState<string | null>(null);
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
@@ -117,6 +117,9 @@ export default function Home() {
       const { transcript: fetchedTranscript } = await transcriptRes.json();
       setTranscript(fetchedTranscript);
       
+      // Move to understanding stage
+      setLoadingStage('understanding');
+      
       // Generate quick preview (non-blocking)
       fetch("/api/quick-preview", {
         method: "POST",
@@ -165,31 +168,14 @@ export default function Home() {
         throw new Error(errorData.error || "Failed to generate topics");
       }
       
-      const { topics: generatedTopics } = await topicsRes.json();
-      
-      // Move to processing stage - now process quotes to find segments
+      // Move to processing stage
       setLoadingStage('processing');
       setGenerationStartTime(null);
       setProcessingStartTime(Date.now());
       setProcessingElapsedTime(0);
       
-      // Process quotes to find exact segments
-      const processRes = await fetch("/api/process-quotes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          transcript: fetchedTranscript,
-          topics: generatedTopics
-        }),
-      });
-      
-      if (!processRes.ok) {
-        const errorData = await processRes.json().catch(() => ({ error: "Unknown error" }));
-        throw new Error(errorData.error || "Failed to process quotes");
-      }
-      
-      const { topics: processedTopics } = await processRes.json();
-      setTopics(processedTopics);
+      const { topics: generatedTopics } = await topicsRes.json();
+      setTopics(generatedTopics);
       
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
@@ -323,6 +309,7 @@ export default function Home() {
               <p className="text-foreground font-medium">Analyzing video and generating highlight reels</p>
               <p className="text-sm text-muted-foreground mt-2">
                 {loadingStage === 'fetching' && 'Fetching transcript...'}
+                {loadingStage === 'understanding' && 'Fetching transcript...'}
                 {loadingStage === 'generating' && `Creating highlight reels... (${elapsedTime} seconds)`}
                 {loadingStage === 'processing' && `Processing and matching quotes... (${processingElapsedTime} seconds)`}
               </p>
