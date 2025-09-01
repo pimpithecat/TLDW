@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const prompt = `Based on the beginning of this video transcript${videoTitle ? ` titled "${videoTitle}"` : ''}, write a brief 2-3 sentence overview of what this video appears to be about. Focus on the main topic and what viewers can expect to learn. Be concise and engaging.
+    const prompt = `Based on the beginning of this video transcript, write a brief 2-3 sentence overview of what this video appears to be about. Focus on the main topic and what viewers can expect to learn. Be concise and engaging.
 
 Transcript excerpt:
 ${previewText}
