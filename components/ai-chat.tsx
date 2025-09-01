@@ -199,14 +199,6 @@ export function AIChat({ transcript, topics, videoId, onTimestampClick }: AIChat
         </div>
 
         <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-          {messages.length === 0 && (
-            <div className="text-center text-muted-foreground py-8">
-              <MessageSquare className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-              <p className="text-sm">Ask questions about the video content</p>
-              <p className="text-xs mt-2">I'll provide answers with citations from the transcript</p>
-            </div>
-          )}
-          
           <div className="space-y-4">
             {messages.map((message) => (
               <ChatMessageComponent
