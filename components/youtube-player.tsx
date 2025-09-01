@@ -40,6 +40,7 @@ export function YouTubePlayer({
   const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isSeekingRef = useRef(false);
   const lastSeekTimeRef = useRef<number | undefined>(undefined);
+  const lastAutoJumpTimeRef = useRef<number>(0);
 
   useEffect(() => {
     // Load YouTube IFrame API
@@ -161,13 +162,17 @@ export function YouTubePlayer({
       if (!playerRef.current?.getCurrentTime) return;
       
       const currentPlayTime = playerRef.current.getCurrentTime();
+      const now = Date.now();
+      
+      // Prevent jumps within 500ms of last auto-jump to avoid loops
+      if (now - lastAutoJumpTimeRef.current < 500) return;
       
       // Find which segment we're currently in or just passed
       let currentSegIdx = -1;
       for (let i = 0; i < selectedTopic.segments.length; i++) {
         const segment = selectedTopic.segments[i];
         // Check if we're in this segment or just passed it
-        if (currentPlayTime >= segment.start && currentPlayTime <= segment.end + 0.3) {
+        if (currentPlayTime >= segment.start && currentPlayTime <= segment.end + 0.1) {
           currentSegIdx = i;
           break;
         }
@@ -177,35 +182,41 @@ export function YouTubePlayer({
       if (currentSegIdx >= 0) {
         const currentSegment = selectedTopic.segments[currentSegIdx];
         
-        // If we've reached the end of this segment
-        if (currentPlayTime >= currentSegment.end) {
+        // Pre-emptive jump: trigger 0.1s before segment actually ends for seamless transition
+        if (currentPlayTime >= currentSegment.end - 0.1) {
           // Check if there's a next segment
           const nextSegmentIdx = currentSegIdx + 1;
           if (nextSegmentIdx < selectedTopic.segments.length) {
             const nextSegment = selectedTopic.segments[nextSegmentIdx];
             
-            // Jump to next segment if there's a gap (segments are not contiguous)
+            // Check if we're already playing within the next segment
+            // This prevents jumping when segments are close together
+            if (currentPlayTime >= nextSegment.start && currentPlayTime <= nextSegment.end) {
+              // Already in the next segment, just update index
+              setCurrentSegmentIndex(nextSegmentIdx);
+              return;
+            }
+            
+            // Only jump if there's a significant gap and we're not already in the next segment
             // Adding small tolerance for floating point comparison
-            if (Math.abs(nextSegment.start - currentSegment.end) > 0.1) {
-              // Clear this monitoring interval to prevent multiple jumps
-              clearInterval(monitoringInterval);
+            if (Math.abs(nextSegment.start - currentSegment.end) > 0.1 && currentPlayTime < nextSegment.start) {
+              // Record the jump time
+              lastAutoJumpTimeRef.current = now;
               
               // Jump to next segment
               playerRef.current.seekTo(nextSegment.start, true);
               setCurrentSegmentIndex(nextSegmentIdx);
-              
-              // Note: A new monitoring interval will be created by this effect re-running
             }
           }
         }
       }
-    }, 100); // Check every 100ms for more responsive jumping
+    }, 50); // Check every 50ms for more responsive jumping
     
     // Clean up on unmount or when dependencies change
     return () => {
       clearInterval(monitoringInterval);
     };
-  }, [selectedTopic, isPlaying, currentSegmentIndex]);
+  }, [selectedTopic, isPlaying]);
 
 
   const playTopic = (topic: Topic) => {
