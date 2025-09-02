@@ -44,7 +44,7 @@ export async function POST(request: Request) {
 ## Detailed Instructions
 
 ### 1. Answer Formatting
-- Your final \`answer\` text MUST include citation placeholders like \`[1]\`, \`[2]\`, etc., corresponding to the quotes you select.
+- Your final \`answer\` text MUST include citation placeholders numbered starting from [1] (e.g. \`[1]\`, \`[2]\`, etc.), corresponding to the quotes you select.
 
 ### 2. Quote Selection Criteria
 - **Verbatim Quotes Only**: The \`text\` for each quote MUST be an EXACT, character-for-character copy of a passage from the transcript.
@@ -67,8 +67,10 @@ export async function POST(request: Request) {
 \`\`\`
 
 ## IMPORTANT CHECKS
-- Before generating the response, double-check that your \`answer\` text contains the citation placeholders (e.g., \`[1]\`).
+- Before generating the response, double-check that your \`answer\` text contains the citation placeholders (e.g., \`[1]\`, \`[2]\`, etc.).
 - The \`text\` field MUST contain the exact text as it appears in the transcript. Do not clean up, correct, or modify the text in any way.
+- The first citation placeholder should corresponding to the first quote in the \`quotes\` array. The second citation placeholder should correspond to the second quote in the \`quotes\` array, and so on.
+- The total number of citation placeholders should correspond to the total number of quotes in the \`quotes\` array.
 
 ## Context
 Video Topics:
