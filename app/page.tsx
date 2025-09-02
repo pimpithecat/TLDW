@@ -261,7 +261,12 @@ export default function Home() {
         start: c.start,
         end: c.end,
         text: c.text,
+        startSegmentIdx: c.startSegmentIdx,
+        endSegmentIdx: c.endSegmentIdx,
+        startCharOffset: c.startCharOffset,
+        endCharOffset: c.endCharOffset,
       })),
+      isCitationReel: true, // Set the flag to identify this as a citation reel
     };
     
     // Set the citation reel as the selected topic to trigger playback

@@ -26,6 +26,7 @@ export interface Topic {
     timestamp: string;
     text: string;
   }[];
+  isCitationReel?: boolean; // Flag to identify citation playback reels
 }
 
 export interface VideoData {

@@ -521,7 +521,7 @@ export function TranscriptViewer({
                               className={part.highlighted ? "text-foreground" : ""}
                               style={
                                 part.highlighted
-                                  ? isCitation
+                                  ? isCitation || selectedTopic?.isCitationReel
                                     ? {
                                         backgroundColor: 'hsl(48, 100%, 85%)',
                                         padding: '1px 3px',

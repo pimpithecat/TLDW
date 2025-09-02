@@ -219,26 +219,12 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
       
       <div className={`flex-1 max-w-[80%] ${isUser ? 'text-right' : ''}`}>
         <Card className={`p-4 ${isUser ? 'bg-primary/5 border-primary/20' : 'bg-muted/30'}`}>
-          {/* Play All Clips button for assistant messages with citations */}
-          {!isUser && message.citations && message.citations.length > 0 && onPlayAllCitations && (
-            <div className="mb-3 pb-3 border-b border-border/50">
-              <Button
-                onClick={() => onPlayAllCitations(message.citations!)}
-                size="sm"
-                variant="secondary"
-                className="flex items-center gap-2"
-              >
-                <Play className="w-4 h-4" />
-                Play All Clips ({message.citations.length})
-              </Button>
-            </div>
-          )}
-          
           {isUser ? (
             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
           ) : (
-            <div className="prose prose-sm dark:prose-invert max-w-none">
-              <ReactMarkdown
+            <>
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
                   p: ({ children }) => <p className="mb-2">{renderTextWithCitations(children)}</p>,
@@ -274,7 +260,23 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
               >
                 {message.content}
               </ReactMarkdown>
-            </div>
+              </div>
+              
+              {/* Play All Clips button for assistant messages with citations */}
+              {message.citations && message.citations.length > 0 && onPlayAllCitations && (
+                <div className="mt-3 pt-3 border-t border-border/50">
+                  <Button
+                    onClick={() => onPlayAllCitations(message.citations!)}
+                    size="sm"
+                    variant="secondary"
+                    className="flex items-center gap-2"
+                  >
+                    <Play className="w-4 h-4" />
+                    Play All Clips ({message.citations.length})
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </Card>
       </div>
