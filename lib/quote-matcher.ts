@@ -11,11 +11,10 @@ export function normalizeWhitespace(text: string): string {
 export function normalizeForMatching(text: string): string {
   return text
     .toLowerCase()
-    .replace(/['']/g, "'")     // Normalize quotes
-    .replace(/[""]/g, '"')     // Normalize double quotes
-    .replace(/…/g, '...')      // Normalize ellipsis
-    .replace(/—/g, '-')        // Normalize dashes
-    .replace(/\s+/g, ' ')      // Normalize whitespace
+    // Remove most punctuation. This makes the match robust to missing commas, etc.
+    .replace(/[.,?"""''!—…–]/g, '')
+    // Normalize whitespace
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -249,7 +248,7 @@ export function findTextInTranscript(
     // Get top scoring segments
     const scoredSegments = Array.from(segmentScores.entries())
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 5); // Check top 5 candidates
+      .slice(0, 15); // Check top 15 candidates
     
     for (const [candidateIdx, score] of scoredSegments) {
       // Build a window around high-scoring segment

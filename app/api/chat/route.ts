@@ -36,25 +36,39 @@ export async function POST(request: Request) {
 
     const prompt = `You are a concise AI assistant helping users understand a video transcript. Your task is to answer the user's question based ONLY on the provided transcript and supporting materials.
 
-## Response Instructions
-1. **Analyze**: Carefully read the user's question, previous conversation, and the full video transcript.
-2. **Answer**: Formulate a direct, concise answer in Markdown format.
-3. **Cite**: Identify 1-3 EXACT, VERBATIM quotes from the transcript that directly support your answer.
-4. **Format**: You MUST return a single JSON object with the following structure. Do not include any other text or formatting.
-   \`\`\`json
-   {
-     "answer": "Your markdown-formatted answer. Use placeholders like [1], [2] for citations, corresponding to the quotes array.",
-     "quotes": [
-       { "text": "The first exact verbatim quote from the transcript." },
-       { "text": "The second exact verbatim quote." }
-     ]
-   }
-   \`\`\`
+## Core Task
+1. **Answer the Question**: Formulate a direct, concise answer to the user's question in Markdown.
+2. **Cite Sources**: Back up your answer with exact quotes from the transcript.
+3. **Provide JSON**: Return a single JSON object containing your answer and the quotes.
 
-## Content Guidelines
-- Answer ONLY from the transcript provided.
-- Be concise and direct. Get to the point immediately.
-- Use **bold** for key terms and use bullet points for lists.
+## Detailed Instructions
+
+### 1. Answer Formatting
+- Your final \`answer\` text MUST include citation placeholders like \`[1]\`, \`[2]\`, etc., corresponding to the quotes you select.
+
+### 2. Quote Selection Criteria
+- **Verbatim Quotes Only**: The \`text\` for each quote MUST be an EXACT, character-for-character copy of a passage from the transcript.
+- **Complete Sentences**: Each quote MUST be a complete sentence or a series of complete sentences. **Do NOT return partial or truncated sentences.** For example, do not end a quote with "...how to integ". It must be the full sentence.
+- **Self-Contained**: Each quote must be fully understandable on its own.
+- **No Summarizing**: Do NOT summarize or paraphrase the transcript in the \`quotes\` array.
+
+### 3. JSON Output Structure
+- You MUST return a single JSON object. Do not include any other text or formatting outside of this JSON object.
+
+## Example of the Required JSON Output
+\`\`\`json
+{
+  "answer": "AI Fund focuses on concrete ideas because they can be quickly validated or falsified [1]. This is paired with rapid engineering, which utilizes AI coding assistants to increase speed and reduce costs [2].",
+  "quotes": [
+    { "text": "We focus on concrete ideas, things that can be built quickly so that we can quickly validate or falsify them." },
+    { "text": "We use a lot of AI coding assistants to really dramatically increase the speed of engineering and reduce the cost." }
+  ]
+}
+\`\`\`
+
+## IMPORTANT CHECKS
+- Before generating the response, double-check that your \`answer\` text contains the citation placeholders (e.g., \`[1]\`).
+- The \`text\` field MUST contain the exact text as it appears in the transcript. Do not clean up, correct, or modify the text in any way.
 
 ## Context
 Video Topics:
@@ -93,6 +107,12 @@ ${message}`;
         const result = await aiModel.generateContent(prompt);
         response = result.response?.text() || '';
         
+        // Debug: Log the raw response from Gemini
+        console.log('=== GEMINI RAW RESPONSE ===');
+        console.log('Response length:', response.length);
+        console.log('Raw response:', response);
+        console.log('=== END RAW RESPONSE ===');
+        
         if (response) {
           break; // Success, exit retry loop
         }
@@ -129,8 +149,16 @@ ${message}`;
     // Parse the JSON response
     let parsedResponse;
     try {
+      console.log('=== PARSING JSON RESPONSE ===');
+      console.log('Response to parse:', response);
       parsedResponse = JSON.parse(response);
+      console.log('Parsed response:', JSON.stringify(parsedResponse, null, 2));
+      console.log('=== END PARSING ===');
     } catch (e) {
+      console.log('=== JSON PARSING ERROR ===');
+      console.log('Error:', e);
+      console.log('Response that failed to parse:', response);
+      console.log('=== END PARSING ERROR ===');
       return NextResponse.json({ 
         content: "I couldn't generate a valid response. Please try again.",
         citations: [],
@@ -139,7 +167,18 @@ ${message}`;
 
     const { answer, quotes } = parsedResponse;
 
+    console.log('=== EXTRACTED DATA ===');
+    console.log('Answer:', answer);
+    console.log('Quotes:', quotes);
+    console.log('Quotes is array:', Array.isArray(quotes));
+    console.log('=== END EXTRACTED DATA ===');
+
     if (!answer || !quotes || !Array.isArray(quotes)) {
+      console.log('=== VALIDATION FAILED ===');
+      console.log('Answer exists:', !!answer);
+      console.log('Quotes exists:', !!quotes);
+      console.log('Quotes is array:', Array.isArray(quotes));
+      console.log('=== END VALIDATION FAILED ===');
       return NextResponse.json({
         content: answer || "I found some information, but couldn't format it correctly.",
         citations: [],
@@ -156,7 +195,7 @@ ${message}`;
 
       const match = findTextInTranscript(transcript, quote.text, transcriptIndex, {
         strategy: 'all',
-        minSimilarity: 0.80,
+        minSimilarity: 0.75,
       });
 
       if (match) {
@@ -177,6 +216,12 @@ ${message}`;
 
     // Sort citations by number
     citations.sort((a, b) => a.number - b.number);
+
+    console.log('=== FINAL RESPONSE ===');
+    console.log('Final answer:', answer);
+    console.log('Final citations count:', citations.length);
+    console.log('Final citations:', JSON.stringify(citations, null, 2));
+    console.log('=== END FINAL RESPONSE ===');
 
     return NextResponse.json({ 
       content: answer,
