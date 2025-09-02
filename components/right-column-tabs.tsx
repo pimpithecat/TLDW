@@ -20,8 +20,6 @@ interface RightColumnTabsProps {
   videoTitle?: string;
   onCitationClick: (citation: Citation) => void;
   onPlayAllCitations?: (citations: Citation[]) => void;
-  switchToTranscriptTab?: boolean;
-  onTabSwitch?: () => void;
 }
 
 export interface RightColumnTabsHandle {
@@ -39,8 +37,6 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   videoTitle,
   onCitationClick,
   onPlayAllCitations,
-  switchToTranscriptTab,
-  onTabSwitch,
 }, ref) => {
   const [activeTab, setActiveTab] = useState<"transcript" | "chat">("transcript");
 
@@ -50,14 +46,6 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
       setActiveTab("transcript");
     }
   }));
-
-  // Switch to transcript tab when requested
-  useEffect(() => {
-    if (switchToTranscriptTab) {
-      setActiveTab("transcript");
-      onTabSwitch?.();
-    }
-  }, [switchToTranscriptTab, onTabSwitch]);
 
   return (
     <Card className="h-full flex flex-col overflow-hidden p-0 gap-0">

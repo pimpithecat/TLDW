@@ -91,12 +91,14 @@ Return ONLY a JSON array of 3 strings (no markdown, no extra text), e.g.:
         if (response) {
           break;
         }
-      } catch (error: any) {
+      } catch (error) {
         
         // Check if it's a rate limit error
-        const isRateLimit = error.status === 429 || 
-                          error.message?.includes('429') || 
-                          error.message?.includes('quota');
+        const errorStatus = error instanceof Error && 'status' in error ? (error as any).status : undefined;
+        const errorMessage = error instanceof Error ? error.message : '';
+        const isRateLimit = errorStatus === 429 || 
+                          errorMessage.includes('429') || 
+                          errorMessage.includes('quota');
         
         if (isRateLimit) {
         }
@@ -109,8 +111,9 @@ Return ONLY a JSON array of 3 strings (no markdown, no extra text), e.g.:
         
         // Parse retryDelay from error if available
         let delayMs = 0;
-        if (error.errorDetails && Array.isArray(error.errorDetails)) {
-          const retryInfo = error.errorDetails.find((detail: any) => 
+        const errorWithDetails = error as any;
+        if (errorWithDetails.errorDetails && Array.isArray(errorWithDetails.errorDetails)) {
+          const retryInfo = errorWithDetails.errorDetails.find((detail: any) => 
             detail['@type'] === 'type.googleapis.com/google.rpc.RetryInfo'
           );
           if (retryInfo?.retryDelay) {

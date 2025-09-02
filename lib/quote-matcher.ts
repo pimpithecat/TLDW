@@ -1,5 +1,17 @@
 import { TranscriptSegment } from '@/lib/types';
 
+// Configuration constants for quote matching
+const QUOTE_MATCH_CONFIG = {
+  FUZZY_MATCH_THRESHOLD: 0.85,
+  MIN_FUZZY_SCORE: 0.7,
+  N_GRAM_SIZE: 3,
+  MIN_N_GRAM_OVERLAP: 0.5,
+  SEGMENT_MERGE_GAP: 5, // seconds
+  MIN_CONTEXT_DURATION: 15, // seconds
+  MAX_CONTEXT_DURATION: 30, // seconds
+  CONTEXT_EXTENSION: 5, // seconds to add before/after
+} as const;
+
 // Text normalization utilities
 export function normalizeWhitespace(text: string): string {
   return text
@@ -191,7 +203,7 @@ export function findTextInTranscript(
   const {
     startIdx = 0,
     strategy = 'all',
-    minSimilarity = 0.85,
+    minSimilarity = QUOTE_MATCH_CONFIG.FUZZY_MATCH_THRESHOLD,
     maxSegmentWindow = 30
   } = options;
   

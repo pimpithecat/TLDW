@@ -145,11 +145,11 @@ ${message}`;
         if (response) {
           break; // Success, exit retry loop
         }
-      } catch (error: any) {
+      } catch (error) {
         
         if (retryCount === maxRetries) {
           // Final attempt failed
-          const errorMessage = error?.message || 'Unknown error';
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           if (errorMessage.includes('429') || errorMessage.includes('quota')) {
             return NextResponse.json({ 
               content: "The AI service is currently at capacity. Please wait a moment and try again.",

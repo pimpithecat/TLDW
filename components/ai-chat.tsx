@@ -131,13 +131,15 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
       };
 
       setMessages(prev => [...prev, assistantMessage]);
-    } catch (error: any) {
+    } catch (error) {
       
       // Retry logic for temporary failures
+      const errorName = error instanceof Error ? error.name : '';
+      const errorMessage = error instanceof Error ? error.message : '';
       if (retryCount < 2 && (
-        error.name === 'AbortError' ||
-        error.message?.includes('temporarily unavailable') ||
-        error.message?.includes('Empty response')
+        errorName === 'AbortError' ||
+        errorMessage.includes('temporarily unavailable') ||
+        errorMessage.includes('Empty response')
       )) {
         // Wait before retrying
         await new Promise(resolve => setTimeout(resolve, 1500 * (retryCount + 1)));
@@ -147,21 +149,21 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
       // Provide specific error messages
       let errorContent = "Sorry, I encountered an error processing your request.";
       
-      if (error.name === 'AbortError') {
+      if (errorName === 'AbortError') {
         errorContent = "The request took too long to process. Please try again with a simpler question.";
-      } else if (error.message?.includes('temporarily unavailable')) {
+      } else if (errorMessage.includes('temporarily unavailable')) {
         errorContent = "The AI service is temporarily unavailable. Please try again in a moment.";
-      } else if (error.message?.includes('Empty response')) {
+      } else if (errorMessage.includes('Empty response')) {
         errorContent = "I couldn't generate a proper response. Please try rephrasing your question.";
       }
       
-      const errorMessage: ChatMessage = {
+      const errorMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: errorContent,
         timestamp: new Date(),
       };
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages(prev => [...prev, errorMsg]);
     } finally {
       setIsLoading(false);
     }

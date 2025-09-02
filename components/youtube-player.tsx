@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Play, SkipForward, SkipBack } from "lucide-react";
-import { Topic } from "@/lib/types";
+import { Topic, TranscriptSegment } from "@/lib/types";
 import { formatDuration, getTopicHSLColor } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -18,7 +18,7 @@ interface YouTubePlayerProps {
   topics?: Topic[];
   onTopicSelect?: (topic: Topic) => void;
   onPlayTopic?: (topic: Topic) => void;
-  transcript?: any[];
+  transcript?: TranscriptSegment[];
 }
 
 export function YouTubePlayer({
@@ -61,10 +61,10 @@ export function YouTubePlayer({
           rel: 0,
         },
         events: {
-          onReady: (event: any) => {
+          onReady: (event: { target: any }) => {
             setVideoDuration(event.target.getDuration());
           },
-          onStateChange: (event: any) => {
+          onStateChange: (event: { data: number; target: any }) => {
             const playing = event.data === 1;
             setIsPlaying(playing);
             

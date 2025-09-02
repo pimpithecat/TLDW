@@ -10,6 +10,7 @@ import { LoadingContext } from "@/components/loading-context";
 import { LoadingTips } from "@/components/loading-tips";
 import { Topic, TranscriptSegment, VideoInfo, Citation } from "@/lib/types";
 import { extractVideoId } from "@/lib/utils";
+import { useElapsedTimer } from "@/lib/hooks/use-elapsed-timer";
 import { Loader2, Video, FileText, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -31,34 +32,12 @@ export default function Home() {
   const [selectedModel, setSelectedModel] = useState<GeminiModel>('gemini-2.5-flash');
   const [citationHighlight, setCitationHighlight] = useState<Citation | null>(null);
   const [generationStartTime, setGenerationStartTime] = useState<number | null>(null);
-  const [elapsedTime, setElapsedTime] = useState<number>(0);
   const [processingStartTime, setProcessingStartTime] = useState<number | null>(null);
-  const [processingElapsedTime, setProcessingElapsedTime] = useState<number>(0);
   const rightColumnTabsRef = useRef<RightColumnTabsHandle>(null);
 
-  // Timer effect for tracking generation time
-  useEffect(() => {
-    if (generationStartTime) {
-      const interval = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - generationStartTime) / 1000);
-        setElapsedTime(elapsed);
-      }, 1000);
-
-      return () => clearInterval(interval);
-    }
-  }, [generationStartTime]);
-
-  // Timer effect for tracking processing time
-  useEffect(() => {
-    if (processingStartTime) {
-      const interval = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - processingStartTime) / 1000);
-        setProcessingElapsedTime(elapsed);
-      }, 1000);
-
-      return () => clearInterval(interval);
-    }
-  }, [processingStartTime]);
+  // Use custom hook for timer logic
+  const elapsedTime = useElapsedTimer(generationStartTime);
+  const processingElapsedTime = useElapsedTimer(processingStartTime);
 
   const processVideo = async (url: string) => {
     setIsLoading(true);
@@ -140,7 +119,6 @@ export default function Home() {
       // Generate topics with timeout
       setLoadingStage('generating');
       setGenerationStartTime(Date.now());
-      setElapsedTime(0);
       const controller2 = new AbortController();
       const timeoutId2 = setTimeout(() => controller2.abort(), 600000); // 60 second timeout for AI generation
       
@@ -172,7 +150,6 @@ export default function Home() {
       setLoadingStage('processing');
       setGenerationStartTime(null);
       setProcessingStartTime(Date.now());
-      setProcessingElapsedTime(0);
       
       const { topics: generatedTopics } = await topicsRes.json();
       setTopics(generatedTopics);
@@ -182,9 +159,7 @@ export default function Home() {
     } finally {
       setIsLoading(false);
       setGenerationStartTime(null);
-      setElapsedTime(0);
       setProcessingStartTime(null);
-      setProcessingElapsedTime(0);
     }
   };
 

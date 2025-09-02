@@ -56,8 +56,9 @@ export async function POST(request: Request) {
       // The API returns data with a 'content' array containing the transcript segments
       transcript = data.content || data.transcript || data;
       
-    } catch (fetchError: any) {
-      if (fetchError.message?.includes('404')) {
+    } catch (fetchError) {
+      const errorMessage = fetchError instanceof Error ? fetchError.message : '';
+      if (errorMessage.includes('404')) {
         return NextResponse.json(
           { error: 'No transcript/captions available for this video. The video may not have subtitles enabled.' },
           { status: 404 }
