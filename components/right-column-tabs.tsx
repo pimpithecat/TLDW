@@ -37,8 +37,8 @@ export function RightColumnTabs({
   const [activeTab, setActiveTab] = useState<"transcript" | "chat">("transcript");
 
   return (
-    <Card className="h-full flex flex-col overflow-hidden">
-      <div className="flex items-center gap-1 p-1 border-b">
+    <Card className="h-full flex flex-col overflow-hidden p-0 gap-0">
+      <div className="flex items-center gap-1 p-1.5 border-b">
         <Button
           variant="ghost"
           size="sm"

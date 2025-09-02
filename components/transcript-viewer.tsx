@@ -379,8 +379,42 @@ export function TranscriptViewer({
       <div className="h-full max-h-full flex flex-col overflow-hidden">
         {/* Header */}
         <div className="px-3 py-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex items-center justify-end mb-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              {selectedTopic && !selectedTopic.isCitationReel && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div
+                      className="h-3 w-3 rounded-full cursor-help"
+                      style={{
+                        backgroundColor: `hsl(${getTopicHSLColor(topics.indexOf(selectedTopic))})`,
+                      }}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-[200px]">
+                    <p className="text-xs">{selectedTopic.title}</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {(citationHighlight || selectedTopic?.isCitationReel) && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div
+                      className="h-3 w-3 rounded-full cursor-help"
+                      style={{
+                        backgroundColor: 'hsl(48, 100%, 50%)',
+                      }}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p className="text-xs">
+                      {selectedTopic?.isCitationReel ? 'Cited Clips' : 'AI Chat Citation'}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+            
             <Button
               variant={autoScroll ? "default" : "outline"}
               size="sm"
@@ -407,33 +441,6 @@ export function TranscriptViewer({
             </Button>
           </div>
         </div>
-        {selectedTopic && !selectedTopic.isCitationReel && (
-          <div className="flex items-center gap-2">
-            <div
-              className="h-2 w-2 rounded-full"
-              style={{
-                backgroundColor: `hsl(${getTopicHSLColor(topics.indexOf(selectedTopic))})`,
-              }}
-            />
-            <span className="text-xs text-muted-foreground truncate">
-              Highlighting: {selectedTopic.title}
-            </span>
-          </div>
-        )}
-        {(citationHighlight || selectedTopic?.isCitationReel) && (
-          <div className="flex items-center gap-2">
-            <div
-              className="h-2 w-2 rounded-full"
-              style={{
-                backgroundColor: 'hsl(48, 100%, 50%)',
-              }}
-            />
-            <span className="text-xs text-muted-foreground truncate">
-              Highlighting: {selectedTopic?.isCitationReel ? 'Cited Clips' : 'AI Chat Citation'}
-            </span>
-          </div>
-        )}
-      </div>
 
       {/* Jump to current button with improved positioning */}
       {showScrollToCurrentButton && currentTime > 0 && (
