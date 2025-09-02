@@ -267,10 +267,16 @@ export default function Home() {
         endCharOffset: c.endCharOffset,
       })),
       isCitationReel: true, // Set the flag to identify this as a citation reel
+      autoPlay: true, // Add flag to indicate this should auto-play
     };
     
     // Set the citation reel as the selected topic to trigger playback
     setSelectedTopic(citationReel);
+    
+    // Seek to the first citation to start playback
+    if (citations.length > 0) {
+      setSeekToTime(citations[0].start);
+    }
     
     // Scroll to video player
     const videoContainer = document.getElementById("video-container");

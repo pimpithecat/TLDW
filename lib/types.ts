@@ -27,6 +27,7 @@ export interface Topic {
     text: string;
   }[];
   isCitationReel?: boolean; // Flag to identify citation playback reels
+  autoPlay?: boolean; // Flag to indicate auto-play when topic is selected
 }
 
 export interface VideoData {
