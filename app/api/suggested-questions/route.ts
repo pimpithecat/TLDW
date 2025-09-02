@@ -4,13 +4,13 @@ import { TranscriptSegment, Topic } from '@/lib/types';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
-function getTranscriptSample(segments: TranscriptSegment[], maxLength: number = 3000): string {
-  let sample = '';
-  for (const segment of segments) {
-    if (sample.length + segment.text.length > maxLength) break;
-    sample += segment.text + ' ';
-  }
-  return sample.trim();
+function formatTranscriptForContext(segments: TranscriptSegment[]): string {
+  return segments.map(s => {
+    const mins = Math.floor(s.start / 60);
+    const secs = Math.floor(s.start % 60);
+    const timestamp = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return `[${timestamp}] ${s.text}`;
+  }).join('\n');
 }
 
 export async function POST(request: Request) {
@@ -24,39 +24,47 @@ export async function POST(request: Request) {
       );
     }
 
-    const transcriptSample = getTranscriptSample(transcript);
+    const fullTranscript = formatTranscriptForContext(transcript);
     const topicsContext = topics?.map((t: Topic) => 
       `- ${t.title}: ${t.description}`
     ).join('\n') || 'No topics available';
 
-    const prompt = `Based on this video titled "${videoTitle || 'Untitled Video'}" and its transcript and topics, generate 3 thought-provoking questions that viewers might want to ask about the content.
+    const prompt = `You are an expert assistant that generates thoughtful QUESTIONS about a video using ONLY its transcript. Every question MUST be answerable from explicit statements in the transcript—no outside knowledge, inference, or speculation.
 
-## Highlight Reels Already Covered
-The following topics have been thoroughly explored in highlight reels - AVOID questions about these specific themes:
-${topicsContext}
+## Inputs
+- Video Title: "${videoTitle || 'Untitled Video'}"
+- Highlight Reels Already Covered (avoid these themes): ${topicsContext}
+- Full Transcript: ${fullTranscript}
 
-## Transcript Sample
-${transcriptSample}
+## Grounding Rule (Most Important)
+- Use the transcript above as the sole source of truth.
+- Do not ask about anything that is not clearly and explicitly stated in the transcript.
+- Before keeping a question, verify you can point to the exact sentence(s) that answer it.
 
 ## Instructions
-Generate exactly 3 questions that:
-1. Explore aspects NOT covered in the highlight reels above
-2. Focus on:
-   - Topics mentioned but not explored in depth in the reels
-   - Practical implementation details or "how-to" aspects
-   - Alternative perspectives or potential counterarguments
-   - Connections between different ideas not highlighted in the reels
-   - Background context, prerequisites, or foundational concepts
-   - Future implications or next steps beyond what was discussed
-3. Are specific and relevant to the video content
-4. Are concise (under 15 words each)
-5. Would lead to insightful answers based on the transcript
-6. Complement rather than duplicate the highlight reel insights
+Generate EXACTLY 3 questions that:
+1) Are fully answerable from the transcript.
+2) Do NOT overlap with the highlight-reel themes (avoid synonyms and paraphrases of those themes).
+3) Focus on:
+   - Specific facts, examples, or data mentioned.
+   - Explanations or reasoning the speaker provides.
+   - Connections made between ideas explicitly discussed.
+   - Concrete advice, steps, or practices actually stated.
+   - Context/background that the speaker explicitly explains.
+4) Are precise, grounded, and non-hypothetical.
+5) Are concise: less than 15 words each.
+6) Complement (not duplicate) the highlight-reel insights.
+7) Prefer “what/why/how” over yes/no; avoid multi-part or vague questions.
+8) Use the transcript's predominant language.
 
-IMPORTANT: Do NOT ask questions about the main themes already covered in the highlight reels. Instead, find the gaps, the details, the practical aspects, or the unexplored angles.
+## Validation Checklist (apply to each question)
+- Is the answer explicitly in the transcript (with quotable sentence[s])?
+- Is it outside the covered highlight-reel themes (including close paraphrases)?
+- Is it specific, single-focus, and less than 15 words?
 
-Return ONLY a JSON array with 3 question strings, no other text:
-["Question 1", "Question 2", "Question 3"]`;
+## Output Format
+Return ONLY a JSON array of 3 strings (no markdown, no extra text), e.g.:
+["Question 1?", "Question 2?", "Question 3?"]`;
 
     const selectedModel = model && ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-2.0-flash'].includes(model) 
       ? model 
