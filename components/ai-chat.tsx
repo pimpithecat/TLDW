@@ -19,9 +19,10 @@ interface AIChatProps {
   videoTitle?: string;
   onCitationClick: (citation: Citation) => void;
   onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean, citationText?: string) => void;
+  onPlayAllCitations?: (citations: Citation[]) => void;
 }
 
-export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClick, onTimestampClick }: AIChatProps) {
+export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClick, onTimestampClick, onPlayAllCitations }: AIChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -210,6 +211,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
                 message={message}
                 onCitationClick={onCitationClick}
                 onTimestampClick={onTimestampClick}
+                onPlayAllCitations={onPlayAllCitations}
               />
             ))}
             

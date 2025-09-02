@@ -4,7 +4,7 @@ import React, { useMemo, ReactNode } from "react";
 import { ChatMessage, Citation } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { User, Bot } from "lucide-react";
+import { User, Bot, Play } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -13,6 +13,7 @@ interface ChatMessageProps {
   message: ChatMessage;
   onCitationClick: (citation: Citation) => void;
   onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean, citationText?: string) => void;
+  onPlayAllCitations?: (citations: Citation[]) => void;
 }
 
 function formatTimestamp(seconds: number): string {
@@ -21,7 +22,7 @@ function formatTimestamp(seconds: number): string {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-export function ChatMessageComponent({ message, onCitationClick, onTimestampClick }: ChatMessageProps) {
+export function ChatMessageComponent({ message, onCitationClick, onTimestampClick, onPlayAllCitations }: ChatMessageProps) {
   const isUser = message.role === 'user';
 
   // Create citation map for quick lookup
@@ -106,14 +107,14 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
 
       // Create a component for each number in the matched group
       const citationElements = citationNumbers.map((num, i) => (
-        <CitationComponent key={`citation-${match.index}-${i}`} citationNumber={num} />
+        <CitationComponent key={`citation-${match!.index}-${i}`} citationNumber={num} />
       ));
 
       if (citationElements.length > 0) {
         allMatches.push({
           index: match.index,
           length: match[0].length,
-          element: <span key={`citations-${match.index}`}>{citationElements}</span>
+          element: <span key={`citations-${match!.index}`}>{citationElements}</span>
         });
       }
     }
@@ -136,7 +137,7 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
           index: match.index,
           length: match[0].length,
           element: (
-            <sup key={`raw-timestamp-${match.index}`} className="inline-block ml-0.5 relative z-50">
+            <sup key={`raw-timestamp-${match!.index}`} className="inline-block ml-0.5 relative z-50">
               <Button
                 variant="link"
                 size="sm"
@@ -218,6 +219,21 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
       
       <div className={`flex-1 max-w-[80%] ${isUser ? 'text-right' : ''}`}>
         <Card className={`p-4 ${isUser ? 'bg-primary/5 border-primary/20' : 'bg-muted/30'}`}>
+          {/* Play All Clips button for assistant messages with citations */}
+          {!isUser && message.citations && message.citations.length > 0 && onPlayAllCitations && (
+            <div className="mb-3 pb-3 border-b border-border/50">
+              <Button
+                onClick={() => onPlayAllCitations(message.citations!)}
+                size="sm"
+                variant="secondary"
+                className="flex items-center gap-2"
+              >
+                <Play className="w-4 h-4" />
+                Play All Clips ({message.citations.length})
+              </Button>
+            </div>
+          )}
+          
           {isUser ? (
             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
           ) : (

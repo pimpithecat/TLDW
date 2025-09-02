@@ -247,6 +247,39 @@ export default function Home() {
     }
   };
 
+  const handlePlayAllCitations = (citations: Citation[]) => {
+    // Clear existing highlights to avoid conflicts
+    setCitationHighlight(null);
+    
+    // Create a "citation reel" - a temporary Topic object from citations
+    const citationReel: Topic = {
+      id: `citation-reel-${Date.now()}`,
+      title: "Cited Clips",
+      description: "Playing all clips cited in the AI response",
+      duration: citations.reduce((total, c) => total + (c.end - c.start), 0),
+      segments: citations.map(c => ({
+        start: c.start,
+        end: c.end,
+        text: c.text,
+      })),
+    };
+    
+    // Set the citation reel as the selected topic to trigger playback
+    setSelectedTopic(citationReel);
+    
+    // Scroll to video player
+    const videoContainer = document.getElementById("video-container");
+    if (videoContainer) {
+      videoContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    
+    // Start playing the first citation
+    if (citations.length > 0) {
+      setSeekToTime(citations[0].start);
+      setTimeout(() => setSeekToTime(undefined), 100);
+    }
+  };
+
   // Dynamically adjust transcript height to match video container
   useEffect(() => {
     const adjustTranscriptHeight = () => {
@@ -378,6 +411,7 @@ export default function Home() {
                 videoTitle={videoInfo?.title}
                 onCitationClick={handleCitationClick}
                 onTimestampClick={handleTimestampClick}
+                onPlayAllCitations={handlePlayAllCitations}
               />
             </div>
           </>
