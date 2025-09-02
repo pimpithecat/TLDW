@@ -125,8 +125,8 @@ export function TranscriptViewer({
     // Calculate the element's position relative to the viewport
     const relativeTop = elementRect.top - viewportRect.top + viewport.scrollTop;
     
-    // Center the element in the viewport with improved calculation
-    const scrollPosition = relativeTop - (viewportRect.height / 2) + (elementRect.height / 2);
+    // Position the element in the top 1/3 of the viewport
+    const scrollPosition = relativeTop - (viewportRect.height / 3);
     
     // Mark this as programmatic scroll
     lastUserScrollTime.current = Date.now() + 500; // Add buffer to prevent detecting as user scroll
@@ -170,9 +170,9 @@ export function TranscriptViewer({
         const elementRect = element.getBoundingClientRect();
         const viewportRect = viewport.getBoundingClientRect();
         
-        // Improved thresholds for better centering - check if element is outside the center 40% of viewport
-        const topThreshold = viewportRect.top + viewportRect.height * 0.35;
-        const bottomThreshold = viewportRect.top + viewportRect.height * 0.65;
+        // Check if element is outside the top 1/3 area (25% to 40% of viewport)
+        const topThreshold = viewportRect.top + viewportRect.height * 0.25;
+        const bottomThreshold = viewportRect.top + viewportRect.height * 0.40;
         
         // Also check if element is completely out of view
         const isOutOfView = elementRect.bottom < viewportRect.top || elementRect.top > viewportRect.bottom;
