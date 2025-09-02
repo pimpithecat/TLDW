@@ -193,10 +193,20 @@ ${message}`;
     await Promise.all(quotes.map(async (quote: { text: string }, index: number) => {
       if (typeof quote.text !== 'string' || !quote.text.trim()) return;
 
-      const match = findTextInTranscript(transcript, quote.text, transcriptIndex, {
+      // First attempt with a stricter similarity threshold
+      let match = findTextInTranscript(transcript, quote.text, transcriptIndex, {
         strategy: 'all',
         minSimilarity: 0.75,
       });
+
+      // Fallback with more lenient settings if the first attempt fails
+      if (!match) {
+        match = findTextInTranscript(transcript, quote.text, transcriptIndex, {
+          strategy: 'all',
+          minSimilarity: 0.60, // Lower threshold to catch paraphrasing
+          maxSegmentWindow: 40,  // Widen search window for longer quotes
+        });
+      }
 
       if (match) {
         const startSegment = transcript[match.startSegmentIdx];

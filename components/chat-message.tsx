@@ -86,8 +86,8 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
 
   // Process text to replace citation patterns with components
   const processTextWithCitations = (text: string): ReactNode[] => {
-    // Pattern for numbered citations [1], [2], etc.
-    const citationPattern = /\[(\d+)\]/g;
+    // Pattern for numbered citations, allowing for comma-separated lists
+    const citationPattern = /\[([\d,\s]+)\]/g;
     // Pattern for raw timestamps [MM:SS] or [MM:SS-MM:SS]
     const rawTimestampPattern = /\[(\d{1,2}:\d{2})(?:-(\d{1,2}:\d{2}))?\]/g;
     
@@ -97,16 +97,25 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
     // First, find all patterns and their positions
     const allMatches: Array<{index: number, length: number, element: ReactNode}> = [];
     
-    // Find numbered citations
+    // Find numbered citations (handles both single and grouped)
     let match: RegExpExecArray | null;
     citationPattern.lastIndex = 0;
     while ((match = citationPattern.exec(text)) !== null) {
-      const citationNumber = parseInt(match[1], 10);
-      allMatches.push({
-        index: match.index,
-        length: match[0].length,
-        element: <CitationComponent key={`citation-${match.index}`} citationNumber={citationNumber} />
-      });
+      const numbersStr = match[1]; // e.g., "1, 2" or "3"
+      const citationNumbers = numbersStr.split(',').map(n => parseInt(n.trim(), 10)).filter(n => !isNaN(n));
+
+      // Create a component for each number in the matched group
+      const citationElements = citationNumbers.map((num, i) => (
+        <CitationComponent key={`citation-${match.index}-${i}`} citationNumber={num} />
+      ));
+
+      if (citationElements.length > 0) {
+        allMatches.push({
+          index: match.index,
+          length: match[0].length,
+          element: <span key={`citations-${match.index}`}>{citationElements}</span>
+        });
+      }
     }
     
     // Find raw timestamps (as fallback for unprocessed timestamps)
