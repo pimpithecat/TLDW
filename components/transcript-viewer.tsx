@@ -378,11 +378,8 @@ export function TranscriptViewer({
     <TooltipProvider delayDuration={300}>
       <div className="h-full max-h-full flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="p-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-sm">Transcript</h3>
-          </div>
+        <div className="px-3 py-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="flex items-center justify-end mb-2">
           <div className="flex items-center gap-2">
             <Button
               variant={autoScroll ? "default" : "outline"}
