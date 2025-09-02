@@ -3,9 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 import { UrlInput } from "@/components/url-input";
 import { TopicCard } from "@/components/topic-card";
-import { TranscriptViewer } from "@/components/transcript-viewer";
+import { RightColumnTabs, type RightColumnTabsHandle } from "@/components/right-column-tabs";
 import { YouTubePlayer } from "@/components/youtube-player";
-import { AIChat } from "@/components/ai-chat";
 import { ModelSelector, type GeminiModel } from "@/components/model-selector";
 import { LoadingContext } from "@/components/loading-context";
 import { LoadingTips } from "@/components/loading-tips";
@@ -35,6 +34,7 @@ export default function Home() {
   const [elapsedTime, setElapsedTime] = useState<number>(0);
   const [processingStartTime, setProcessingStartTime] = useState<number | null>(null);
   const [processingElapsedTime, setProcessingElapsedTime] = useState<number>(0);
+  const rightColumnTabsRef = useRef<RightColumnTabsHandle>(null);
 
   // Timer effect for tracking generation time
   useEffect(() => {
@@ -251,6 +251,9 @@ export default function Home() {
     // Clear existing highlights to avoid conflicts
     setCitationHighlight(null);
     
+    // Switch to transcript tab
+    rightColumnTabsRef.current?.switchToTranscript();
+    
     // Create a "citation reel" - a temporary Topic object from citations
     const citationReel: Topic = {
       id: `citation-reel-${Date.now()}`,
@@ -291,33 +294,33 @@ export default function Home() {
     }
   };
 
-  // Dynamically adjust transcript height to match video container
+  // Dynamically adjust right column height to match video container
   useEffect(() => {
-    const adjustTranscriptHeight = () => {
+    const adjustRightColumnHeight = () => {
       const videoContainer = document.getElementById("video-container");
-      const transcriptContainer = document.getElementById("transcript-container");
+      const rightColumnContainer = document.getElementById("right-column-container");
       
-      if (videoContainer && transcriptContainer) {
+      if (videoContainer && rightColumnContainer) {
         const videoHeight = videoContainer.offsetHeight;
         setTranscriptHeight(`${videoHeight}px`);
       }
     };
 
     // Initial adjustment
-    adjustTranscriptHeight();
+    adjustRightColumnHeight();
 
     // Adjust on window resize
-    window.addEventListener("resize", adjustTranscriptHeight);
+    window.addEventListener("resize", adjustRightColumnHeight);
     
     // Also observe video container for size changes
-    const resizeObserver = new ResizeObserver(adjustTranscriptHeight);
+    const resizeObserver = new ResizeObserver(adjustRightColumnHeight);
     const videoContainer = document.getElementById("video-container");
     if (videoContainer) {
       resizeObserver.observe(videoContainer);
     }
 
     return () => {
-      window.removeEventListener("resize", adjustTranscriptHeight);
+      window.removeEventListener("resize", adjustRightColumnHeight);
       resizeObserver.disconnect();
     };
   }, [videoId, topics]); // Re-run when video or topics change
@@ -394,36 +397,28 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Right Column - Transcript (1/3 width) */}
+              {/* Right Column - Tabbed Interface (1/3 width) */}
               <div className="lg:col-span-1">
                 <div 
                   className="sticky top-4" 
-                  id="transcript-container"
+                  id="right-column-container"
                   style={{ height: transcriptHeight, maxHeight: transcriptHeight }}
                 >
-                  <TranscriptViewer
+                  <RightColumnTabs
+                    ref={rightColumnTabsRef}
                     transcript={transcript}
                     selectedTopic={selectedTopic}
                     onTimestampClick={handleTimestampClick}
                     currentTime={currentTime}
                     topics={topics}
                     citationHighlight={citationHighlight}
+                    videoId={videoId}
+                    videoTitle={videoInfo?.title}
+                    onCitationClick={handleCitationClick}
+                    onPlayAllCitations={handlePlayAllCitations}
                   />
                 </div>
               </div>
-            </div>
-
-            {/* AI Chat Section - Full width below */}
-            <div>
-              <AIChat
-                transcript={transcript}
-                topics={topics}
-                videoId={videoId}
-                videoTitle={videoInfo?.title}
-                onCitationClick={handleCitationClick}
-                onTimestampClick={handleTimestampClick}
-                onPlayAllCitations={handlePlayAllCitations}
-              />
             </div>
           </>
         )}

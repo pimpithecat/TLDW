@@ -4,13 +4,13 @@ import { useState, useRef, useEffect } from "react";
 import { ChatMessage, TranscriptSegment, Topic, Citation } from "@/lib/types";
 import { ChatMessageComponent } from "./chat-message";
 import { SuggestedQuestions } from "./suggested-questions";
-import { ModelSelector, type GeminiModel } from "./model-selector";
+import { type GeminiModel } from "./model-selector";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Send, Loader2, MessageSquare, ChevronUp, ChevronDown } from "lucide-react";
+import { Send, Loader2, ChevronUp, ChevronDown } from "lucide-react";
 
 interface AIChatProps {
   transcript: TranscriptSegment[];
@@ -28,7 +28,6 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
   const [isLoading, setIsLoading] = useState(false);
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<GeminiModel>('gemini-2.5-flash');
   const [askedQuestions, setAskedQuestions] = useState<Set<string>>(new Set());
   const [showSuggestions, setShowSuggestions] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -45,17 +44,6 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
     }
   }, [transcript]);
 
-  useEffect(() => {
-    const savedModel = localStorage.getItem('selectedChatModel');
-    if (savedModel && ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-2.0-flash'].includes(savedModel)) {
-      setSelectedModel(savedModel as GeminiModel);
-    }
-  }, []);
-
-  const handleModelChange = (model: GeminiModel) => {
-    setSelectedModel(model);
-    localStorage.setItem('selectedChatModel', model);
-  };
 
   const fetchSuggestedQuestions = async () => {
     setLoadingQuestions(true);
@@ -112,7 +100,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
           topics,
           videoId,
           chatHistory: messages,
-          model: selectedModel,
+          model: 'gemini-2.5-flash-lite',
         }),
         signal: controller.signal,
       });
@@ -188,22 +176,8 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
 
   return (
     <TooltipProvider delayDuration={0} skipDelayDuration={0} disableHoverableContent={false}>
-      <Card className="w-full h-[600px] flex flex-col">
-        <div className="p-4 border-b">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <MessageSquare className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold">Ask about this video</h3>
-            </div>
-            <ModelSelector
-              value={selectedModel}
-              onChange={handleModelChange}
-              disabled={isLoading}
-            />
-          </div>
-        </div>
-
-        <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+      <div className="w-full h-full flex flex-col">
+        <ScrollArea className="flex-1 p-3" ref={scrollRef}>
           <div className="space-y-4">
             {messages.map((message) => (
               <ChatMessageComponent
@@ -229,7 +203,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
         </ScrollArea>
 
         {suggestedQuestions.length > 0 && (
-          <div className="px-4 py-3 border-t">
+          <div className="px-3 py-2 border-t">
             <div className="space-y-2">
               <button
                 onClick={() => setShowSuggestions(!showSuggestions)}
@@ -250,7 +224,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
           </div>
         )}
 
-        <div className="p-4 border-t">
+        <div className="p-3 border-t">
           <div className="flex gap-2">
             <Textarea
               value={input}
@@ -275,7 +249,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
             </Button>
           </div>
         </div>
-      </Card>
+      </div>
     </TooltipProvider>
   );
 }

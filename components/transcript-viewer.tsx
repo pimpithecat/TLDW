@@ -5,7 +5,6 @@ import { TranscriptSegment, Topic, Citation } from "@/lib/types";
 import { getTopicHSLColor, formatDuration } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
 import { Play, Eye, EyeOff, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
@@ -208,12 +207,6 @@ export function TranscriptViewer({
     return null;
   };
 
-  const isSegmentHighlighted = (segment: TranscriptSegment): boolean => {
-    if (!selectedTopic) return false;
-    return selectedTopic.segments.some(
-      (topicSeg) => segment.start >= topicSeg.start && segment.start < topicSeg.end
-    );
-  };
 
   const getHighlightedText = (segment: TranscriptSegment, segmentIndex: number): { highlightedParts: Array<{ text: string; highlighted: boolean; isCitation?: boolean }> } | null => {
     // Determine what segments to highlight based on citation or topic
@@ -376,14 +369,45 @@ export function TranscriptViewer({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="h-full max-h-full flex flex-col rounded-lg border bg-card shadow-sm overflow-hidden">
+      <div className="h-full max-h-full flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="p-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-sm">Transcript</h3>
-          </div>
-          <div className="flex items-center gap-2">
+        <div className="px-3 py-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              {selectedTopic && !selectedTopic.isCitationReel && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div
+                      className="h-3 w-3 rounded-full cursor-help"
+                      style={{
+                        backgroundColor: `hsl(${getTopicHSLColor(topics.indexOf(selectedTopic))})`,
+                      }}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-[200px]">
+                    <p className="text-xs">{selectedTopic.title}</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {(citationHighlight || selectedTopic?.isCitationReel) && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div
+                      className="h-3 w-3 rounded-full cursor-help"
+                      style={{
+                        backgroundColor: 'hsl(48, 100%, 50%)',
+                      }}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p className="text-xs">
+                      {selectedTopic?.isCitationReel ? 'Cited Clips' : 'AI Chat Citation'}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+            
             <Button
               variant={autoScroll ? "default" : "outline"}
               size="sm"
@@ -410,20 +434,6 @@ export function TranscriptViewer({
             </Button>
           </div>
         </div>
-        {selectedTopic && (
-          <div className="flex items-center gap-2">
-            <div
-              className="h-2 w-2 rounded-full"
-              style={{
-                backgroundColor: `hsl(${getTopicHSLColor(topics.indexOf(selectedTopic))})`,
-              }}
-            />
-            <span className="text-xs text-muted-foreground truncate">
-              Highlighting: {selectedTopic.title}
-            </span>
-          </div>
-        )}
-      </div>
 
       {/* Jump to current button with improved positioning */}
       {showScrollToCurrentButton && currentTime > 0 && (
@@ -442,7 +452,7 @@ export function TranscriptViewer({
       {/* Transcript content */}
       <ScrollArea className="flex-1 min-h-0" ref={scrollAreaRef}>
         <div 
-          className="p-4 space-y-1" 
+          className="p-3 space-y-1" 
           ref={(el) => {
             // Get the viewport element from ScrollArea - it's the data-radix-scroll-area-viewport element
             if (el) {
@@ -465,7 +475,7 @@ export function TranscriptViewer({
               return transcript.map((segment, index) => {
                 const highlightedText = getHighlightedText(segment, index);
                 const isCurrent = index === currentSegmentIndex;
-                const topicInfo = getSegmentTopic(segment);
+                getSegmentTopic(segment);
                 const isHovered = hoveredSegment === index;
                 
                 const hasHighlight = highlightedText !== null;
