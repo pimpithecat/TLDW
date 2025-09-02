@@ -38,7 +38,7 @@ export function RightColumnTabs({
 
   return (
     <Card className="h-full flex flex-col overflow-hidden">
-      <div className="flex items-center gap-1 p-2 border-b">
+      <div className="flex items-center gap-1 p-1 border-b">
         <Button
           variant="ghost"
           size="sm"

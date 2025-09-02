@@ -376,9 +376,9 @@ export function TranscriptViewer({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="h-full max-h-full flex flex-col rounded-lg border bg-card shadow-sm overflow-hidden">
+      <div className="h-full max-h-full flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="p-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="p-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <h3 className="font-semibold text-sm">Transcript</h3>
@@ -442,7 +442,7 @@ export function TranscriptViewer({
       {/* Transcript content */}
       <ScrollArea className="flex-1 min-h-0" ref={scrollAreaRef}>
         <div 
-          className="p-4 space-y-1" 
+          className="p-3 space-y-1" 
           ref={(el) => {
             // Get the viewport element from ScrollArea - it's the data-radix-scroll-area-viewport element
             if (el) {
