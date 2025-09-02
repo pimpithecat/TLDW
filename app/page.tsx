@@ -34,6 +34,12 @@ export default function Home() {
   const [generationStartTime, setGenerationStartTime] = useState<number | null>(null);
   const [processingStartTime, setProcessingStartTime] = useState<number | null>(null);
   const rightColumnTabsRef = useRef<RightColumnTabsHandle>(null);
+  
+  // Blog generation state
+  const [blogContent, setBlogContent] = useState<string | null>(null);
+  const [isGeneratingBlog, setIsGeneratingBlog] = useState<boolean>(false);
+  const [blogError, setBlogError] = useState<string>("");
+  const [showBlogTab, setShowBlogTab] = useState<boolean>(false);
 
   // Use custom hook for timer logic
   const elapsedTime = useElapsedTimer(generationStartTime);
@@ -269,6 +275,45 @@ export default function Home() {
     }
   };
 
+  const handleGenerateBlog = async () => {
+    if (!transcript || transcript.length === 0 || !videoInfo) {
+      setBlogError("Video information is not available");
+      return;
+    }
+
+    setIsGeneratingBlog(true);
+    setBlogError("");
+    setShowBlogTab(true);
+    
+    // Switch to blog tab
+    rightColumnTabsRef.current?.switchToBlog?.();
+
+    try {
+      const response = await fetch("/api/generate-blog", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transcript,
+          videoInfo,
+          videoId,
+          model: selectedModel
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || "Failed to generate blog post");
+      }
+
+      const { blogContent: generatedBlog } = await response.json();
+      setBlogContent(generatedBlog);
+    } catch (err) {
+      setBlogError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setIsGeneratingBlog(false);
+    }
+  };
+
   // Dynamically adjust right column height to match video container
   useEffect(() => {
     const adjustRightColumnHeight = () => {
@@ -391,6 +436,11 @@ export default function Home() {
                     videoTitle={videoInfo?.title}
                     onCitationClick={handleCitationClick}
                     onPlayAllCitations={handlePlayAllCitations}
+                    onGenerateBlog={handleGenerateBlog}
+                    blogContent={blogContent}
+                    isGeneratingBlog={isGeneratingBlog}
+                    blogError={blogError}
+                    showBlogTab={showBlogTab}
                   />
                 </div>
               </div>
