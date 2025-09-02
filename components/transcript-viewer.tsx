@@ -410,7 +410,7 @@ export function TranscriptViewer({
             </Button>
           </div>
         </div>
-        {selectedTopic && (
+        {selectedTopic && !selectedTopic.isCitationReel && (
           <div className="flex items-center gap-2">
             <div
               className="h-2 w-2 rounded-full"
@@ -420,6 +420,19 @@ export function TranscriptViewer({
             />
             <span className="text-xs text-muted-foreground truncate">
               Highlighting: {selectedTopic.title}
+            </span>
+          </div>
+        )}
+        {(citationHighlight || selectedTopic?.isCitationReel) && (
+          <div className="flex items-center gap-2">
+            <div
+              className="h-2 w-2 rounded-full"
+              style={{
+                backgroundColor: 'hsl(48, 100%, 50%)',
+              }}
+            />
+            <span className="text-xs text-muted-foreground truncate">
+              Highlighting: {selectedTopic?.isCitationReel ? 'Cited Clips' : 'AI Chat Citation'}
             </span>
           </div>
         )}
