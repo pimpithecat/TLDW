@@ -50,7 +50,7 @@ export async function POST(request: Request) {
 Be concise and engaging.
 
 Transcript:
-${transcript}
+${previewText}
 
 Write the overview in 3-4 sentences:
 `;
