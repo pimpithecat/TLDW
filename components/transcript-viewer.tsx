@@ -5,7 +5,6 @@ import { TranscriptSegment, Topic, Citation } from "@/lib/types";
 import { getTopicHSLColor, formatDuration } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
 import { Play, Eye, EyeOff, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
@@ -208,12 +207,6 @@ export function TranscriptViewer({
     return null;
   };
 
-  const isSegmentHighlighted = (segment: TranscriptSegment): boolean => {
-    if (!selectedTopic) return false;
-    return selectedTopic.segments.some(
-      (topicSeg) => segment.start >= topicSeg.start && segment.start < topicSeg.end
-    );
-  };
 
   const getHighlightedText = (segment: TranscriptSegment, segmentIndex: number): { highlightedParts: Array<{ text: string; highlighted: boolean; isCitation?: boolean }> } | null => {
     // Determine what segments to highlight based on citation or topic
@@ -482,7 +475,7 @@ export function TranscriptViewer({
               return transcript.map((segment, index) => {
                 const highlightedText = getHighlightedText(segment, index);
                 const isCurrent = index === currentSegmentIndex;
-                const topicInfo = getSegmentTopic(segment);
+                getSegmentTopic(segment);
                 const isHovered = hoveredSegment === index;
                 
                 const hasHighlight = highlightedText !== null;

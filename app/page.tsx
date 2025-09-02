@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { UrlInput } from "@/components/url-input";
 import { TopicCard } from "@/components/topic-card";
-import { RightColumnTabs } from "@/components/right-column-tabs";
+import { RightColumnTabs, type RightColumnTabsHandle } from "@/components/right-column-tabs";
 import { YouTubePlayer } from "@/components/youtube-player";
 import { ModelSelector, type GeminiModel } from "@/components/model-selector";
 import { LoadingContext } from "@/components/loading-context";
@@ -34,6 +34,7 @@ export default function Home() {
   const [elapsedTime, setElapsedTime] = useState<number>(0);
   const [processingStartTime, setProcessingStartTime] = useState<number | null>(null);
   const [processingElapsedTime, setProcessingElapsedTime] = useState<number>(0);
+  const rightColumnTabsRef = useRef<RightColumnTabsHandle>(null);
 
   // Timer effect for tracking generation time
   useEffect(() => {
@@ -250,6 +251,9 @@ export default function Home() {
     // Clear existing highlights to avoid conflicts
     setCitationHighlight(null);
     
+    // Switch to transcript tab
+    rightColumnTabsRef.current?.switchToTranscript();
+    
     // Create a "citation reel" - a temporary Topic object from citations
     const citationReel: Topic = {
       id: `citation-reel-${Date.now()}`,
@@ -401,6 +405,7 @@ export default function Home() {
                   style={{ height: transcriptHeight, maxHeight: transcriptHeight }}
                 >
                   <RightColumnTabs
+                    ref={rightColumnTabsRef}
                     transcript={transcript}
                     selectedTopic={selectedTopic}
                     onTimestampClick={handleTimestampClick}

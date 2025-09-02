@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useImperativeHandle, forwardRef } from "react";
 import { TranscriptViewer } from "@/components/transcript-viewer";
 import { AIChat } from "@/components/ai-chat";
 import { Button } from "@/components/ui/button";
@@ -20,9 +20,15 @@ interface RightColumnTabsProps {
   videoTitle?: string;
   onCitationClick: (citation: Citation) => void;
   onPlayAllCitations?: (citations: Citation[]) => void;
+  switchToTranscriptTab?: boolean;
+  onTabSwitch?: () => void;
 }
 
-export function RightColumnTabs({
+export interface RightColumnTabsHandle {
+  switchToTranscript: () => void;
+}
+
+export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabsProps>(({
   transcript,
   selectedTopic,
   onTimestampClick,
@@ -33,8 +39,25 @@ export function RightColumnTabs({
   videoTitle,
   onCitationClick,
   onPlayAllCitations,
-}: RightColumnTabsProps) {
+  switchToTranscriptTab,
+  onTabSwitch,
+}, ref) => {
   const [activeTab, setActiveTab] = useState<"transcript" | "chat">("transcript");
+
+  // Expose method to parent to switch to transcript tab
+  useImperativeHandle(ref, () => ({
+    switchToTranscript: () => {
+      setActiveTab("transcript");
+    }
+  }));
+
+  // Switch to transcript tab when requested
+  useEffect(() => {
+    if (switchToTranscriptTab) {
+      setActiveTab("transcript");
+      onTabSwitch?.();
+    }
+  }, [switchToTranscriptTab, onTabSwitch]);
 
   return (
     <Card className="h-full flex flex-col overflow-hidden p-0 gap-0">
@@ -69,8 +92,9 @@ export function RightColumnTabs({
         </Button>
       </div>
       
-      <div className="flex-1 overflow-hidden">
-        {activeTab === "transcript" ? (
+      <div className="flex-1 overflow-hidden relative">
+        {/* Keep both components mounted but toggle visibility */}
+        <div className={cn("absolute inset-0", activeTab !== "transcript" && "hidden")}>
           <TranscriptViewer
             transcript={transcript}
             selectedTopic={selectedTopic}
@@ -79,7 +103,8 @@ export function RightColumnTabs({
             topics={topics}
             citationHighlight={citationHighlight}
           />
-        ) : (
+        </div>
+        <div className={cn("absolute inset-0", activeTab !== "chat" && "hidden")}>
           <AIChat
             transcript={transcript}
             topics={topics || []}
@@ -89,8 +114,10 @@ export function RightColumnTabs({
             onTimestampClick={onTimestampClick}
             onPlayAllCitations={onPlayAllCitations}
           />
-        )}
+        </div>
       </div>
     </Card>
   );
-}
+});
+
+RightColumnTabs.displayName = "RightColumnTabs";
