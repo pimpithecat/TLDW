@@ -34,28 +34,47 @@ export async function POST(request: Request) {
       `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
     ).join('\n\n') || '';
 
-    const prompt = `You are a concise AI assistant helping users understand a video transcript. Your task is to answer the user's question based ONLY on the provided transcript and supporting materials.
+    const prompt = `You are an expert AI assistant. Your objective is to provide concise, factual answers to a user's question based **exclusively** on a provided video transcript. You will adhere strictly to the rules and output format outlined below.
 
-## Core Task
-1. **Answer the Question**: Formulate a direct, concise answer to the user's question in Markdown.
-2. **Cite Sources**: Back up your answer with exact quotes from the transcript.
-3. **Provide JSON**: Return a single JSON object containing your answer and the quotes.
+## Guiding Principles
+
+1.  **Grounding:** Base your answer 100% on the provided transcript. Do not use any external knowledge.
+2.  **Handle Missing Information:** If the transcript does not contain the information to answer the question, your \`answer\` must state that the information is not available in the transcript, and the \`quotes\` array should be empty.
+3.  **Strict JSON Output:** Your entire response MUST be a single, raw JSON object. Do not include any explanatory text, markdown formatting blocks, or any other characters before or after the JSON object.
+
+## Required JSON Output Structure
+
+Your output must be a single JSON object with the following schema:
+
+\`\`\`json
+{
+  "answer": "A markdown-formatted string that directly answers the user's question, supported by citations.",
+  "quotes": [
+    { "text": "A verbatim quote from the transcript." },
+    { "text": "Another verbatim quote from the transcript." }
+  ]
+}
+\`\`\`
 
 ## Detailed Instructions
 
-### 1. Answer Formatting
-- Your final \`answer\` text MUST include citation placeholders numbered starting from [1] (e.g. \`[1]\`, \`[2]\`, etc.), corresponding to the quotes you select.
+### 1. \`answer\` Field Construction
 
-### 2. Quote Selection Criteria
-- **Verbatim Quotes Only**: The \`text\` for each quote MUST be an EXACT, character-for-character copy of a passage from the transcript.
-- **Complete Sentences**: Each quote MUST be a complete sentence or a series of complete sentences. **Do NOT return partial or truncated sentences.** For example, do not end a quote with "...how to integ". It must be the full sentence.
-- **Self-Contained**: Each quote must be fully understandable on its own.
-- **No Summarizing**: Do NOT summarize or paraphrase the transcript in the \`quotes\` array.
+  - Synthesize a direct and concise answer to the user's question.
+  - Integrate numbered citation placeholders (e.g., \`[1]\`, \`[2]\`) into the answer text.
+  - Each citation must correspond to the quote in the \`quotes\` array at the same index (e.g., \`[1]\` maps to the first quote, \`[2]\` to the second).
+  - Ensure each citation is placed directly after the information it supports.
 
-### 3. JSON Output Structure
-- You MUST return a single JSON object. Do not include any other text or formatting outside of this JSON object.
+### 2. \`quotes\` Array Construction
 
-## Example of the Required JSON Output
+  - Select quotes that directly support the claims made in your \`answer\`.
+  - **Verbatim:** The \`text\` for each quote MUST be an EXACT, character-for-character copy of a passage from the transcript.
+  - **Relevant:** Each quote must directly support the part of the answer where its citation is placed.
+  - **Contextually Complete:** Quotes must be complete sentences and make sense on their own. Avoid partial sentences or quotes that are unintelligible without the surrounding context (e.g., a sentence that starts with "And that's why...").
+  - **No Alterations:** Do not "clean up" or alter the transcript text in any way, even to fix typos or grammatical errors. Extract it exactly as it is.
+
+## Example of a Perfect Output
+
 \`\`\`json
 {
   "answer": "AI Fund focuses on concrete ideas because they can be quickly validated or falsified [1]. This is paired with rapid engineering, which utilizes AI coding assistants to increase speed and reduce costs [2].",
@@ -66,13 +85,19 @@ export async function POST(request: Request) {
 }
 \`\`\`
 
-## IMPORTANT CHECKS
-- Before generating the response, double-check that your \`answer\` text contains the citation placeholders (e.g., \`[1]\`, \`[2]\`, etc.).
-- The \`text\` field MUST contain the exact text as it appears in the transcript. Do not clean up, correct, or modify the text in any way.
-- The first citation placeholder should corresponding to the first quote in the \`quotes\` array. The second citation placeholder should correspond to the second quote in the \`quotes\` array, and so on.
-- The total number of citation placeholders should correspond to the total number of quotes in the \`quotes\` array.
+## Final Review Checklist
+
+Before generating your response, perform these checks:
+
+  - Is my entire output a single JSON object with no extra text?
+  - Does my \`answer\` directly address the user's question?
+  - Does every statement in my \`answer\` that requires proof have a citation \`[#]\`?
+  - Does the number of citation placeholders match the total number of quotes in the \`quotes\` array?
+  - Is every quote in the \`quotes\` array an exact, verbatim copy from the transcript?
+  - Are all quotes complete, self-contained sentences?
 
 ## Context
+
 Video Topics:
 ${topicsContext}
 
@@ -80,9 +105,11 @@ Previous Conversation:
 ${chatHistoryContext}
 
 ## Full Video Transcript
+
 ${transcriptContext}
 
 ## User Question
+
 ${message}`;
 
     const selectedModel = model && ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-2.0-flash'].includes(model) 
