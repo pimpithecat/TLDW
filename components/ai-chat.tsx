@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { ChatMessage, TranscriptSegment, Topic } from "@/lib/types";
+import { ChatMessage, TranscriptSegment, Topic, Citation } from "@/lib/types";
 import { ChatMessageComponent } from "./chat-message";
 import { SuggestedQuestions } from "./suggested-questions";
 import { ModelSelector, type GeminiModel } from "./model-selector";
@@ -17,10 +17,12 @@ interface AIChatProps {
   topics: Topic[];
   videoId: string;
   videoTitle?: string;
+  onCitationClick: (citation: Citation) => void;
   onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean, citationText?: string) => void;
+  onPlayAllCitations?: (citations: Citation[]) => void;
 }
 
-export function AIChat({ transcript, topics, videoId, videoTitle, onTimestampClick }: AIChatProps) {
+export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClick, onTimestampClick, onPlayAllCitations }: AIChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -207,7 +209,9 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onTimestampCli
               <ChatMessageComponent
                 key={message.id}
                 message={message}
+                onCitationClick={onCitationClick}
                 onTimestampClick={onTimestampClick}
+                onPlayAllCitations={onPlayAllCitations}
               />
             ))}
             

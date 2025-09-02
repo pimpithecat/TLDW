@@ -9,7 +9,7 @@ import { AIChat } from "@/components/ai-chat";
 import { ModelSelector, type GeminiModel } from "@/components/model-selector";
 import { LoadingContext } from "@/components/loading-context";
 import { LoadingTips } from "@/components/loading-tips";
-import { Topic, TranscriptSegment, VideoInfo } from "@/lib/types";
+import { Topic, TranscriptSegment, VideoInfo, Citation } from "@/lib/types";
 import { extractVideoId } from "@/lib/utils";
 import { Loader2, Video, FileText, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -30,7 +30,7 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(0);
   const [transcriptHeight, setTranscriptHeight] = useState<string>("auto");
   const [selectedModel, setSelectedModel] = useState<GeminiModel>('gemini-2.5-flash');
-  const [citationHighlight, setCitationHighlight] = useState<{ start: number; end?: number; text?: string } | null>(null);
+  const [citationHighlight, setCitationHighlight] = useState<Citation | null>(null);
   const [generationStartTime, setGenerationStartTime] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState<number>(0);
   const [processingStartTime, setProcessingStartTime] = useState<number | null>(null);
@@ -188,6 +188,18 @@ export default function Home() {
     }
   };
 
+  const handleCitationClick = (citation: Citation) => {
+    setSelectedTopic(null);
+    setCitationHighlight(citation);
+
+    const videoContainer = document.getElementById("video-container");
+    if (videoContainer) {
+      videoContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    setSeekToTime(citation.start);
+    setTimeout(() => setSeekToTime(undefined), 100);
+  };
+
   const handleTimestampClick = (seconds: number, endSeconds?: number, isCitation: boolean = false, citationText?: string, isWithinHighlightReel: boolean = false, isWithinCitationHighlight: boolean = false) => {
     // Prevent rapid sequential clicks and state updates
     if (seekToTime === seconds) return;
@@ -199,15 +211,10 @@ export default function Home() {
       setSelectedTopic(null);
     }
     
-    // Handle citation highlight:
-    if (isCitation) {
-      // New citation from AI chat - set new citation highlight
-      setCitationHighlight({ start: seconds, end: endSeconds, text: citationText });
-    } else if (!isWithinCitationHighlight) {
-      // Clicking outside citation highlight - clear it
+    // Clear citation highlight for non-citation clicks
+    if (!isCitation) {
       setCitationHighlight(null);
     }
-    // If isWithinCitationHighlight is true, preserve the existing citation highlight
     
     // Scroll to video player
     const videoContainer = document.getElementById("video-container");
@@ -237,6 +244,50 @@ export default function Home() {
   const handlePlayTopic = () => {
     if (selectedTopic && selectedTopic.segments.length > 0) {
       setSeekToTime(selectedTopic.segments[0].start);
+    }
+  };
+
+  const handlePlayAllCitations = (citations: Citation[]) => {
+    // Clear existing highlights to avoid conflicts
+    setCitationHighlight(null);
+    
+    // Create a "citation reel" - a temporary Topic object from citations
+    const citationReel: Topic = {
+      id: `citation-reel-${Date.now()}`,
+      title: "Cited Clips",
+      description: "Playing all clips cited in the AI response",
+      duration: citations.reduce((total, c) => total + (c.end - c.start), 0),
+      segments: citations.map(c => ({
+        start: c.start,
+        end: c.end,
+        text: c.text,
+        startSegmentIdx: c.startSegmentIdx,
+        endSegmentIdx: c.endSegmentIdx,
+        startCharOffset: c.startCharOffset,
+        endCharOffset: c.endCharOffset,
+      })),
+      isCitationReel: true, // Set the flag to identify this as a citation reel
+      autoPlay: true, // Add flag to indicate this should auto-play
+    };
+    
+    // Set the citation reel as the selected topic to trigger playback
+    setSelectedTopic(citationReel);
+    
+    // Seek to the first citation to start playback
+    if (citations.length > 0) {
+      setSeekToTime(citations[0].start);
+    }
+    
+    // Scroll to video player
+    const videoContainer = document.getElementById("video-container");
+    if (videoContainer) {
+      videoContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    
+    // Start playing the first citation
+    if (citations.length > 0) {
+      setSeekToTime(citations[0].start);
+      setTimeout(() => setSeekToTime(undefined), 100);
     }
   };
 
@@ -369,7 +420,9 @@ export default function Home() {
                 topics={topics}
                 videoId={videoId}
                 videoTitle={videoInfo?.title}
+                onCitationClick={handleCitationClick}
                 onTimestampClick={handleTimestampClick}
+                onPlayAllCitations={handlePlayAllCitations}
               />
             </div>
           </>

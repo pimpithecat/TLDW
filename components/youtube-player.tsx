@@ -141,7 +141,7 @@ export function YouTubePlayer({
     }
   }, [seekToTime, onTimeUpdate]);
 
-  // Reset segment index when topic changes
+  // Reset segment index when topic changes and auto-play if needed
   useEffect(() => {
     setCurrentSegmentIndex(0);
     lastKnownSegmentRef.current = -1;
@@ -149,6 +149,16 @@ export function YouTubePlayer({
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
+    }
+    
+    // Auto-play if the topic has the autoPlay flag
+    if (selectedTopic?.autoPlay && playerRef.current) {
+      // Small delay to ensure player is ready
+      setTimeout(() => {
+        if (playerRef.current?.playVideo) {
+          playerRef.current.playVideo();
+        }
+      }, 100);
     }
   }, [selectedTopic]);
 

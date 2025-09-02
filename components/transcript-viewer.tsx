@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { TranscriptSegment, Topic } from "@/lib/types";
+import { TranscriptSegment, Topic, Citation } from "@/lib/types";
 import { getTopicHSLColor, formatDuration } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -16,7 +16,7 @@ interface TranscriptViewerProps {
   onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean, citationText?: string, isWithinHighlightReel?: boolean, isWithinCitationHighlight?: boolean) => void;
   currentTime?: number;
   topics?: Topic[];
-  citationHighlight?: { start: number; end?: number; text?: string } | null;
+  citationHighlight?: Citation | null;
 }
 
 export function TranscriptViewer({
@@ -215,88 +215,95 @@ export function TranscriptViewer({
     );
   };
 
-  const getHighlightedText = (segment: TranscriptSegment, segmentIndex: number): { highlightedParts: Array<{ text: string; highlighted: boolean }> } | null => {
-    if (!selectedTopic) return null;
+  const getHighlightedText = (segment: TranscriptSegment, segmentIndex: number): { highlightedParts: Array<{ text: string; highlighted: boolean; isCitation?: boolean }> } | null => {
+    // Determine what segments to highlight based on citation or topic
+    const segmentsToHighlight = citationHighlight 
+      ? [citationHighlight]
+      : selectedTopic?.segments || [];
     
-    // Check each topic segment to see if this transcript segment should be highlighted
-    for (const topicSeg of selectedTopic.segments) {
+    if (segmentsToHighlight.length === 0) return null;
+    
+    const isCitation = !!citationHighlight;
+    
+    // Check each segment to see if this transcript segment should be highlighted
+    for (const highlightSeg of segmentsToHighlight) {
       // Use segment indices with character offsets for precise matching
-      if (topicSeg.startSegmentIdx !== undefined && topicSeg.endSegmentIdx !== undefined) {
+      if (highlightSeg.startSegmentIdx !== undefined && highlightSeg.endSegmentIdx !== undefined) {
         
         // Skip this debug logging - removed for cleaner output
         
         // Skip segments that are before the start or after the end
-        if (segmentIndex < topicSeg.startSegmentIdx || segmentIndex > topicSeg.endSegmentIdx) {
+        if (segmentIndex < highlightSeg.startSegmentIdx || segmentIndex > highlightSeg.endSegmentIdx) {
           continue;
         }
         
         // Case 1: This segment is between start and end (not at boundaries)
-        if (segmentIndex > topicSeg.startSegmentIdx && segmentIndex < topicSeg.endSegmentIdx) {
+        if (segmentIndex > highlightSeg.startSegmentIdx && segmentIndex < highlightSeg.endSegmentIdx) {
           return { 
-            highlightedParts: [{ text: segment.text, highlighted: true }] 
+            highlightedParts: [{ text: segment.text, highlighted: true, isCitation }] 
           };
         }
         
         // Case 2: This is the start segment - may need partial highlighting
-        if (segmentIndex === topicSeg.startSegmentIdx) {
-          if (topicSeg.startCharOffset !== undefined && topicSeg.startCharOffset > 0) {
+        if (segmentIndex === highlightSeg.startSegmentIdx) {
+          if (highlightSeg.startCharOffset !== undefined && highlightSeg.startCharOffset > 0) {
             // Partial highlight from character offset to end
-            const beforeHighlight = segment.text.substring(0, topicSeg.startCharOffset);
-            const highlighted = segment.text.substring(topicSeg.startCharOffset);
+            const beforeHighlight = segment.text.substring(0, highlightSeg.startCharOffset);
+            const highlighted = segment.text.substring(highlightSeg.startCharOffset);
             
             // If this is also the end segment, apply end offset
-            if (segmentIndex === topicSeg.endSegmentIdx && topicSeg.endCharOffset !== undefined) {
+            if (segmentIndex === highlightSeg.endSegmentIdx && highlightSeg.endCharOffset !== undefined) {
               const actualHighlighted = segment.text.substring(
-                topicSeg.startCharOffset, 
-                Math.min(topicSeg.endCharOffset, segment.text.length)
+                highlightSeg.startCharOffset, 
+                Math.min(highlightSeg.endCharOffset, segment.text.length)
               );
-              const afterHighlight = segment.text.substring(Math.min(topicSeg.endCharOffset, segment.text.length));
+              const afterHighlight = segment.text.substring(Math.min(highlightSeg.endCharOffset, segment.text.length));
               
-              const parts: Array<{ text: string; highlighted: boolean }> = [];
+              const parts: Array<{ text: string; highlighted: boolean; isCitation?: boolean }> = [];
               if (beforeHighlight) parts.push({ text: beforeHighlight, highlighted: false });
-              if (actualHighlighted) parts.push({ text: actualHighlighted, highlighted: true });
+              if (actualHighlighted) parts.push({ text: actualHighlighted, highlighted: true, isCitation });
               if (afterHighlight) parts.push({ text: afterHighlight, highlighted: false });
               return { highlightedParts: parts };
             }
             
-            const parts: Array<{ text: string; highlighted: boolean }> = [];
+            const parts: Array<{ text: string; highlighted: boolean; isCitation?: boolean }> = [];
             if (beforeHighlight) parts.push({ text: beforeHighlight, highlighted: false });
-            if (highlighted) parts.push({ text: highlighted, highlighted: true });
+            if (highlighted) parts.push({ text: highlighted, highlighted: true, isCitation });
             return { highlightedParts: parts };
           } else {
             // No offset or offset is 0, highlight from beginning
-            if (segmentIndex === topicSeg.endSegmentIdx && topicSeg.endCharOffset !== undefined) {
+            if (segmentIndex === highlightSeg.endSegmentIdx && highlightSeg.endCharOffset !== undefined) {
               // This is both start and end segment
-              const highlighted = segment.text.substring(0, topicSeg.endCharOffset);
-              const afterHighlight = segment.text.substring(topicSeg.endCharOffset);
+              const highlighted = segment.text.substring(0, highlightSeg.endCharOffset);
+              const afterHighlight = segment.text.substring(highlightSeg.endCharOffset);
               
-              const parts: Array<{ text: string; highlighted: boolean }> = [];
-              if (highlighted) parts.push({ text: highlighted, highlighted: true });
+              const parts: Array<{ text: string; highlighted: boolean; isCitation?: boolean }> = [];
+              if (highlighted) parts.push({ text: highlighted, highlighted: true, isCitation });
               if (afterHighlight) parts.push({ text: afterHighlight, highlighted: false });
               return { highlightedParts: parts };
             }
             // Highlight entire segment
             return { 
-              highlightedParts: [{ text: segment.text, highlighted: true }] 
+              highlightedParts: [{ text: segment.text, highlighted: true, isCitation }] 
             };
           }
         }
         
         // Case 3: This is the end segment (only if different from start) - may need partial highlighting
-        if (segmentIndex === topicSeg.endSegmentIdx && segmentIndex !== topicSeg.startSegmentIdx) {
-          if (topicSeg.endCharOffset !== undefined && topicSeg.endCharOffset < segment.text.length) {
+        if (segmentIndex === highlightSeg.endSegmentIdx && segmentIndex !== highlightSeg.startSegmentIdx) {
+          if (highlightSeg.endCharOffset !== undefined && highlightSeg.endCharOffset < segment.text.length) {
             // Partial highlight from beginning to character offset
-            const highlighted = segment.text.substring(0, topicSeg.endCharOffset);
-            const afterHighlight = segment.text.substring(topicSeg.endCharOffset);
+            const highlighted = segment.text.substring(0, highlightSeg.endCharOffset);
+            const afterHighlight = segment.text.substring(highlightSeg.endCharOffset);
             
-            const parts: Array<{ text: string; highlighted: boolean }> = [];
-            if (highlighted) parts.push({ text: highlighted, highlighted: true });
+            const parts: Array<{ text: string; highlighted: boolean; isCitation?: boolean }> = [];
+            if (highlighted) parts.push({ text: highlighted, highlighted: true, isCitation });
             if (afterHighlight) parts.push({ text: afterHighlight, highlighted: false });
             return { highlightedParts: parts };
           } else {
             // No offset or offset covers entire segment
             return { 
-              highlightedParts: [{ text: segment.text, highlighted: true }] 
+              highlightedParts: [{ text: segment.text, highlighted: true, isCitation }] 
             };
           }
         }
@@ -304,16 +311,16 @@ export function TranscriptViewer({
     }
     
     // Only use time-based highlighting if NO segments have index information
-    const hasAnySegmentIndices = selectedTopic.segments.some(seg => 
+    const hasAnySegmentIndices = segmentsToHighlight.some(seg => 
       seg.startSegmentIdx !== undefined && seg.endSegmentIdx !== undefined
     );
     
     if (!hasAnySegmentIndices) {
       // Fallback to time-based highlighting only if segment indices aren't available at all
       const segmentEnd = segment.start + segment.duration;
-      const shouldHighlight = selectedTopic.segments.some(topicSeg => {
-        const overlapStart = Math.max(segment.start, topicSeg.start);
-        const overlapEnd = Math.min(segmentEnd, topicSeg.end);
+      const shouldHighlight = segmentsToHighlight.some(highlightSeg => {
+        const overlapStart = Math.max(segment.start, highlightSeg.start);
+        const overlapEnd = Math.min(segmentEnd, highlightSeg.end);
         const overlapDuration = Math.max(0, overlapEnd - overlapStart);
         const overlapRatio = overlapDuration / segment.duration;
         // Highlight if there's significant overlap (more than 50% of the segment)
@@ -322,93 +329,12 @@ export function TranscriptViewer({
       
       if (shouldHighlight) {
         return { 
-          highlightedParts: [{ text: segment.text, highlighted: true }] 
+          highlightedParts: [{ text: segment.text, highlighted: true, isCitation }] 
         };
       }
     }
     
     return null;
-  };
-  
-  
-
-  const getCitationHighlightedText = (segment: TranscriptSegment, segmentIndex: number): { highlightedParts: Array<{ text: string; highlighted: boolean; isCitation: boolean }> } | null => {
-    if (!citationHighlight) return null;
-    
-    const segmentEnd = segment.start + segment.duration;
-    const citationEnd = citationHighlight.end || citationHighlight.start + 30;
-    
-    // Check if segment overlaps with citation time range
-    const overlapStart = Math.max(segment.start, citationHighlight.start);
-    const overlapEnd = Math.min(segmentEnd, citationEnd);
-    const overlapDuration = Math.max(0, overlapEnd - overlapStart);
-    const overlapRatio = overlapDuration / segment.duration;
-    
-    // For citations, we can be more lenient with partial overlaps
-    // since we don't have character-level offsets for citations yet
-    if (overlapRatio > 0.5) {
-      // Try to find sentence boundaries within the segment
-      // This is a simplified approach for citations
-      const sentences = segment.text.split(/(?<=[.!?])\s+/);
-      if (sentences.length > 1 && overlapRatio < 0.9) {
-        // Partial segment - try to highlight only relevant sentences
-        const parts: Array<{ text: string; highlighted: boolean; isCitation: boolean }> = [];
-        let currentPos = 0;
-        
-        for (const sentence of sentences) {
-          const sentenceStart = segment.text.indexOf(sentence, currentPos);
-          if (sentenceStart === -1) continue;
-          
-          // Estimate time position of this sentence within the segment
-          const sentenceTimeRatio = sentenceStart / segment.text.length;
-          const sentenceTime = segment.start + (segment.duration * sentenceTimeRatio);
-          
-          // Check if this sentence falls within citation range
-          const shouldHighlight = sentenceTime >= citationHighlight.start && sentenceTime <= citationEnd;
-          
-          if (shouldHighlight) {
-            // Add any text before this sentence as non-highlighted
-            if (sentenceStart > currentPos) {
-              parts.push({ 
-                text: segment.text.substring(currentPos, sentenceStart), 
-                highlighted: false, 
-                isCitation: false 
-              });
-            }
-            parts.push({ text: sentence, highlighted: true, isCitation: true });
-          } else if (parts.length === 0) {
-            // Haven't started highlighting yet
-            parts.push({ text: sentence, highlighted: false, isCitation: false });
-          }
-          
-          currentPos = sentenceStart + sentence.length;
-        }
-        
-        // Add any remaining text
-        if (currentPos < segment.text.length && parts.length > 0) {
-          parts.push({ 
-            text: segment.text.substring(currentPos), 
-            highlighted: false, 
-            isCitation: false 
-          });
-        }
-        
-        if (parts.some(p => p.highlighted)) {
-          return { highlightedParts: parts };
-        }
-      } else {
-        // Highlight entire segment
-        return { 
-          highlightedParts: [{ text: segment.text, highlighted: true, isCitation: true }] 
-        };
-      }
-    }
-    
-    return null;
-  };
-  
-  const isCitationHighlighted = (segment: TranscriptSegment, segmentIndex: number): boolean => {
-    return getCitationHighlightedText(segment, segmentIndex) !== null;
   };
 
   // Find the single best matching segment for the current time
@@ -537,31 +463,14 @@ export function TranscriptViewer({
               const currentSegmentIndex = getCurrentSegmentIndex();
               
               return transcript.map((segment, index) => {
-                const topicHighlightedText = getHighlightedText(segment, index);
-                const citationHighlightedText = getCitationHighlightedText(segment, index);
+                const highlightedText = getHighlightedText(segment, index);
                 const isCurrent = index === currentSegmentIndex;
                 const topicInfo = getSegmentTopic(segment);
                 const isHovered = hoveredSegment === index;
                 
-                // Track highlight states separately
-                const hasTopicHighlight = topicHighlightedText !== null;
-                const hasCitationHighlight = citationHighlightedText !== null;
-                
-                // Merge highlights if both exist
-                let finalHighlightedParts: Array<{ text: string; highlighted: boolean; isCitation?: boolean }> | null = null;
-                
-                if (citationHighlightedText) {
-                  // Citation takes priority
-                  finalHighlightedParts = citationHighlightedText.highlightedParts;
-                } else if (topicHighlightedText) {
-                  // Use topic highlights
-                  finalHighlightedParts = topicHighlightedText.highlightedParts.map(part => ({
-                    ...part,
-                    isCitation: false
-                  }));
-                }
-                
-                const hasHighlight = finalHighlightedParts !== null;
+                const hasHighlight = highlightedText !== null;
+                const hasCitationHighlight = citationHighlight && highlightedText !== null;
+                const hasTopicHighlight = selectedTopic && highlightedText !== null;
 
             return (
               <Tooltip key={index} delayDuration={300}>
@@ -583,7 +492,7 @@ export function TranscriptViewer({
                       "hover:bg-muted/50",
                       isHovered && "bg-muted"
                     )}
-                    onClick={() => handleSegmentClick(segment, hasTopicHighlight, hasCitationHighlight)}
+                    onClick={() => handleSegmentClick(segment, hasTopicHighlight || false, hasCitationHighlight || false)}
                     onMouseEnter={() => setHoveredSegment(index)}
                     onMouseLeave={() => setHoveredSegment(null)}
                   >
@@ -602,8 +511,8 @@ export function TranscriptViewer({
                         isCurrent ? "text-foreground font-medium" : "text-muted-foreground"
                       )}
                     >
-                      {finalHighlightedParts ? (
-                        finalHighlightedParts.map((part, partIndex) => {
+                      {highlightedText ? (
+                        highlightedText.highlightedParts.map((part, partIndex) => {
                           const isCitation = 'isCitation' in part && part.isCitation;
                           
                           return (
@@ -612,7 +521,7 @@ export function TranscriptViewer({
                               className={part.highlighted ? "text-foreground" : ""}
                               style={
                                 part.highlighted
-                                  ? isCitation
+                                  ? isCitation || selectedTopic?.isCitationReel
                                     ? {
                                         backgroundColor: 'hsl(48, 100%, 85%)',
                                         padding: '1px 3px',

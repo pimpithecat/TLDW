@@ -4,14 +4,16 @@ import React, { useMemo, ReactNode } from "react";
 import { ChatMessage, Citation } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { User, Bot } from "lucide-react";
+import { User, Bot, Play } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ChatMessageProps {
   message: ChatMessage;
+  onCitationClick: (citation: Citation) => void;
   onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean, citationText?: string) => void;
+  onPlayAllCitations?: (citations: Citation[]) => void;
 }
 
 function formatTimestamp(seconds: number): string {
@@ -20,7 +22,7 @@ function formatTimestamp(seconds: number): string {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-export function ChatMessageComponent({ message, onTimestampClick }: ChatMessageProps) {
+export function ChatMessageComponent({ message, onCitationClick, onTimestampClick, onPlayAllCitations }: ChatMessageProps) {
   const isUser = message.role === 'user';
 
   // Create citation map for quick lookup
@@ -47,8 +49,8 @@ export function ChatMessageComponent({ message, onTimestampClick }: ChatMessageP
     const handleClick = React.useCallback((e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      onTimestampClick(citation.timestamp, citation.endTime, true, citation.text);
-    }, [citation.timestamp, citation.endTime, citation.text]);
+      onCitationClick(citation);
+    }, [citation, onCitationClick]);
 
     const handleMouseDown = React.useCallback((e: React.MouseEvent) => {
       e.preventDefault();
@@ -75,8 +77,8 @@ export function ChatMessageComponent({ message, onTimestampClick }: ChatMessageP
         </TooltipTrigger>
         <TooltipContent className="p-2 z-[100] pointer-events-none" sideOffset={5}>
           <div className="font-semibold text-xs whitespace-nowrap">
-            {formatTimestamp(citation.timestamp)}
-            {citation.endTime && ` - ${formatTimestamp(citation.endTime)}`}
+            {formatTimestamp(citation.start)}
+            {` - ${formatTimestamp(citation.end)}`}
           </div>
         </TooltipContent>
       </Tooltip>
@@ -85,8 +87,8 @@ export function ChatMessageComponent({ message, onTimestampClick }: ChatMessageP
 
   // Process text to replace citation patterns with components
   const processTextWithCitations = (text: string): ReactNode[] => {
-    // Pattern for numbered citations [1], [2], etc.
-    const citationPattern = /\[(\d+)\]/g;
+    // Pattern for numbered citations, allowing for comma-separated lists
+    const citationPattern = /\[([\d,\s]+)\]/g;
     // Pattern for raw timestamps [MM:SS] or [MM:SS-MM:SS]
     const rawTimestampPattern = /\[(\d{1,2}:\d{2})(?:-(\d{1,2}:\d{2}))?\]/g;
     
@@ -96,16 +98,25 @@ export function ChatMessageComponent({ message, onTimestampClick }: ChatMessageP
     // First, find all patterns and their positions
     const allMatches: Array<{index: number, length: number, element: ReactNode}> = [];
     
-    // Find numbered citations
+    // Find numbered citations (handles both single and grouped)
     let match: RegExpExecArray | null;
     citationPattern.lastIndex = 0;
     while ((match = citationPattern.exec(text)) !== null) {
-      const citationNumber = parseInt(match[1], 10);
-      allMatches.push({
-        index: match.index,
-        length: match[0].length,
-        element: <CitationComponent key={`citation-${match.index}`} citationNumber={citationNumber} />
-      });
+      const numbersStr = match[1]; // e.g., "1, 2" or "3"
+      const citationNumbers = numbersStr.split(',').map(n => parseInt(n.trim(), 10)).filter(n => !isNaN(n));
+
+      // Create a component for each number in the matched group
+      const citationElements = citationNumbers.map((num, i) => (
+        <CitationComponent key={`citation-${match!.index}-${i}`} citationNumber={num} />
+      ));
+
+      if (citationElements.length > 0) {
+        allMatches.push({
+          index: match.index,
+          length: match[0].length,
+          element: <span key={`citations-${match!.index}`}>{citationElements}</span>
+        });
+      }
     }
     
     // Find raw timestamps (as fallback for unprocessed timestamps)
@@ -126,7 +137,7 @@ export function ChatMessageComponent({ message, onTimestampClick }: ChatMessageP
           index: match.index,
           length: match[0].length,
           element: (
-            <sup key={`raw-timestamp-${match.index}`} className="inline-block ml-0.5 relative z-50">
+            <sup key={`raw-timestamp-${match!.index}`} className="inline-block ml-0.5 relative z-50">
               <Button
                 variant="link"
                 size="sm"
@@ -211,8 +222,9 @@ export function ChatMessageComponent({ message, onTimestampClick }: ChatMessageP
           {isUser ? (
             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
           ) : (
-            <div className="prose prose-sm dark:prose-invert max-w-none">
-              <ReactMarkdown
+            <>
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
                   p: ({ children }) => <p className="mb-2">{renderTextWithCitations(children)}</p>,
@@ -248,7 +260,23 @@ export function ChatMessageComponent({ message, onTimestampClick }: ChatMessageP
               >
                 {message.content}
               </ReactMarkdown>
-            </div>
+              </div>
+              
+              {/* Play All Clips button for assistant messages with citations */}
+              {message.citations && message.citations.length > 0 && onPlayAllCitations && (
+                <div className="mt-3 pt-3 border-t border-border/50">
+                  <Button
+                    onClick={() => onPlayAllCitations(message.citations!)}
+                    size="sm"
+                    variant="secondary"
+                    className="flex items-center gap-2"
+                  >
+                    <Play className="w-4 h-4" />
+                    Play All Clips ({message.citations.length})
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </Card>
       </div>

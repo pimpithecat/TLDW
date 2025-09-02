@@ -26,6 +26,8 @@ export interface Topic {
     timestamp: string;
     text: string;
   }[];
+  isCitationReel?: boolean; // Flag to identify citation playback reels
+  autoPlay?: boolean; // Flag to indicate auto-play when topic is selected
 }
 
 export interface VideoData {
@@ -36,11 +38,14 @@ export interface VideoData {
 }
 
 export interface Citation {
-  timestamp: number;
-  endTime?: number;
+  number: number;
   text: string;
-  context?: string;
-  number?: number; // Citation number for inline references
+  start: number;
+  end: number;
+  startSegmentIdx: number;
+  endSegmentIdx: number;
+  startCharOffset: number;
+  endCharOffset: number;
 }
 
 export interface ChatMessage {
