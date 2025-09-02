@@ -190,12 +190,12 @@ export function YouTubePlayer({
         }
       }
       
-      // If we're in a segment, check if we need to jump to next
+      // If we're in a segment, check if we need to jump to next or pause
       if (currentSegIdx >= 0) {
         const currentSegment = selectedTopic.segments[currentSegIdx];
         
         // Pre-emptive jump: trigger 0.1s before segment actually ends
-        if (currentPlayTime >= currentSegment.end - 0.1) {
+        if (currentPlayTime >= currentSegment.end - 2) {
           const nextSegmentIdx = currentSegIdx + 1;
           if (nextSegmentIdx < selectedTopic.segments.length) {
             const nextSegment = selectedTopic.segments[nextSegmentIdx];
@@ -277,7 +277,11 @@ export function YouTubePlayer({
       intervalRef.current = setInterval(() => {
         if (playerRef.current?.getCurrentTime) {
           const currentTime = playerRef.current.getCurrentTime();
-          if (currentTime >= segment.end) {
+          // Use pre-emptive check for last segment to avoid overshooting
+          const isLastSegment = segmentIndex === topic.segments.length - 1;
+          const threshold = isLastSegment ? segment.end - 0.1 : segment.end;
+          
+          if (currentTime >= threshold) {
             // Clear interval immediately to prevent multiple triggers
             if (intervalRef.current) {
               clearInterval(intervalRef.current);
@@ -296,7 +300,7 @@ export function YouTubePlayer({
             }
           }
         }
-      }, 100);
+      }, 50);
     };
     
     // Start playing from the first segment
@@ -323,7 +327,11 @@ export function YouTubePlayer({
       intervalRef.current = setInterval(() => {
         if (playerRef.current?.getCurrentTime) {
           const currentTime = playerRef.current.getCurrentTime();
-          if (currentTime >= segment.end) {
+          // Use pre-emptive check for last segment to avoid overshooting
+          const isLastSegment = index === selectedTopic.segments.length - 1;
+          const threshold = isLastSegment ? segment.end - 0.1 : segment.end;
+          
+          if (currentTime >= threshold) {
             // Clear interval immediately to prevent multiple triggers
             if (intervalRef.current) {
               clearInterval(intervalRef.current);
@@ -342,7 +350,7 @@ export function YouTubePlayer({
             }
           }
         }
-      }, 100);
+      }, 50);
     }
   };
 
