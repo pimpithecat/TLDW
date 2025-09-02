@@ -36,11 +36,14 @@ export interface VideoData {
 }
 
 export interface Citation {
-  timestamp: number;
-  endTime?: number;
+  number: number;
   text: string;
-  context?: string;
-  number?: number; // Citation number for inline references
+  start: number;
+  end: number;
+  startSegmentIdx: number;
+  endSegmentIdx: number;
+  startCharOffset: number;
+  endCharOffset: number;
 }
 
 export interface ChatMessage {

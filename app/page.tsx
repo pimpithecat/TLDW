@@ -9,7 +9,7 @@ import { AIChat } from "@/components/ai-chat";
 import { ModelSelector, type GeminiModel } from "@/components/model-selector";
 import { LoadingContext } from "@/components/loading-context";
 import { LoadingTips } from "@/components/loading-tips";
-import { Topic, TranscriptSegment, VideoInfo } from "@/lib/types";
+import { Topic, TranscriptSegment, VideoInfo, Citation } from "@/lib/types";
 import { extractVideoId } from "@/lib/utils";
 import { Loader2, Video, FileText, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -30,7 +30,7 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(0);
   const [transcriptHeight, setTranscriptHeight] = useState<string>("auto");
   const [selectedModel, setSelectedModel] = useState<GeminiModel>('gemini-2.5-flash');
-  const [citationHighlight, setCitationHighlight] = useState<{ start: number; end?: number; text?: string } | null>(null);
+  const [citationHighlight, setCitationHighlight] = useState<Citation | null>(null);
   const [generationStartTime, setGenerationStartTime] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState<number>(0);
   const [processingStartTime, setProcessingStartTime] = useState<number | null>(null);
@@ -188,6 +188,18 @@ export default function Home() {
     }
   };
 
+  const handleCitationClick = (citation: Citation) => {
+    setSelectedTopic(null);
+    setCitationHighlight(citation);
+
+    const videoContainer = document.getElementById("video-container");
+    if (videoContainer) {
+      videoContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    setSeekToTime(citation.start);
+    setTimeout(() => setSeekToTime(undefined), 100);
+  };
+
   const handleTimestampClick = (seconds: number, endSeconds?: number, isCitation: boolean = false, citationText?: string, isWithinHighlightReel: boolean = false, isWithinCitationHighlight: boolean = false) => {
     // Prevent rapid sequential clicks and state updates
     if (seekToTime === seconds) return;
@@ -199,15 +211,10 @@ export default function Home() {
       setSelectedTopic(null);
     }
     
-    // Handle citation highlight:
-    if (isCitation) {
-      // New citation from AI chat - set new citation highlight
-      setCitationHighlight({ start: seconds, end: endSeconds, text: citationText });
-    } else if (!isWithinCitationHighlight) {
-      // Clicking outside citation highlight - clear it
+    // Clear citation highlight for non-citation clicks
+    if (!isCitation) {
       setCitationHighlight(null);
     }
-    // If isWithinCitationHighlight is true, preserve the existing citation highlight
     
     // Scroll to video player
     const videoContainer = document.getElementById("video-container");
@@ -369,6 +376,7 @@ export default function Home() {
                 topics={topics}
                 videoId={videoId}
                 videoTitle={videoInfo?.title}
+                onCitationClick={handleCitationClick}
                 onTimestampClick={handleTimestampClick}
               />
             </div>

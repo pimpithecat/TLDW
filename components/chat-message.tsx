@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 interface ChatMessageProps {
   message: ChatMessage;
+  onCitationClick: (citation: Citation) => void;
   onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean, citationText?: string) => void;
 }
 
@@ -20,7 +21,7 @@ function formatTimestamp(seconds: number): string {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-export function ChatMessageComponent({ message, onTimestampClick }: ChatMessageProps) {
+export function ChatMessageComponent({ message, onCitationClick, onTimestampClick }: ChatMessageProps) {
   const isUser = message.role === 'user';
 
   // Create citation map for quick lookup
@@ -47,8 +48,8 @@ export function ChatMessageComponent({ message, onTimestampClick }: ChatMessageP
     const handleClick = React.useCallback((e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      onTimestampClick(citation.timestamp, citation.endTime, true, citation.text);
-    }, [citation.timestamp, citation.endTime, citation.text]);
+      onCitationClick(citation);
+    }, [citation, onCitationClick]);
 
     const handleMouseDown = React.useCallback((e: React.MouseEvent) => {
       e.preventDefault();
@@ -75,8 +76,8 @@ export function ChatMessageComponent({ message, onTimestampClick }: ChatMessageP
         </TooltipTrigger>
         <TooltipContent className="p-2 z-[100] pointer-events-none" sideOffset={5}>
           <div className="font-semibold text-xs whitespace-nowrap">
-            {formatTimestamp(citation.timestamp)}
-            {citation.endTime && ` - ${formatTimestamp(citation.endTime)}`}
+            {formatTimestamp(citation.start)}
+            {` - ${formatTimestamp(citation.end)}`}
           </div>
         </TooltipContent>
       </Tooltip>
