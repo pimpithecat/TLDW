@@ -223,14 +223,14 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
           ) : (
             <>
-              <div className="prose prose-sm dark:prose-invert max-w-none">
+              <div className="prose dark:prose-invert max-w-none text-sm [&>*:last-child]:mb-0">
                 <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
-                  p: ({ children }) => <p className="mb-2">{renderTextWithCitations(children)}</p>,
-                  ul: ({ children }) => <ul className="list-disc list-inside mb-2">{children}</ul>,
-                  ol: ({ children }) => <ol className="list-decimal list-inside mb-2">{children}</ol>,
-                  li: ({ children }) => <li className="mb-1">{renderTextWithCitations(children)}</li>,
+                  p: ({ children }) => <p className="mb-2 last:mb-0">{renderTextWithCitations(children)}</p>,
+                  ul: ({ children }) => <ul className="list-disc list-inside mb-2 last:mb-0">{children}</ul>,
+                  ol: ({ children }) => <ol className="list-decimal list-inside mb-2 last:mb-0">{children}</ol>,
+                  li: ({ children }) => <li className="mb-1 last:mb-0">{renderTextWithCitations(children)}</li>,
                   code: ({ className, children, ...props }) => {
                     const match = /language-(\w+)/.exec(className || '');
                     return match ? (
@@ -264,7 +264,7 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
               
               {/* Play All Clips button for assistant messages with citations */}
               {message.citations && message.citations.length > 0 && onPlayAllCitations && (
-                <div className="mt-3 pt-3 border-t border-border/50">
+                <div className="mt-0 pt-3 border-t border-border/50">
                   <Button
                     onClick={() => onPlayAllCitations(message.citations!)}
                     size="sm"
