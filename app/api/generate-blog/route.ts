@@ -65,45 +65,45 @@ ${fullTranscript}
 
 **【Video Notes】**
 
-1. **YouTube Info** 
-  * Title | Author (include social media links if available) 
-2. **One-Sentence Summary** 
-  * Use one paragraph to highlight the core thesis and conclusion of the main speaker(s) in the video. 
-3. **Video Thematic Breakdown** 
-  * a. Divide the video content into several sections based on logical themes (e.g., according to the video's natural paragraphs or topic shifts). The title of each section should be concise and reflect the core theme of that section. 
-  * b. Within each section, provide a detailed and exhaustive description based on the video's content, including key details, examples, explanations, and dialogue mentioned. Ensure the description is detailed enough for a reader to fully understand that part of the content without watching the video. 
-  * c. If the video presents methods, frameworks, or processes, rewrite them into clearly structured steps or paragraphs, using bullet points for organization. 
-  * d. If there are key numbers, definitions, direct quotes, or citations, preserve the core words faithfully and add brief annotations in parentheses. 
-  * e. Avoid overly long paragraphs; if logically divisible, break them down into multiple paragraphs or use bullet points. 
-  * f. Include the video timestamp for each referenced section.
+1. **YouTube Info**
+ * Title | Author (include social media links if available)
+2. **One-Sentence Summary**
+ * Use one paragraph to highlight the core thesis and conclusion of the main speaker(s) in the video.
+3. **Video Thematic Breakdown**
+ * a. Divide the video content into several sections based on logical themes (e.g., according to the video's natural paragraphs or topic shifts). The title of each section should be concise and reflect the core theme of that section.
+ * b. Within each section, provide a detailed and exhaustive description based on the video's content, including key details, examples, explanations, and dialogue mentioned. Ensure the description is detailed enough for a reader to fully understand that part of the content without watching the video.
+ * c. If the video presents methods, frameworks, or processes, rewrite them into clearly structured steps or paragraphs, using bullet points for organization.
+ * d. If there are key numbers, definitions, direct quotes, or citations, preserve the core words faithfully and add brief annotations in parentheses.
+ * e. Avoid overly long paragraphs; if logically divisible, break them down into multiple paragraphs or use bullet points.
+ * f. Include the video timestamp for each referenced section.
 
 **【Content Framework Output (Framework & Mindset)】**
 
-* Abstract any frameworks and mindsets from the video and rewrite them into clearly structured steps or paragraphs. Each framework & mindset should be output in its entirety, preferably over 500 words (do not display this requirement in the output text). For long content, ensure it is divided into smaller paragraphs. Do not omit anything. 
+* Abstract any frameworks and mindsets from the video and rewrite them into clearly structured steps or paragraphs. Each framework & mindset should be output in its entirety. For long content, ensure it is divided into smaller paragraphs. Do not omit anything.
 * Pay attention to reasonable paragraph division for mental models to reduce reading fatigue.
 
 **【Smart Chapters】**
 
-5. **Video Timeline Breakdown (Smart Chapters)** 
-  * a. Organize the content modules chronologically according to their speaking time. 
-  * b. Include a one-sentence concise chapter title and a brief, detailed description.
+5. **Video Timeline Breakdown (Smart Chapters)**
+ * a. Organize the content modules chronologically according to their speaking time.
+ * b. Include a one-sentence concise chapter title and a brief, detailed description.
 
 **【References】**
 
-6. **Mentioned Resources** 
-  * Organize any books, blogs, podcasts, other cited shows or videos, key figures, website URLs, etc., mentioned in the video into a table in chronological order. 
-  * a. Item 
-  * b. Brief Description 
-  * c. Link
+6. **Mentioned Resources**
+ * Organize any books, blogs, podcasts, other cited shows or videos, key figures, website URLs, etc., mentioned in the video into a table in chronological order.
+ * a. Item
+ * b. Brief Description
+ * c. Link
 
 **Style and Limitations:**
 
-* All the above content should be presented with clean and clear Markdown sections, paying attention to title hierarchy. 
-* Never over-summarize! 
-* Do not add new facts; if ambiguous statements appear, maintain the original meaning and note the uncertainty. 
-* Preserve original proper nouns, and provide Chinese translations in parentheses (if they appear in the transcript or can be directly translated). 
-* Avoid overly long paragraphs; longer ones can be broken down into multiple logical paragraphs (using bullet points). 
-* Use a writing style and vocabulary that is as close as possible to the original video, appropriately combined with a Medium blog style. 
+* All the above content should be presented with clean and clear Markdown sections, paying attention to title hierarchy.
+* Never over-summarize!
+* Do not add new facts; if ambiguous statements appear, maintain the original meaning and note the uncertainty.
+* Preserve original proper nouns, and provide Chinese translations in parentheses (if they appear in the transcript or can be directly translated).
+* Avoid overly long paragraphs; longer ones can be broken down into multiple logical paragraphs (using bullet points).
+* Use a writing style and vocabulary that is as close as possible to the original video, appropriately combined with a Medium blog style.
 * Do not include the instructional text from these requirements in the final output.`;
 
     // Generate blog post using Gemini
