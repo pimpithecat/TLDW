@@ -272,7 +272,7 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
                     className="flex items-center gap-2"
                   >
                     <Play className="w-4 h-4" />
-                    Play All Clips ({message.citations.length})
+                    Play Clip ({message.citations.length})
                   </Button>
                 </div>
               )}
