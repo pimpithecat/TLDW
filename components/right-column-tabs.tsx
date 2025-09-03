@@ -5,7 +5,7 @@ import { TranscriptViewer } from "@/components/transcript-viewer";
 import { AIChat } from "@/components/ai-chat";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { FileText, MessageSquare, FileEdit } from "lucide-react";
+import { FileText, MessageSquare, FileEdit, RefreshCw } from "lucide-react";
 import { TranscriptSegment, Topic, Citation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BlogPostViewer } from "@/components/blog-post-viewer";
@@ -173,8 +173,18 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
               <Skeleton className="h-4 w-3/4" />
             </div>
           ) : blogError ? (
-            <div className="p-6">
+            <div className="p-6 space-y-4">
               <p className="text-destructive">{blogError}</p>
+              <Button
+                onClick={onGenerateBlog}
+                disabled={isGeneratingBlog}
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Try Again
+              </Button>
             </div>
           ) : blogContent ? (
             <BlogPostViewer content={blogContent} />
