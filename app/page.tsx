@@ -52,6 +52,11 @@ export default function Home() {
     setVideoInfo(null);
     setVideoPreview("");
     
+    // Reset blog-related states
+    setBlogContent(null);
+    setBlogError("");
+    setShowBlogTab(false);
+    
     try {
       const extractedVideoId = extractVideoId(url);
       if (!extractedVideoId) {
@@ -59,20 +64,6 @@ export default function Home() {
       }
       
       setVideoId(extractedVideoId);
-      
-      // Fetch video info immediately (non-blocking)
-      fetch("/api/video-info", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
-      })
-        .then(res => res.json())
-        .then(data => {
-          if (data && !data.error) {
-            setVideoInfo(data);
-          }
-        })
-        .catch(() => {});
       
       // Create AbortController for timeout
       const controller = new AbortController();
@@ -105,13 +96,34 @@ export default function Home() {
       // Move to understanding stage
       setLoadingStage('understanding');
       
+      // Fetch video info before starting generation
+      let fetchedVideoInfo = null;
+      try {
+        const videoInfoRes = await fetch("/api/video-info", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+        
+        if (videoInfoRes.ok) {
+          const videoInfoData = await videoInfoRes.json();
+          if (videoInfoData && !videoInfoData.error) {
+            setVideoInfo(videoInfoData);
+            fetchedVideoInfo = videoInfoData;
+          }
+        }
+      } catch (error) {
+        // Video info fetch failed, but continue anyway
+        console.error("Failed to fetch video info:", error);
+      }
+      
       // Generate quick preview (non-blocking)
       fetch("/api/quick-preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           transcript: fetchedTranscript,
-          videoTitle: videoInfo?.title
+          videoTitle: fetchedVideoInfo?.title
         }),
       })
         .then(res => res.json())
@@ -122,13 +134,18 @@ export default function Home() {
         })
         .catch(() => {});
       
-      // Generate topics with timeout
+      // Initiate parallel API requests for topics and blog
       setLoadingStage('generating');
       setGenerationStartTime(Date.now());
-      const controller2 = new AbortController();
-      const timeoutId2 = setTimeout(() => controller2.abort(), 600000); // 60 second timeout for AI generation
       
-      const topicsRes = await fetch("/api/generate-topics", {
+      // Create abort controllers for both requests
+      const topicsController = new AbortController();
+      const blogController = new AbortController();
+      const topicsTimeoutId = setTimeout(() => topicsController.abort(), 600000); // 60 second timeout
+      const blogTimeoutId = setTimeout(() => blogController.abort(), 600000); // 60 second timeout
+      
+      // Start topics generation (promise, not awaited yet)
+      const topicsPromise = fetch("/api/generate-topics", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
@@ -136,16 +153,58 @@ export default function Home() {
           videoId: extractedVideoId,
           model: selectedModel
         }),
-        signal: controller2.signal,
+        signal: topicsController.signal,
       }).catch(err => {
-        clearTimeout(timeoutId2);
+        clearTimeout(topicsTimeoutId);
         if (err.name === 'AbortError') {
           throw new Error("Topic generation timed out. The video might be too long. Please try a shorter video.");
         }
         throw new Error("Network error: Unable to generate topics. Please check your connection.");
       });
       
-      clearTimeout(timeoutId2);
+      // Start blog generation (promise, not awaited)
+      const blogPromise = fetch("/api/generate-blog", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transcript: fetchedTranscript,
+          videoInfo: fetchedVideoInfo,
+          videoId: extractedVideoId,
+          model: selectedModel
+        }),
+        signal: blogController.signal,
+      });
+      
+      // Show blog tab immediately and set generating state
+      setShowBlogTab(true);
+      setIsGeneratingBlog(true);
+      
+      // Handle blog generation asynchronously (non-blocking)
+      blogPromise
+        .then(async (response) => {
+          clearTimeout(blogTimeoutId);
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+            throw new Error(errorData.error || "Failed to generate blog post");
+          }
+          const { blogContent: generatedBlog } = await response.json();
+          setBlogContent(generatedBlog);
+        })
+        .catch(err => {
+          clearTimeout(blogTimeoutId);
+          if (err.name === 'AbortError') {
+            setBlogError("Blog generation timed out. The content might be too long.");
+          } else {
+            setBlogError(err instanceof Error ? err.message : "An error occurred generating the blog");
+          }
+        })
+        .finally(() => {
+          setIsGeneratingBlog(false);
+        });
+      
+      // Now await only the topics promise for the main UI
+      const topicsRes = await topicsPromise;
+      clearTimeout(topicsTimeoutId);
       
       if (!topicsRes.ok) {
         const errorData = await topicsRes.json().catch(() => ({ error: "Unknown error" }));
@@ -275,44 +334,6 @@ export default function Home() {
     }
   };
 
-  const handleGenerateBlog = async () => {
-    if (!transcript || transcript.length === 0 || !videoInfo) {
-      setBlogError("Video information is not available");
-      return;
-    }
-
-    setIsGeneratingBlog(true);
-    setBlogError("");
-    setShowBlogTab(true);
-    
-    // Switch to blog tab
-    rightColumnTabsRef.current?.switchToBlog?.();
-
-    try {
-      const response = await fetch("/api/generate-blog", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transcript,
-          videoInfo,
-          videoId,
-          model: selectedModel
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-        throw new Error(errorData.error || "Failed to generate blog post");
-      }
-
-      const { blogContent: generatedBlog } = await response.json();
-      setBlogContent(generatedBlog);
-    } catch (err) {
-      setBlogError(err instanceof Error ? err.message : "An error occurred");
-    } finally {
-      setIsGeneratingBlog(false);
-    }
-  };
 
   // Dynamically adjust right column height to match video container
   useEffect(() => {
@@ -436,7 +457,6 @@ export default function Home() {
                     videoTitle={videoInfo?.title}
                     onCitationClick={handleCitationClick}
                     onPlayAllCitations={handlePlayAllCitations}
-                    onGenerateBlog={handleGenerateBlog}
                     blogContent={blogContent}
                     isGeneratingBlog={isGeneratingBlog}
                     blogError={blogError}

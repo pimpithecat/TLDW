@@ -5,7 +5,7 @@ import { TranscriptViewer } from "@/components/transcript-viewer";
 import { AIChat } from "@/components/ai-chat";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { FileText, MessageSquare, FileEdit, RefreshCw } from "lucide-react";
+import { FileText, MessageSquare, FileEdit } from "lucide-react";
 import { TranscriptSegment, Topic, Citation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BlogPostViewer } from "@/components/blog-post-viewer";
@@ -23,7 +23,6 @@ interface RightColumnTabsProps {
   videoTitle?: string;
   onCitationClick: (citation: Citation) => void;
   onPlayAllCitations?: (citations: Citation[]) => void;
-  onGenerateBlog?: () => void;
   blogContent?: string | null;
   isGeneratingBlog?: boolean;
   blogError?: string;
@@ -46,7 +45,6 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   videoTitle,
   onCitationClick,
   onPlayAllCitations,
-  onGenerateBlog,
   blogContent,
   isGeneratingBlog,
   blogError,
@@ -114,24 +112,6 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
             Blog Post
           </Button>
         )}
-        {transcript.length > 0 && !showBlogTab && onGenerateBlog && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onGenerateBlog}
-                className="ml-auto px-2"
-                disabled={isGeneratingBlog}
-              >
-                <FileEdit className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              <p>Generate Blog Post</p>
-            </TooltipContent>
-          </Tooltip>
-        )}
       </div>
       
       <div className="flex-1 overflow-hidden relative">
@@ -175,16 +155,6 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
           ) : blogError ? (
             <div className="p-6 space-y-4">
               <p className="text-destructive">{blogError}</p>
-              <Button
-                onClick={onGenerateBlog}
-                disabled={isGeneratingBlog}
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-2"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Try Again
-              </Button>
             </div>
           ) : blogContent ? (
             <BlogPostViewer content={blogContent} />
