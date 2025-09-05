@@ -13,10 +13,10 @@ import {
 interface ParsedTopic {
   title: string;
   description: string;
-  quotes?: Array<{
+  quote?: {
     timestamp: string;
     text: string;
-  }>;
+  };
 }
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
@@ -242,7 +242,7 @@ export async function POST(request: Request) {
     const transcriptWithTimestamps = formatTranscriptWithTimestamps(transcript);
 
     const prompt = `## Role and Goal
-    You are an expert content strategist. Your goal is to analyze the provided video transcript and description to create 5 distinct "highlight reels." Each reel will focus on a single, powerful theme, supported by direct quotes from the speaker. The final output should allow a busy, intelligent viewer to absorb the video's most valuable insights in minutes.
+    You are an expert content strategist. Your goal is to analyze the provided video transcript and description to create 5 distinct "highlight reels." The final output should allow a busy, intelligent viewer to absorb the video's most valuable insights in minutes.
     
     ## Target Audience
     Your audience is forward-thinking and curious. They have a short attention span and are looking for contrarian insights, actionable mental models, and bold predictions, not generic advice.
@@ -259,16 +259,15 @@ export async function POST(request: Request) {
     - **Concise:** Maximum of 10 words.
     - **Synthesized:** The theme should connect ideas from different parts of the talk, not just one section.
     
-    ### Step 2: Select Supporting Passages
-    For each theme, select 1 to 5 direct passages from the transcript that powerfully illustrate the core idea.
+    ### Step 2: Select Supporting Passage
+    For each theme, select the **single, most representative passage** from the transcript that powerfully illustrates the core idea.
     
     **Passage Selection Criteria:**
     - **Direct Quotes Only:** Use complete, unedited sentences from the transcript. Do **not** summarize, paraphrase, or use ellipses (...).
-    - **Self-Contained:** Each passage must be fully understandable on its own. If the speaker references something earlier, extend the passage backward to include that context.
-    - **High-Signal:** Choose passages that contain memorable stories, bold predictions, data points, specific examples, or contrarian thinking. Avoid generic statements.
-    - **No Fluff:** While passages should be complete, avoid including unrelated tangents or off-topic rambling.
-    - **Avoid Redundancy:** Within a single reel, ensure each selected passage offers a unique angle on the theme.
-    - **Chronological:** Within each reel, list the passages in the order they appear in the video.
+    - **Self-Contained:** The passage must be fully understandable on its own. If the speaker references something earlier, extend the passage backward to include that context.
+    - **High-Signal:** Choose the passage that contains memorable stories, bold predictions, data points, specific examples, or contrarian thinking. Avoid generic statements.
+    - **No Fluff:** While the passage should be complete, avoid including unrelated tangents or off-topic rambling.
+    - **Most Impactful:** Choose the single quote that best encapsulates the entire theme on its own. It should be the most concise, high-signal example.
     
     ## Quality Control
     - **Distinct Themes:** Each highlight reel's title must represent a clearly distinct theme. While themes can be related, their core ideas should be unique.
@@ -280,12 +279,10 @@ export async function POST(request: Request) {
     [
      {
        "title": "Complete sentence or question",
-       "quotes": [
-         {
-           "timestamp": "[MM:SS-MM:SS]",
-           "text": "EXACT verbatim text from transcript - must be a perfect character-by-character match"
-         }
-       ]
+       "quote": {
+         "timestamp": "[MM:SS-MM:SS]",
+         "text": "EXACT verbatim text from transcript - must be a perfect character-by-character match"
+       }
      }
     ]
     
@@ -349,10 +346,10 @@ export async function POST(request: Request) {
           parsedResponse = [{
             title: "Full Video",
             description: "Complete video content",
-            quotes: [{
+            quote: {
               timestamp: "[00:00-00:30]",
               text: fullText.substring(0, 200)
-            }]
+            }
           }];
         }
       } else {
@@ -361,10 +358,10 @@ export async function POST(request: Request) {
         parsedResponse = [{
           title: "Full Video",
           description: "Complete video content",
-          quotes: [{
+          quote: {
             timestamp: "[00:00-00:30]",
             text: fullText.substring(0, 200)
-          }]
+          }
         }];
       }
     }
@@ -399,10 +396,10 @@ export async function POST(request: Request) {
           topicsArray.push({
             title: `Part ${i + 1}`,
             description: `Section ${i + 1} of the video`,
-            quotes: [{
+            quote: {
               timestamp: `[${formatTime(startTime)}-${formatTime(endTime)}]`,
               text: chunkSegments.map(s => s.text).join(' ').substring(0, 200) + '...'
-            }]
+            }
           });
         }
       }
@@ -413,8 +410,7 @@ export async function POST(request: Request) {
     topicsArray.forEach((topic: ParsedTopic, index: number) => {
       console.log({
         title: topic.title,
-        hasQuotes: !!topic.quotes,
-        quoteCount: topic.quotes ? topic.quotes.length : 0
+        hasQuote: !!topic.quote
       });
     });
 
@@ -425,8 +421,8 @@ export async function POST(request: Request) {
     const topicsWithSegments = await Promise.all(
       topicsArray.map(async (topic: ParsedTopic, index: number) => {
         
-        // Pass the quotes directly to findExactQuotes
-        const quotesArray = topic.quotes && Array.isArray(topic.quotes) ? topic.quotes : [];
+        // Pass the quote to findExactQuotes (as an array for compatibility)
+        const quotesArray = topic.quote ? [topic.quote] : [];
         
         
         // Find the exact segments for these quotes (now async with parallel processing)
@@ -440,7 +436,7 @@ export async function POST(request: Request) {
           description: topic.description || '',
           duration: Math.round(totalDuration),
           segments: segments,
-          quotes: topic.quotes // Store original quotes for display
+          quote: topic.quote // Store original quote for display
         };
       })
     );
@@ -453,7 +449,7 @@ export async function POST(request: Request) {
         description: topic.description || '',
         duration: 0,
         segments: [],
-        quotes: topic.quotes || []
+        quote: topic.quote || null
       }));
     
 

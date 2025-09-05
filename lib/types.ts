@@ -22,10 +22,10 @@ export interface Topic {
     hasCompleteSentences?: boolean;
   }[];
   keywords?: string[]; // Optional for backward compatibility
-  quotes?: {
+  quote?: {
     timestamp: string;
     text: string;
-  }[];
+  };
   isCitationReel?: boolean; // Flag to identify citation playback reels
   autoPlay?: boolean; // Flag to indicate auto-play when topic is selected
 }

@@ -4,6 +4,8 @@ import { useEffect, useState, useRef } from "react";
 import { Topic, TranscriptSegment } from "@/lib/types";
 import { formatDuration, getTopicHSLColor } from "@/lib/utils";
 import { TopicCard } from "@/components/topic-card";
+import { Button } from "@/components/ui/button";
+import { PlayCircle, StopCircle } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -21,6 +23,9 @@ interface VideoProgressBarProps {
   onTopicSelect?: (topic: Topic) => void;
   onPlayTopic?: (topic: Topic) => void;
   transcript?: TranscriptSegment[];
+  onPlayAllTopics?: () => void;
+  isPlayingAll?: boolean;
+  playAllIndex?: number;
 }
 
 export function VideoProgressBar({
@@ -32,6 +37,9 @@ export function VideoProgressBar({
   onTopicSelect,
   onPlayTopic,
   transcript,
+  onPlayAllTopics,
+  isPlayingAll = false,
+  playAllIndex = 0,
 }: VideoProgressBarProps) {
   const [hoveredSegment, setHoveredSegment] = useState<{
     topic: Topic;
@@ -167,23 +175,55 @@ export function VideoProgressBar({
           </div>
         </div>
 
+        {/* Play All button and Topic insights list */}
+        <div className="mt-3 space-y-2">
+          {/* Play All Topics button */}
+          {topics.length > 0 && (
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm font-medium text-muted-foreground">Highlight Reels</span>
+              <Button
+                size="sm"
+                variant={isPlayingAll ? "destructive" : "outline"}
+                onClick={onPlayAllTopics}
+                className="h-7 px-2 text-xs gap-1"
+              >
+                {isPlayingAll ? (
+                  <>
+                    <StopCircle className="h-3.5 w-3.5" />
+                    Stop
+                  </>
+                ) : (
+                  <>
+                    <PlayCircle className="h-3.5 w-3.5" />
+                    Play All
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
 
-        {/* Topic insights list */}
-        <div className="mt-3 space-y-1">
-          {topics.map((topic, index) => {
-            const isSelected = selectedTopic?.id === topic.id;
+          {/* Topic insights list */}
+          <div className="space-y-1">
+            {topics.map((topic, index) => {
+              const isSelected = selectedTopic?.id === topic.id;
+              const isCurrentlyPlaying = isPlayingAll && index === playAllIndex;
             
-            return (
-              <TopicCard
-                key={topic.id}
-                topic={topic}
-                isSelected={isSelected}
-                onClick={() => onTopicSelect?.(topic)}
-                topicIndex={index}
-                onPlayTopic={() => onPlayTopic?.(topic)}
-              />
-            );
-          })}
+              return (
+                <div key={topic.id} className={cn(
+                  "relative",
+                  isCurrentlyPlaying && "animate-pulse"
+                )}>
+                  <TopicCard
+                    topic={topic}
+                    isSelected={isSelected || isCurrentlyPlaying}
+                    onClick={() => onTopicSelect?.(topic)}
+                    topicIndex={index}
+                    onPlayTopic={() => onPlayTopic?.(topic)}
+                  />
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </TooltipProvider>

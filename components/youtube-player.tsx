@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Play, SkipForward, SkipBack } from "lucide-react";
+import { Play } from "lucide-react";
 import { Topic, TranscriptSegment } from "@/lib/types";
 import { formatDuration, getTopicHSLColor } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,8 @@ export function YouTubePlayer({
   const [currentSegmentIndex, setCurrentSegmentIndex] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
+  const [isPlayingAll, setIsPlayingAll] = useState(false);
+  const [playAllIndex, setPlayAllIndex] = useState(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isSeekingRef = useRef(false);
@@ -162,99 +164,43 @@ export function YouTubePlayer({
     }
   }, [selectedTopic]);
 
-  // Auto-jump monitoring for normal playback with selected topic
+  // Monitor playback to pause at segment end when topic is selected
   useEffect(() => {
     if (!selectedTopic || !isPlaying || !playerRef.current) return;
     
-    // Don't set up monitoring if playSegments/playTopic interval is already running
+    // Don't set up monitoring if playTopic/playSegments interval is already running
     if (intervalRef.current) return;
     
-    // Set up monitoring interval for auto-jumping between segments
+    // Don't set up monitoring during play-all mode (let playTopicForPlayAll handle it)
+    if (isPlayingAll) return;
+    
+    const segment = selectedTopic.segments[0];
+    if (!segment) return;
+    
+    // Set up monitoring interval to pause at segment end
     const monitoringInterval = setInterval(() => {
       if (!playerRef.current?.getCurrentTime) return;
       
-      const currentPlayTime = playerRef.current.getCurrentTime();
-      const now = Date.now();
+      const currentTime = playerRef.current.getCurrentTime();
       
-      // Prevent jumps within 500ms of last auto-jump to avoid loops
-      if (now - lastAutoJumpTimeRef.current < 500) return;
-      
-      // Find which segment we're currently in
-      let currentSegIdx = -1;
-      for (let i = 0; i < selectedTopic.segments.length; i++) {
-        const segment = selectedTopic.segments[i];
-        if (currentPlayTime >= segment.start && currentPlayTime <= segment.end + 0.1) {
-          currentSegIdx = i;
-          lastKnownSegmentRef.current = i; // Track last known segment
-          break;
-        }
-      }
-      
-      // If we're in a segment, check if we need to jump to next or pause
-      if (currentSegIdx >= 0) {
-        const currentSegment = selectedTopic.segments[currentSegIdx];
+      // Check if we're playing within the selected segment and approaching the end
+      if (currentTime >= segment.start && currentTime >= segment.end) {
+        // Pause the video
+        playerRef.current.pauseVideo();
         
-        // Pre-emptive jump: trigger 0.1s before segment actually ends
-        if (currentPlayTime >= currentSegment.end - 2) {
-          const nextSegmentIdx = currentSegIdx + 1;
-          if (nextSegmentIdx < selectedTopic.segments.length) {
-            const nextSegment = selectedTopic.segments[nextSegmentIdx];
-            
-            // Check if already in next segment
-            if (currentPlayTime >= nextSegment.start && currentPlayTime <= nextSegment.end) {
-              setCurrentSegmentIndex(nextSegmentIdx);
-              lastKnownSegmentRef.current = nextSegmentIdx;
-              return;
-            }
-            
-            // Jump to next segment if there's a gap
-            if (currentPlayTime < nextSegment.start) {
-              lastAutoJumpTimeRef.current = now;
-              playerRef.current.seekTo(nextSegment.start, true);
-              setCurrentSegmentIndex(nextSegmentIdx);
-              lastKnownSegmentRef.current = nextSegmentIdx;
-            }
-          }
-        }
-      } else {
-        // Fallback: We're between segments, check if we passed a segment end
-        if (lastKnownSegmentRef.current >= 0 && lastKnownSegmentRef.current < selectedTopic.segments.length) {
-          const lastSegment = selectedTopic.segments[lastKnownSegmentRef.current];
-          
-          // If we're past the last known segment's end
-          if (currentPlayTime >= lastSegment.end) {
-            const nextSegmentIdx = lastKnownSegmentRef.current + 1;
-            
-            if (nextSegmentIdx < selectedTopic.segments.length) {
-              const nextSegment = selectedTopic.segments[nextSegmentIdx];
-              
-              // Check if we're already in or past the next segment
-              if (currentPlayTime >= nextSegment.start && currentPlayTime <= nextSegment.end) {
-                // We're in the next segment, update tracking
-                setCurrentSegmentIndex(nextSegmentIdx);
-                lastKnownSegmentRef.current = nextSegmentIdx;
-              } else if (currentPlayTime < nextSegment.start) {
-                // We're in the gap, jump to next segment
-                lastAutoJumpTimeRef.current = now;
-                playerRef.current.seekTo(nextSegment.start, true);
-                setCurrentSegmentIndex(nextSegmentIdx);
-                lastKnownSegmentRef.current = nextSegmentIdx;
-              }
-            }
-          }
-        }
+        // Clear the monitoring interval
+        clearInterval(monitoringInterval);
       }
-    }, 50); // Check every 50ms for more responsive jumping
+    }, 100); // Check every 100ms
     
     // Clean up on unmount or when dependencies change
     return () => {
       clearInterval(monitoringInterval);
     };
-  }, [selectedTopic, isPlaying]);
-
+  }, [selectedTopic, isPlaying, isPlayingAll]);
 
   const playTopic = (topic: Topic) => {
-    if (!playerRef.current || !topic) return;
+    if (!playerRef.current || !topic || topic.segments.length === 0) return;
     
     // Clear any existing interval
     if (intervalRef.current) {
@@ -262,53 +208,39 @@ export function YouTubePlayer({
       intervalRef.current = null;
     }
     
-    // Reset segment index for this topic
+    // If clicking a topic manually, exit play all mode
+    if (isPlayingAll) {
+      setIsPlayingAll(false);
+    }
+    
+    // Seek to the start of the single segment and play
+    const segment = topic.segments[0];
+    playerRef.current.seekTo(segment.start, true);
+    playerRef.current.playVideo();
     setCurrentSegmentIndex(0);
     
-    // Helper function to play a specific segment of the topic
-    const playTopicSegment = (segmentIndex: number) => {
-      const segment = topic.segments[segmentIndex];
-      if (!segment || !playerRef.current) return;
-      
-      playerRef.current.seekTo(segment.start, true);
-      playerRef.current.playVideo();
-      
-      // Set up interval to check when to move to next segment
-      intervalRef.current = setInterval(() => {
-        if (playerRef.current?.getCurrentTime) {
-          const currentTime = playerRef.current.getCurrentTime();
-          // Use pre-emptive check for last segment to avoid overshooting
-          const isLastSegment = segmentIndex === topic.segments.length - 1;
-          const threshold = isLastSegment ? segment.end - 0.1 : segment.end;
-          
-          if (currentTime >= threshold) {
-            // Clear interval immediately to prevent multiple triggers
-            if (intervalRef.current) {
-              clearInterval(intervalRef.current);
-              intervalRef.current = null;
-            }
-            
-            const nextIndex = segmentIndex + 1;
-            if (nextIndex < topic.segments.length) {
-              setCurrentSegmentIndex(nextIndex);
-              // Recursively play next segment, which will seek to its start
-              playTopicSegment(nextIndex);
-            } else {
-              // All segments played, pause the video
-              playerRef.current.pauseVideo();
-              setCurrentSegmentIndex(0);
-            }
+    // Set up monitoring to pause at segment end
+    intervalRef.current = setInterval(() => {
+      if (playerRef.current?.getCurrentTime) {
+        const currentTime = playerRef.current.getCurrentTime();
+        
+        // Check if we've reached or passed the segment end
+        if (currentTime >= segment.end) {
+          // Clear the monitoring interval
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
           }
+          
+          // Only pause if not in play all mode
+          playerRef.current.pauseVideo();
         }
-      }, 50);
-    };
-    
-    // Start playing from the first segment
-    playTopicSegment(0);
+      }
+    }, 100); // Check every 100ms
   };
 
-  const playSegments = (segmentIndex?: number) => {
-    if (!selectedTopic || !playerRef.current) return;
+  const playSegments = () => {
+    if (!selectedTopic || !playerRef.current || selectedTopic.segments.length === 0) return;
     
     // Clear any existing interval
     if (intervalRef.current) {
@@ -316,63 +248,32 @@ export function YouTubePlayer({
       intervalRef.current = null;
     }
     
-    const index = segmentIndex ?? currentSegmentIndex;
-    const segment = selectedTopic.segments[index];
+    // Play the single segment
+    const segment = selectedTopic.segments[0];
+    playerRef.current.seekTo(segment.start, true);
+    playerRef.current.playVideo();
+    setCurrentSegmentIndex(0);
     
-    if (segment) {
-      playerRef.current.seekTo(segment.start, true);
-      playerRef.current.playVideo();
-      
-      // Set up interval to check when to move to next segment
-      intervalRef.current = setInterval(() => {
-        if (playerRef.current?.getCurrentTime) {
-          const currentTime = playerRef.current.getCurrentTime();
-          // Use pre-emptive check for last segment to avoid overshooting
-          const isLastSegment = index === selectedTopic.segments.length - 1;
-          const threshold = isLastSegment ? segment.end - 0.1 : segment.end;
+    // Set up monitoring to pause at segment end
+    intervalRef.current = setInterval(() => {
+      if (playerRef.current?.getCurrentTime) {
+        const currentTime = playerRef.current.getCurrentTime();
+        
+        // Check if we've reached or passed the segment end
+        if (currentTime >= segment.end) {
+          // Pause the video
+          playerRef.current.pauseVideo();
           
-          if (currentTime >= threshold) {
-            // Clear interval immediately to prevent multiple triggers
-            if (intervalRef.current) {
-              clearInterval(intervalRef.current);
-              intervalRef.current = null;
-            }
-            
-            const nextIndex = index + 1;
-            if (nextIndex < selectedTopic.segments.length) {
-              setCurrentSegmentIndex(nextIndex);
-              // Recursively play next segment, which will seek to its start
-              playSegments(nextIndex);
-            } else {
-              // All segments played, pause the video
-              playerRef.current.pauseVideo();
-              setCurrentSegmentIndex(0);
-            }
+          // Clear the monitoring interval
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
           }
         }
-      }, 50);
-    }
+      }
+    }, 100); // Check every 100ms
   };
 
-  const skipToNextSegment = () => {
-    if (!selectedTopic) return;
-    const nextIndex = currentSegmentIndex + 1;
-    if (nextIndex < selectedTopic.segments.length) {
-      setCurrentSegmentIndex(nextIndex);
-      const segment = selectedTopic.segments[nextIndex];
-      playerRef.current?.seekTo(segment.start, true);
-      playerRef.current?.playVideo();
-    }
-  };
-
-  const skipToPrevSegment = () => {
-    if (!selectedTopic) return;
-    const prevIndex = Math.max(0, currentSegmentIndex - 1);
-    setCurrentSegmentIndex(prevIndex);
-    const segment = selectedTopic.segments[prevIndex];
-    playerRef.current?.seekTo(segment.start, true);
-    playerRef.current?.playVideo();
-  };
 
   const handleSeek = (time: number) => {
     playerRef.current?.seekTo(time, true);
@@ -385,6 +286,76 @@ export function YouTubePlayer({
     } else {
       playerRef.current?.playVideo();
     }
+  };
+
+  const playAllTopics = () => {
+    if (topics.length === 0) return;
+    
+    // Toggle play all mode
+    if (isPlayingAll) {
+      // Stop playing all
+      setIsPlayingAll(false);
+      playerRef.current?.pauseVideo();
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    } else {
+      // Start playing all from the beginning
+      setIsPlayingAll(true);
+      setPlayAllIndex(0);
+      const firstTopic = topics[0];
+      onTopicSelect?.(firstTopic);
+      playTopicForPlayAll(firstTopic, 0);
+    }
+  };
+
+  const playTopicForPlayAll = (topic: Topic, index: number) => {
+    if (!playerRef.current || !topic || topic.segments.length === 0) return;
+    
+    // Clear any existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    
+    // Seek to the start of the single segment and play
+    const segment = topic.segments[0];
+    playerRef.current.seekTo(segment.start, true);
+    playerRef.current.playVideo();
+    setCurrentSegmentIndex(0);
+    setPlayAllIndex(index);
+    
+    // Set up monitoring to advance to next topic at segment end
+    intervalRef.current = setInterval(() => {
+      if (playerRef.current?.getCurrentTime) {
+        const currentTime = playerRef.current.getCurrentTime();
+        
+        // Check if we've reached or passed the segment end
+        if (currentTime >= segment.end) {
+          // Clear the monitoring interval
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+          }
+          
+          // Move to next topic
+          const nextIndex = index + 1;
+          if (nextIndex < topics.length && isPlayingAll) {
+            const nextTopic = topics[nextIndex];
+            onTopicSelect?.(nextTopic);
+            // Small delay before playing next topic for smooth transition
+            setTimeout(() => {
+              playTopicForPlayAll(nextTopic, nextIndex);
+            }, 500);
+          } else {
+            // All topics played or play all was stopped
+            setIsPlayingAll(false);
+            playerRef.current.pauseVideo();
+          }
+        }
+      }
+    }, 100); // Check every 100ms
   };
 
   const selectedTopicIndex = selectedTopic ? topics.findIndex(t => t.id === selectedTopic.id) : -1;
@@ -412,35 +383,15 @@ export function YouTubePlayer({
               onTopicSelect={onTopicSelect}
               onPlayTopic={playTopic}
               transcript={transcript}
+              onPlayAllTopics={playAllTopics}
+              isPlayingAll={isPlayingAll}
+              playAllIndex={playAllIndex}
             />
           )}
 
           {/* Playback controls */}
           <div className="mt-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              {selectedTopic && (
-                <>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={skipToPrevSegment}
-                    disabled={currentSegmentIndex === 0}
-                    className="h-9 w-9"
-                  >
-                    <SkipBack className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={skipToNextSegment}
-                    disabled={currentSegmentIndex >= selectedTopic.segments.length - 1}
-                    className="h-9 w-9"
-                  >
-                    <SkipForward className="h-4 w-4" />
-                  </Button>
-                </>
-              )}
-
               <div className="ml-3 flex items-center gap-2">
                 <span className="text-sm font-mono text-muted-foreground">
                   {formatDuration(currentTime)} / {formatDuration(videoDuration)}
@@ -449,11 +400,6 @@ export function YouTubePlayer({
             </div>
 
             <div className="flex items-center gap-2">
-              {selectedTopic && (
-                <Badge variant="secondary" className="text-xs">
-                  Segment {currentSegmentIndex + 1}/{selectedTopic.segments.length}
-                </Badge>
-              )}
             </div>
           </div>
         </div>

@@ -279,6 +279,12 @@ export default function Home() {
     // Clear citation highlight when selecting a topic
     setCitationHighlight(null);
     setSelectedTopic(topic);
+    
+    // Immediately play the topic when selected
+    if (topic && topic.segments.length > 0) {
+      setSeekToTime(topic.segments[0].start);
+      setTimeout(() => setSeekToTime(undefined), 100);
+    }
   };
 
   const handlePlayTopic = () => {
