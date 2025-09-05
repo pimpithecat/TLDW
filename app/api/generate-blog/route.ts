@@ -55,8 +55,8 @@ export async function POST(request: Request) {
 
 ## Video Information
 - **Title**: ${videoInfo.title}
-- **Author**: ${videoInfo.author || 'Unknown'}
-- **Duration**: ${durationFormatted}
+- **Description**: ${videoInfo.description}
+- **Channel**: ${videoInfo.author || 'Unknown'}
 
 ## Video Transcript
 ${fullTranscript}
@@ -65,45 +65,39 @@ ${fullTranscript}
 
 **【Video Notes】**
 
-1. **YouTube Info**
- * Title | Author (include social media links if available)
-2. **One-Sentence Summary**
- * Use one paragraph to highlight the core thesis and conclusion of the main speaker(s) in the video.
-3. **Video Thematic Breakdown**
- * a. Divide the video content into several sections based on logical themes (e.g., according to the video's natural paragraphs or topic shifts). The title of each section should be concise and reflect the core theme of that section.
- * b. Within each section, provide a detailed and exhaustive description based on the video's content, including key details, examples, explanations, and dialogue mentioned. Ensure the description is detailed enough for a reader to fully understand that part of the content without watching the video.
- * c. If the video presents methods, frameworks, or processes, rewrite them into clearly structured steps or paragraphs, using bullet points for organization.
- * d. If there are key numbers, definitions, direct quotes, or citations, preserve the core words faithfully and add brief annotations in parentheses.
- * e. Avoid overly long paragraphs; if logically divisible, break them down into multiple paragraphs or use bullet points.
- * f. Include the video timestamp for each referenced section.
+1. **Context**
+- Who: (introduce each speaker's background and what makes them noteworthy in 1-3 sentences; include their social media/website links if available)
+- What: (key topics discussed)
+- Why should you care: (briefly describe what the viewer can get out of this video in one sentence; make it eye-catching)
 
-**【Content Framework Output (Framework & Mindset)】**
+2. **Key takeaways**
+Highlight the key lessons that the viewer can learn from the video in 3-5 bullet points, each followed by the timestamps where those insights appeared. Make sure the insights are high-value, non-cliched, and actionable. Avoid generic statements.
 
-* Abstract any frameworks and mindsets from the video and rewrite them into clearly structured steps or paragraphs. Each framework & mindset should be output in its entirety. For long content, ensure it is divided into smaller paragraphs. Do not omit anything.
-* Pay attention to reasonable paragraph division for mental models to reduce reading fatigue.
-
-**【Smart Chapters】**
-
-5. **Video Timeline Breakdown (Smart Chapters)**
+3. **Smart Chapters**
  * a. Organize the content modules chronologically according to their speaking time.
- * b. Include a one-sentence concise chapter title and a brief, detailed description.
+ * b. Include a one-sentence concise chapter title and a description.
 
-**【References】**
+4. **Key quotes**
+Highlight the TOP 3-5 most insightful/contrarian/memorable/impactful/thought-provoking quotes from the video in bullet point format, with speakers and timestamps. Don't change the original wording of the quotes, but feel free to modify typos in the transcript. Avoid generic statements.
+
+5. **Stories and anecdotes**
+Highlight the 1-3 most intriguing and memorable and surprising stories/anecdotes shared by the speaker in bullet points; make them engaging. 
 
 6. **Mentioned Resources**
- * Organize any books, blogs, podcasts, other cited shows or videos, key figures, website URLs, etc., mentioned in the video into a table in chronological order.
- * a. Item
+ * Organize any books, blogs, podcasts, products, other cited shows or videos, key figures, website URLs, etc., mentioned in the video into a table in chronological order. 
+ * a. Item (followed by timestamp mentioned)
  * b. Brief Description
  * c. Link
 
 **Style and Limitations:**
 
 * All the above content should be presented with clean and clear Markdown sections, paying attention to title hierarchy.
+* Note that the transcript might include transcription errors; you should deduce the correct spellings from the context and output the correct versions
 * Never over-summarize!
+* Format all timestamps as "00:00" and hyperlink the timestamps to the corresponding video sections
 * Do not add new facts; if ambiguous statements appear, maintain the original meaning and note the uncertainty.
-* Preserve original proper nouns, and provide Chinese translations in parentheses (if they appear in the transcript or can be directly translated).
-* Avoid overly long paragraphs; longer ones can be broken down into multiple logical paragraphs (using bullet points).
-* Use a writing style and vocabulary that is as close as possible to the original video, appropriately combined with a Medium blog style.
+* Avoid overly long paragraphs; longer ones can be broken down into multiple logical paragraphs
+* Try to preserve the original tone and voice of the video content. When rewriting, make sure your writing is concise, engaging, and highly readable
 * Do not include the instructional text from these requirements in the final output.`;
 
     // Generate blog post using Gemini
