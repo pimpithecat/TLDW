@@ -35,11 +35,11 @@ export default function Home() {
   const [processingStartTime, setProcessingStartTime] = useState<number | null>(null);
   const rightColumnTabsRef = useRef<RightColumnTabsHandle>(null);
   
-  // Blog generation state
-  const [blogContent, setBlogContent] = useState<string | null>(null);
-  const [isGeneratingBlog, setIsGeneratingBlog] = useState<boolean>(false);
-  const [blogError, setBlogError] = useState<string>("");
-  const [showBlogTab, setShowBlogTab] = useState<boolean>(false);
+  // Summary generation state
+  const [summaryContent, setSummaryContent] = useState<string | null>(null);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState<boolean>(false);
+  const [summaryError, setSummaryError] = useState<string>("");
+  const [showSummaryTab, setShowSummaryTab] = useState<boolean>(false);
 
   // Use custom hook for timer logic
   const elapsedTime = useElapsedTimer(generationStartTime);
@@ -52,10 +52,10 @@ export default function Home() {
     setVideoInfo(null);
     setVideoPreview("");
     
-    // Reset blog-related states
-    setBlogContent(null);
-    setBlogError("");
-    setShowBlogTab(false);
+    // Reset summary-related states
+    setSummaryContent(null);
+    setSummaryError("");
+    setShowSummaryTab(false);
     
     try {
       const extractedVideoId = extractVideoId(url);
@@ -134,15 +134,15 @@ export default function Home() {
         })
         .catch(() => {});
       
-      // Initiate parallel API requests for topics and blog
+      // Initiate parallel API requests for topics and summary
       setLoadingStage('generating');
       setGenerationStartTime(Date.now());
       
       // Create abort controllers for both requests
       const topicsController = new AbortController();
-      const blogController = new AbortController();
+      const summaryController = new AbortController();
       const topicsTimeoutId = setTimeout(() => topicsController.abort(), 600000); // 60 second timeout
-      const blogTimeoutId = setTimeout(() => blogController.abort(), 600000); // 60 second timeout
+      const summaryTimeoutId = setTimeout(() => summaryController.abort(), 600000); // 60 second timeout
       
       // Start topics generation (promise, not awaited yet)
       const topicsPromise = fetch("/api/generate-topics", {
@@ -162,8 +162,8 @@ export default function Home() {
         throw new Error("Network error: Unable to generate topics. Please check your connection.");
       });
       
-      // Start blog generation (promise, not awaited)
-      const blogPromise = fetch("/api/generate-blog", {
+      // Start summary generation (promise, not awaited)
+      const summaryPromise = fetch("/api/generate-summary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -172,34 +172,34 @@ export default function Home() {
           videoId: extractedVideoId,
           model: selectedModel
         }),
-        signal: blogController.signal,
+        signal: summaryController.signal,
       });
       
-      // Show blog tab immediately and set generating state
-      setShowBlogTab(true);
-      setIsGeneratingBlog(true);
+      // Show summary tab immediately and set generating state
+      setShowSummaryTab(true);
+      setIsGeneratingSummary(true);
       
-      // Handle blog generation asynchronously (non-blocking)
-      blogPromise
+      // Handle summary generation asynchronously (non-blocking)
+      summaryPromise
         .then(async (response) => {
-          clearTimeout(blogTimeoutId);
+          clearTimeout(summaryTimeoutId);
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-            throw new Error(errorData.error || "Failed to generate blog post");
+            throw new Error(errorData.error || "Failed to generate summary");
           }
-          const { blogContent: generatedBlog } = await response.json();
-          setBlogContent(generatedBlog);
+          const { summaryContent: generatedSummary } = await response.json();
+          setSummaryContent(generatedSummary);
         })
         .catch(err => {
-          clearTimeout(blogTimeoutId);
+          clearTimeout(summaryTimeoutId);
           if (err.name === 'AbortError') {
-            setBlogError("Blog generation timed out. The content might be too long.");
+            setSummaryError("Summary generation timed out. The content might be too long.");
           } else {
-            setBlogError(err instanceof Error ? err.message : "An error occurred generating the blog");
+            setSummaryError(err instanceof Error ? err.message : "An error occurred generating the summary");
           }
         })
         .finally(() => {
-          setIsGeneratingBlog(false);
+          setIsGeneratingSummary(false);
         });
       
       // Now await only the topics promise for the main UI
@@ -463,10 +463,10 @@ export default function Home() {
                     videoTitle={videoInfo?.title}
                     onCitationClick={handleCitationClick}
                     onPlayAllCitations={handlePlayAllCitations}
-                    blogContent={blogContent}
-                    isGeneratingBlog={isGeneratingBlog}
-                    blogError={blogError}
-                    showBlogTab={showBlogTab}
+                    summaryContent={summaryContent}
+                    isGeneratingSummary={isGeneratingSummary}
+                    summaryError={summaryError}
+                    showSummaryTab={showSummaryTab}
                   />
                 </div>
               </div>

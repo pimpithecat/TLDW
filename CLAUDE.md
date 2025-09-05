@@ -34,6 +34,7 @@ npm start            # Start production server
 - `/api/chat`: Powers context-aware AI chat with citation extraction
 - `/api/suggested-questions`: Generates relevant questions based on video content
 - `/api/quick-preview`: Fast topic preview generation
+- `/api/generate-summary`: Creates comprehensive video summary using Gemini
 
 ### Key Technical Implementation
 - **Transcript Processing**: Advanced text matching algorithms in `generate-topics/route.ts` including Boyer-Moore search, n-gram similarity, and fuzzy matching

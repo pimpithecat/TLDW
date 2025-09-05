@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { FileText, MessageSquare, FileEdit } from "lucide-react";
 import { TranscriptSegment, Topic, Citation } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { BlogPostViewer } from "@/components/blog-post-viewer";
+import { SummaryViewer } from "@/components/summary-viewer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 
@@ -23,15 +23,15 @@ interface RightColumnTabsProps {
   videoTitle?: string;
   onCitationClick: (citation: Citation) => void;
   onPlayAllCitations?: (citations: Citation[]) => void;
-  blogContent?: string | null;
-  isGeneratingBlog?: boolean;
-  blogError?: string;
-  showBlogTab?: boolean;
+  summaryContent?: string | null;
+  isGeneratingSummary?: boolean;
+  summaryError?: string;
+  showSummaryTab?: boolean;
 }
 
 export interface RightColumnTabsHandle {
   switchToTranscript: () => void;
-  switchToBlog?: () => void;
+  switchToSummary?: () => void;
 }
 
 export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabsProps>(({
@@ -45,21 +45,21 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   videoTitle,
   onCitationClick,
   onPlayAllCitations,
-  blogContent,
-  isGeneratingBlog,
-  blogError,
-  showBlogTab,
+  summaryContent,
+  isGeneratingSummary,
+  summaryError,
+  showSummaryTab,
 }, ref) => {
-  const [activeTab, setActiveTab] = useState<"transcript" | "chat" | "blog">("transcript");
+  const [activeTab, setActiveTab] = useState<"transcript" | "chat" | "summary">("transcript");
 
   // Expose methods to parent to switch tabs
   useImperativeHandle(ref, () => ({
     switchToTranscript: () => {
       setActiveTab("transcript");
     },
-    switchToBlog: () => {
-      if (showBlogTab) {
-        setActiveTab("blog");
+    switchToSummary: () => {
+      if (showSummaryTab) {
+        setActiveTab("summary");
       }
     }
   }));
@@ -96,20 +96,20 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
           <MessageSquare className="h-4 w-4" />
           AI Chat
         </Button>
-        {showBlogTab && (
+        {showSummaryTab && (
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setActiveTab("blog")}
+            onClick={() => setActiveTab("summary")}
             className={cn(
               "flex-1 justify-center gap-2",
-              activeTab === "blog" 
+              activeTab === "summary" 
                 ? "bg-accent text-accent-foreground" 
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
             <FileEdit className="h-4 w-4" />
-            Blog Post
+            Summary
           </Button>
         )}
       </div>
@@ -137,8 +137,8 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
             onPlayAllCitations={onPlayAllCitations}
           />
         </div>
-        <div className={cn("absolute inset-0", activeTab !== "blog" && "hidden")}>
-          {isGeneratingBlog ? (
+        <div className={cn("absolute inset-0", activeTab !== "summary" && "hidden")}>
+          {isGeneratingSummary ? (
             <div className="p-6 space-y-4">
               <Skeleton className="h-8 w-3/4" />
               <Skeleton className="h-4 w-full" />
@@ -152,12 +152,12 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
               <Skeleton className="h-4 w-full" />
               <Skeleton className="h-4 w-3/4" />
             </div>
-          ) : blogError ? (
+          ) : summaryError ? (
             <div className="p-6 space-y-4">
-              <p className="text-destructive">{blogError}</p>
+              <p className="text-destructive">{summaryError}</p>
             </div>
-          ) : blogContent ? (
-            <BlogPostViewer content={blogContent} />
+          ) : summaryContent ? (
+            <SummaryViewer content={summaryContent} />
           ) : null}
         </div>
       </div>

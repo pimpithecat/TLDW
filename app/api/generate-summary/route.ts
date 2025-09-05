@@ -45,13 +45,13 @@ export async function POST(request: Request) {
     // Combine transcript into full text
     const fullTranscript = combineTranscript(transcript);
     
-    // Calculate video duration for the blog post
+    // Calculate video duration for the summary
     const lastSegment = transcript[transcript.length - 1];
     const totalDuration = lastSegment ? lastSegment.start + lastSegment.duration : 0;
     const durationFormatted = formatTime(totalDuration);
 
-    // Construct the blog generation prompt
-    const prompt = `You are a professional video content transcriber and rewriter. Your task is to rewrite a YouTube video into a "reading version," divided into several sections based on content themes. The goal is to allow readers to fully understand what the video is about simply by reading, as if they were reading a blog post. The output must be based on the actual content of the video, without adding any external information or personal interpretation.
+    // Construct the summary generation prompt
+    const prompt = `You are a professional video content transcriber and rewriter. Your task is to rewrite a YouTube video into a "reading version," divided into several sections based on content themes. The goal is to allow readers to fully understand what the video is about simply by reading, as if they were reading a comprehensive summary. The output must be based on the actual content of the video, without adding any external information or personal interpretation.
 
 ## Video Information
 - **Title**: ${videoInfo.title}
@@ -100,7 +100,7 @@ Highlight the 1-3 most intriguing and memorable and surprising stories/anecdotes
 * Try to preserve the original tone and voice of the video content. When rewriting, make sure your writing is concise, engaging, and highly readable
 * Do not include the instructional text from these requirements in the final output.`;
 
-    // Generate blog post using Gemini
+    // Generate summary using Gemini
     const geminiModel = genAI.getGenerativeModel({ 
       model: model,
       generationConfig: {
@@ -109,14 +109,14 @@ Highlight the 1-3 most intriguing and memorable and surprising stories/anecdotes
     });
 
     const result = await geminiModel.generateContent(prompt);
-    const blogContent = result.response.text();
+    const summaryContent = result.response.text();
 
-    if (!blogContent) {
+    if (!summaryContent) {
       throw new Error('No response from AI model');
     }
 
     // Clean up the response if it has any markdown code block wrappers
-    let cleanedContent = blogContent;
+    let cleanedContent = summaryContent;
     if (cleanedContent.startsWith('```markdown')) {
       cleanedContent = cleanedContent.substring(11);
     }
@@ -125,11 +125,11 @@ Highlight the 1-3 most intriguing and memorable and surprising stories/anecdotes
     }
     cleanedContent = cleanedContent.trim();
 
-    return NextResponse.json({ blogContent: cleanedContent });
+    return NextResponse.json({ summaryContent: cleanedContent });
   } catch (error) {
-    console.error('Error generating blog post:', error);
+    console.error('Error generating summary:', error);
     return NextResponse.json(
-      { error: 'Failed to generate blog post' },
+      { error: 'Failed to generate summary' },
       { status: 500 }
     );
   }

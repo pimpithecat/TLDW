@@ -4,11 +4,11 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-interface BlogPostViewerProps {
+interface SummaryViewerProps {
   content: string;
 }
 
-export function BlogPostViewer({ content }: BlogPostViewerProps) {
+export function SummaryViewer({ content }: SummaryViewerProps) {
   return (
     <ScrollArea className="h-full w-full">
       <div className="p-6 max-w-none">
