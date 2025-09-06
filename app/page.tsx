@@ -297,9 +297,6 @@ export default function Home() {
     // Clear existing highlights to avoid conflicts
     setCitationHighlight(null);
     
-    // Switch to transcript tab
-    rightColumnTabsRef.current?.switchToTranscript();
-    
     // Create a "citation reel" - a temporary Topic object from citations
     const citationReel: Topic = {
       id: `citation-reel-${Date.now()}`,

@@ -34,6 +34,7 @@ export function YouTubePlayer({
   const playerRef = useRef<any>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentSegmentIndex, setCurrentSegmentIndex] = useState(0);
+  const [citationReelSegmentIndex, setCitationReelSegmentIndex] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
   const [isPlayingAll, setIsPlayingAll] = useState(false);
@@ -186,6 +187,7 @@ export function YouTubePlayer({
   // Reset segment index when topic changes and auto-play if needed
   useEffect(() => {
     setCurrentSegmentIndex(0);
+    setCitationReelSegmentIndex(0);
     lastKnownSegmentRef.current = -1;
     // Clear any existing interval
     if (intervalRef.current) {
@@ -226,7 +228,7 @@ export function YouTubePlayer({
     }, 100);
   }, [isPlayingAll, playAllIndex, playerReady]);
 
-  // Monitor playback to pause at segment end when topic is selected
+  // Monitor playback to handle segment transitions and pausing
   useEffect(() => {
     if (!selectedTopic || !isPlaying || !playerRef.current) return;
     
@@ -236,30 +238,71 @@ export function YouTubePlayer({
     // Don't set up monitoring during play-all mode (handled by time update logic)
     if (isPlayingAll) return;
     
-    const segment = selectedTopic.segments[0];
-    if (!segment) return;
-    
-    // Set up monitoring interval to pause at segment end
-    const monitoringInterval = setInterval(() => {
-      if (!playerRef.current?.getCurrentTime) return;
-      
-      const currentTime = playerRef.current.getCurrentTime();
-      
-      // Check if we're playing within the selected segment and approaching the end
-      if (currentTime >= segment.start && currentTime >= segment.end) {
-        // Pause the video
-        playerRef.current.pauseVideo();
+    // Handle citation reels with multiple segments
+    if (selectedTopic.isCitationReel && selectedTopic.segments.length > 0) {
+      const monitoringInterval = setInterval(() => {
+        if (!playerRef.current?.getCurrentTime) return;
         
-        // Clear the monitoring interval
+        const currentTime = playerRef.current.getCurrentTime();
+        const currentSegment = selectedTopic.segments[citationReelSegmentIndex];
+        
+        if (!currentSegment) return;
+        
+        // Check if we've reached the end of the current segment
+        if (currentTime >= currentSegment.end) {
+          // Check if there are more segments to play
+          if (citationReelSegmentIndex < selectedTopic.segments.length - 1) {
+            // Move to the next segment
+            const nextIndex = citationReelSegmentIndex + 1;
+            setCitationReelSegmentIndex(nextIndex);
+            const nextSegment = selectedTopic.segments[nextIndex];
+            
+            // Seek to the start of the next segment
+            playerRef.current.seekTo(nextSegment.start, true);
+          } else {
+            // This was the last segment, pause the video
+            playerRef.current.pauseVideo();
+            
+            // Clear the monitoring interval
+            clearInterval(monitoringInterval);
+            
+            // Reset the segment index for next playback
+            setCitationReelSegmentIndex(0);
+          }
+        }
+      }, 100); // Check every 100ms
+      
+      // Clean up on unmount or when dependencies change
+      return () => {
         clearInterval(monitoringInterval);
-      }
-    }, 100); // Check every 100ms
-    
-    // Clean up on unmount or when dependencies change
-    return () => {
-      clearInterval(monitoringInterval);
-    };
-  }, [selectedTopic, isPlaying, isPlayingAll]);
+      };
+    } else {
+      // Handle regular topics with single segment
+      const segment = selectedTopic.segments[0];
+      if (!segment) return;
+      
+      // Set up monitoring interval to pause at segment end
+      const monitoringInterval = setInterval(() => {
+        if (!playerRef.current?.getCurrentTime) return;
+        
+        const currentTime = playerRef.current.getCurrentTime();
+        
+        // Check if we're playing within the selected segment and approaching the end
+        if (currentTime >= segment.start && currentTime >= segment.end) {
+          // Pause the video
+          playerRef.current.pauseVideo();
+          
+          // Clear the monitoring interval
+          clearInterval(monitoringInterval);
+        }
+      }, 100); // Check every 100ms
+      
+      // Clean up on unmount or when dependencies change
+      return () => {
+        clearInterval(monitoringInterval);
+      };
+    }
+  }, [selectedTopic, isPlaying, isPlayingAll, citationReelSegmentIndex]);
 
   const playTopic = (topic: Topic) => {
     if (!playerRef.current || !topic || topic.segments.length === 0) return;
