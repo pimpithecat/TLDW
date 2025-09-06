@@ -38,12 +38,29 @@ export function YouTubePlayer({
   const [videoDuration, setVideoDuration] = useState(0);
   const [isPlayingAll, setIsPlayingAll] = useState(false);
   const [playAllIndex, setPlayAllIndex] = useState(0);
+  const [playerReady, setPlayerReady] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isSeekingRef = useRef(false);
   const lastSeekTimeRef = useRef<number | undefined>(undefined);
   const lastAutoJumpTimeRef = useRef<number>(0);
   const lastKnownSegmentRef = useRef<number>(-1);
+  const isPlayingAllRef = useRef(false);
+  const playAllIndexRef = useRef(0);
+  const topicsRef = useRef<Topic[]>([]);
+  
+  // Keep refs in sync with state
+  useEffect(() => {
+    isPlayingAllRef.current = isPlayingAll;
+  }, [isPlayingAll]);
+  
+  useEffect(() => {
+    playAllIndexRef.current = playAllIndex;
+  }, [playAllIndex]);
+  
+  useEffect(() => {
+    topicsRef.current = topics;
+  }, [topics]);
 
   useEffect(() => {
     // Load YouTube IFrame API
@@ -65,6 +82,7 @@ export function YouTubePlayer({
         events: {
           onReady: (event: { target: any }) => {
             setVideoDuration(event.target.getDuration());
+            setPlayerReady(true);
           },
           onStateChange: (event: { data: number; target: any }) => {
             const playing = event.data === 1;
@@ -87,6 +105,27 @@ export function YouTubePlayer({
                   // Always update internal current time for progress bar
                   setCurrentTime(time);
                   
+                  // Handle Play All mode auto-transitions
+                  if (isPlayingAllRef.current && topicsRef.current.length > 0) {
+                    const currentTopic = topicsRef.current[playAllIndexRef.current];
+                    if (currentTopic && currentTopic.segments.length > 0) {
+                      const segment = currentTopic.segments[0];
+                      
+                      // Check if we've reached the end of the current segment
+                      if (time >= segment.end) {
+                        // Check if this is the last topic
+                        if (playAllIndexRef.current >= topicsRef.current.length - 1) {
+                          // End Play All mode
+                          setIsPlayingAll(false);
+                          playerRef.current.pauseVideo();
+                        } else {
+                          // Advance to the next topic
+                          setPlayAllIndex(prev => prev + 1);
+                        }
+                      }
+                    }
+                  }
+                  
                   // Throttle external updates to reduce re-renders (update every 500ms instead of 100ms)
                   const timeDiff = Math.abs(time - lastUpdateTime);
                   if (timeDiff >= 0.5) {
@@ -108,6 +147,7 @@ export function YouTubePlayer({
     };
 
     return () => {
+      setPlayerReady(false);
       if (playerRef.current) {
         playerRef.current.destroy();
       }
@@ -164,6 +204,28 @@ export function YouTubePlayer({
     }
   }, [selectedTopic]);
 
+  // State-driven playback effect for Play All mode
+  useEffect(() => {
+    if (!isPlayingAll || !playerReady || !playerRef.current || topics.length === 0) return;
+    
+    const currentTopic = topics[playAllIndex];
+    if (!currentTopic || currentTopic.segments.length === 0) return;
+    
+    // Select the topic in the UI
+    onTopicSelect?.(currentTopic);
+    
+    // Small delay to ensure player is ready
+    setTimeout(() => {
+      if (playerRef.current?.seekTo && playerRef.current?.playVideo) {
+        // Seek to the start of the topic's segment and play
+        const segment = currentTopic.segments[0];
+        playerRef.current.seekTo(segment.start, true);
+        playerRef.current.playVideo();
+        setCurrentSegmentIndex(0);
+      }
+    }, 100);
+  }, [isPlayingAll, playAllIndex, playerReady]);
+
   // Monitor playback to pause at segment end when topic is selected
   useEffect(() => {
     if (!selectedTopic || !isPlaying || !playerRef.current) return;
@@ -171,7 +233,7 @@ export function YouTubePlayer({
     // Don't set up monitoring if playTopic/playSegments interval is already running
     if (intervalRef.current) return;
     
-    // Don't set up monitoring during play-all mode (let playTopicForPlayAll handle it)
+    // Don't set up monitoring during play-all mode (handled by time update logic)
     if (isPlayingAll) return;
     
     const segment = selectedTopic.segments[0];
@@ -304,58 +366,8 @@ export function YouTubePlayer({
       // Start playing all from the beginning
       setIsPlayingAll(true);
       setPlayAllIndex(0);
-      const firstTopic = topics[0];
-      onTopicSelect?.(firstTopic);
-      playTopicForPlayAll(firstTopic, 0);
+      // The useEffect will handle starting playback
     }
-  };
-
-  const playTopicForPlayAll = (topic: Topic, index: number) => {
-    if (!playerRef.current || !topic || topic.segments.length === 0) return;
-    
-    // Clear any existing interval
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    
-    // Seek to the start of the single segment and play
-    const segment = topic.segments[0];
-    playerRef.current.seekTo(segment.start, true);
-    playerRef.current.playVideo();
-    setCurrentSegmentIndex(0);
-    setPlayAllIndex(index);
-    
-    // Set up monitoring to advance to next topic at segment end
-    intervalRef.current = setInterval(() => {
-      if (playerRef.current?.getCurrentTime) {
-        const currentTime = playerRef.current.getCurrentTime();
-        
-        // Check if we've reached or passed the segment end
-        if (currentTime >= segment.end) {
-          // Clear the monitoring interval
-          if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-          }
-          
-          // Move to next topic
-          const nextIndex = index + 1;
-          if (nextIndex < topics.length && isPlayingAll) {
-            const nextTopic = topics[nextIndex];
-            onTopicSelect?.(nextTopic);
-            // Small delay before playing next topic for smooth transition
-            setTimeout(() => {
-              playTopicForPlayAll(nextTopic, nextIndex);
-            }, 500);
-          } else {
-            // All topics played or play all was stopped
-            setIsPlayingAll(false);
-            playerRef.current.pauseVideo();
-          }
-        }
-      }
-    }, 100); // Check every 100ms
   };
 
   const selectedTopicIndex = selectedTopic ? topics.findIndex(t => t.id === selectedTopic.id) : -1;
