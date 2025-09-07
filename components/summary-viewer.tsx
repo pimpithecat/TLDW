@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -12,6 +12,65 @@ interface SummaryViewerProps {
 }
 
 export function SummaryViewer({ content, onTimestampClick }: SummaryViewerProps) {
+  // Process text to make timestamps clickable
+  const processTextWithTimestamps = (text: string | ReactNode): ReactNode => {
+    if (!onTimestampClick || typeof text !== 'string') return text;
+    
+    // Regex to match various timestamp formats: MM:SS, HH:MM:SS, with optional brackets/parentheses
+    const timestampRegex = /(?:[\[(])?\b(\d{1,2}:\d{2}(?::\d{2})?)\b(?:[\])])?/g;
+    
+    const parts: ReactNode[] = [];
+    let lastIndex = 0;
+    let match;
+    
+    while ((match = timestampRegex.exec(text)) !== null) {
+      const timestamp = match[1];
+      const seconds = parseTimestamp(timestamp);
+      
+      if (seconds !== null) {
+        // Add text before the match
+        if (match.index > lastIndex) {
+          parts.push(text.slice(lastIndex, match.index));
+        }
+        
+        // Add clickable timestamp
+        parts.push(
+          <button
+            key={`ts-${match.index}`}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onTimestampClick(seconds);
+            }}
+            className="text-primary hover:text-primary/80 underline decoration-1 underline-offset-2 transition-colors cursor-pointer"
+          >
+            {match[0]}
+          </button>
+        );
+        
+        lastIndex = match.index + match[0].length;
+      }
+    }
+    
+    // Add remaining text
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+    
+    return parts.length > 0 ? <>{parts}</> : text;
+  };
+  
+  // Helper to process children nodes
+  const processChildren = (children: ReactNode): ReactNode => {
+    if (!children) return children;
+    
+    return React.Children.map(children, (child) => {
+      if (typeof child === 'string') {
+        return processTextWithTimestamps(child);
+      }
+      return child;
+    });
+  };
   return (
     <ScrollArea className="h-full w-full">
       <div className="p-6 max-w-none">
@@ -43,7 +102,7 @@ export function SummaryViewer({ content, onTimestampClick }: SummaryViewerProps)
               // Paragraphs
               p: ({ children }) => (
                 <p className="mb-4 text-sm leading-relaxed text-foreground/90">
-                  {children}
+                  {processChildren(children)}
                 </p>
               ),
               // Lists
@@ -59,7 +118,7 @@ export function SummaryViewer({ content, onTimestampClick }: SummaryViewerProps)
               ),
               li: ({ children }) => (
                 <li className="ml-2 text-sm leading-relaxed">
-                  {children}
+                  {processChildren(children)}
                 </li>
               ),
               // Blockquotes
@@ -106,7 +165,7 @@ export function SummaryViewer({ content, onTimestampClick }: SummaryViewerProps)
                 </th>
               ),
               td: ({ children }) => (
-                <td className="px-3 py-2 text-sm text-foreground/90">{children}</td>
+                <td className="px-3 py-2 text-sm text-foreground/90">{processChildren(children)}</td>
               ),
               // Horizontal rules
               hr: () => (
@@ -148,12 +207,12 @@ export function SummaryViewer({ content, onTimestampClick }: SummaryViewerProps)
               // Emphasis
               strong: ({ children }) => (
                 <strong className="font-semibold text-foreground">
-                  {children}
+                  {processChildren(children)}
                 </strong>
               ),
               em: ({ children }) => (
                 <em className="italic">
-                  {children}
+                  {processChildren(children)}
                 </em>
               ),
             }}
