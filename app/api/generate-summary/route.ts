@@ -100,14 +100,16 @@ Highlight the 1-3 most intriguing and memorable and surprising stories/anecdotes
 
 **Style and Limitations:**
 
-* All the above content should be presented with clean and clear Markdown sections, paying attention to title hierarchy.
 * Note that the transcript might include transcription errors; you should deduce the correct spellings from the context and output the correct versions
 * Never over-summarize!
 * Include timestamps in MM:SS or HH:MM:SS format (e.g., 05:32 or 1:45:30) for important moments
 * Do not add new facts; if ambiguous statements appear, maintain the original meaning and note the uncertainty.
 * Avoid overly long paragraphs; longer ones can be broken down into multiple logical paragraphs
 * Try to preserve the original tone and voice of the video content. When rewriting, make sure your writing is concise, engaging, and highly readable
-* Do not include the instructional text from these requirements in the final output.`;
+
+**CRITICAL OUTPUT RULES:**
+1. **Summary Only**: Your response must contain ONLY the summary. Do not include any conversational text, greetings, or explanations.
+2. **Raw Markdown**: Provide the output as raw markdown text.`;
 
     // Generate summary using Gemini
     const geminiModel = genAI.getGenerativeModel({ 
