@@ -186,24 +186,14 @@ export default function Home() {
       setShowSummaryTab(true);
       setIsGeneratingSummary(true);
       
-      // Wait for both topics and summary to complete before showing UI
-      const [topicsRes, summaryRes] = await Promise.all([topicsPromise, summaryPromise]);
+      // Wait for topics to complete first (prioritize highlight reels)
+      const topicsRes = await topicsPromise;
       clearTimeout(topicsTimeoutId);
-      clearTimeout(summaryTimeoutId);
       
       // Check topics response
       if (!topicsRes.ok) {
         const errorData = await topicsRes.json().catch(() => ({ error: "Unknown error" }));
         throw new Error(errorData.error || "Failed to generate topics");
-      }
-      
-      // Check summary response (non-blocking error)
-      if (!summaryRes.ok) {
-        const errorData = await summaryRes.json().catch(() => ({ error: "Unknown error" }));
-        setSummaryError(errorData.error || "Failed to generate summary");
-      } else {
-        const { summaryContent: generatedSummary } = await summaryRes.json();
-        setSummaryContent(generatedSummary);
       }
       
       // Move to processing stage
@@ -213,7 +203,31 @@ export default function Home() {
       
       const { topics: generatedTopics } = await topicsRes.json();
       setTopics(generatedTopics);
-      setIsGeneratingSummary(false);
+      
+      // Handle summary asynchronously in the background
+      summaryPromise
+        .then(async (summaryRes) => {
+          clearTimeout(summaryTimeoutId);
+          
+          if (!summaryRes.ok) {
+            const errorData = await summaryRes.json().catch(() => ({ error: "Unknown error" }));
+            setSummaryError(errorData.error || "Failed to generate summary");
+          } else {
+            const { summaryContent: generatedSummary } = await summaryRes.json();
+            setSummaryContent(generatedSummary);
+          }
+        })
+        .catch((err) => {
+          clearTimeout(summaryTimeoutId);
+          if (err.name === 'AbortError') {
+            setSummaryError("Summary generation timed out. The video might be too long.");
+          } else {
+            setSummaryError("Failed to generate summary. Please try again.");
+          }
+        })
+        .finally(() => {
+          setIsGeneratingSummary(false);
+        });
       
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");

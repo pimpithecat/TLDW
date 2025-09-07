@@ -5,12 +5,11 @@ import { TranscriptViewer } from "@/components/transcript-viewer";
 import { AIChat } from "@/components/ai-chat";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { FileText, MessageSquare, FileEdit } from "lucide-react";
+import { FileText, MessageSquare, FileEdit, Loader2 } from "lucide-react";
 import { TranscriptSegment, Topic, Citation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { SummaryViewer } from "@/components/summary-viewer";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 
 interface RightColumnTabsProps {
   transcript: TranscriptSegment[];
@@ -65,7 +64,6 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   }));
 
   return (
-    <TooltipProvider delayDuration={0}>
     <Card className="h-full flex flex-col overflow-hidden p-0 gap-0">
       <div className="flex items-center gap-1 p-1.5 border-b">
         {showSummaryTab && (
@@ -80,7 +78,11 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
-            <FileEdit className="h-4 w-4" />
+            {isGeneratingSummary ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileEdit className="h-4 w-4" />
+            )}
             Summary
           </Button>
         )}
@@ -162,7 +164,6 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
         </div>
       </div>
     </Card>
-    </TooltipProvider>
   );
 });
 
