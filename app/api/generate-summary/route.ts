@@ -17,7 +17,7 @@ function formatTime(seconds: number): string {
 
 export async function POST(request: Request) {
   try {
-    const { transcript, videoInfo, videoId, model = 'gemini-2.5-flash' } = await request.json();
+    const { transcript, videoInfo, videoId, model = 'gemini-2.5-flash', language = 'English' } = await request.json();
 
     if (!transcript || !Array.isArray(transcript)) {
       return NextResponse.json(
@@ -62,6 +62,12 @@ export async function POST(request: Request) {
 ${fullTranscript}
 
 **Output Requirements:**
+
+**Language Requirement:**
+- Your entire output MUST be written in ${language}.
+- All section titles, descriptions, and content must be in ${language}.
+- Do not mix languages. Everything including headers like "Video Notes", "Context", "Key takeaways" etc. must be translated to ${language}.
+- Maintain the same markdown structure but translate all text to ${language}.
 
 **【Video Notes】**
 

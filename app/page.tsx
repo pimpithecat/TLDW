@@ -6,6 +6,7 @@ import { TopicCard } from "@/components/topic-card";
 import { RightColumnTabs, type RightColumnTabsHandle } from "@/components/right-column-tabs";
 import { YouTubePlayer } from "@/components/youtube-player";
 import { ModelSelector, type GeminiModel } from "@/components/model-selector";
+import { LanguageSelector, type Language } from "@/components/language-selector";
 import { LoadingContext } from "@/components/loading-context";
 import { LoadingTips } from "@/components/loading-tips";
 import { Topic, TranscriptSegment, VideoInfo, Citation } from "@/lib/types";
@@ -30,6 +31,7 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(0);
   const [transcriptHeight, setTranscriptHeight] = useState<string>("auto");
   const [selectedModel, setSelectedModel] = useState<GeminiModel>('gemini-2.5-flash');
+  const [summaryLanguage, setSummaryLanguage] = useState<Language>('English');
   const [citationHighlight, setCitationHighlight] = useState<Citation | null>(null);
   const [generationStartTime, setGenerationStartTime] = useState<number | null>(null);
   const [processingStartTime, setProcessingStartTime] = useState<number | null>(null);
@@ -174,7 +176,8 @@ export default function Home() {
           transcript: fetchedTranscript,
           videoInfo: fetchedVideoInfo,
           videoId: extractedVideoId,
-          model: selectedModel
+          model: selectedModel,
+          language: summaryLanguage
         }),
         signal: summaryController.signal,
       });
@@ -412,13 +415,23 @@ export default function Home() {
 
         <div className="flex flex-col items-center gap-4 mb-8">
           <UrlInput onSubmit={processVideo} isLoading={isLoading} />
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Model:</span>
-            <ModelSelector 
-              value={selectedModel} 
-              onChange={setSelectedModel} 
-              disabled={isLoading}
-            />
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Model:</span>
+              <ModelSelector 
+                value={selectedModel} 
+                onChange={setSelectedModel} 
+                disabled={isLoading}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Language:</span>
+              <LanguageSelector
+                value={summaryLanguage}
+                onChange={setSummaryLanguage}
+                disabled={isLoading}
+              />
+            </div>
           </div>
         </div>
 
