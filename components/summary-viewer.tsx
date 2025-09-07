@@ -1,14 +1,17 @@
 "use client";
 
+import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { parseTimestamp } from "@/lib/utils";
 
 interface SummaryViewerProps {
   content: string;
+  onTimestampClick?: (seconds: number) => void;
 }
 
-export function SummaryViewer({ content }: SummaryViewerProps) {
+export function SummaryViewer({ content, onTimestampClick }: SummaryViewerProps) {
   return (
     <ScrollArea className="h-full w-full">
       <div className="p-6 max-w-none">
@@ -110,16 +113,38 @@ export function SummaryViewer({ content }: SummaryViewerProps) {
                 <hr className="my-6 border-t border-border/50" />
               ),
               // Links
-              a: ({ href, children }) => (
-                <a 
-                  href={href} 
-                  className="text-primary hover:text-primary/80 underline decoration-1 underline-offset-2 transition-colors"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {children}
-                </a>
-              ),
+              a: ({ href, children }) => {
+                // Check if the link text is a timestamp
+                const linkText = React.Children.toArray(children).join('');
+                const seconds = parseTimestamp(linkText);
+                
+                if (seconds !== null && onTimestampClick) {
+                  // It's a timestamp - render as a clickable button
+                  return (
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        onTimestampClick(seconds);
+                      }}
+                      className="text-primary hover:text-primary/80 underline decoration-1 underline-offset-2 transition-colors cursor-pointer"
+                    >
+                      {children}
+                    </button>
+                  );
+                }
+                
+                // Regular external link
+                return (
+                  <a 
+                    href={href} 
+                    className="text-primary hover:text-primary/80 underline decoration-1 underline-offset-2 transition-colors"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {children}
+                  </a>
+                );
+              },
               // Emphasis
               strong: ({ children }) => (
                 <strong className="font-semibold text-foreground">

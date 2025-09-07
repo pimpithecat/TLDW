@@ -157,7 +157,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
               <p className="text-destructive">{summaryError}</p>
             </div>
           ) : summaryContent ? (
-            <SummaryViewer content={summaryContent} />
+            <SummaryViewer content={summaryContent} onTimestampClick={onTimestampClick} />
           ) : null}
         </div>
       </div>
