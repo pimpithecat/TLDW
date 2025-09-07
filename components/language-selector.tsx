@@ -14,45 +14,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Language, LANGUAGE_INFO, isRTLLanguage } from "@/lib/language-utils";
 
-export type Language = 
-  | 'English'
-  | 'Spanish'
-  | 'French'
-  | 'German'
-  | 'Italian'
-  | 'Portuguese'
-  | 'Dutch'
-  | 'Russian'
-  | 'Japanese'
-  | 'Korean'
-  | 'Chinese (Simplified)'
-  | 'Chinese (Traditional)'
-  | 'Arabic'
-  | 'Hindi';
-
-interface LanguageInfo {
-  id: Language;
-  name: string;
-  nativeName: string;
-}
-
-const languageInfo: LanguageInfo[] = [
-  { id: 'English', name: 'English', nativeName: 'English' },
-  { id: 'Spanish', name: 'Spanish', nativeName: 'Español' },
-  { id: 'French', name: 'French', nativeName: 'Français' },
-  { id: 'German', name: 'German', nativeName: 'Deutsch' },
-  { id: 'Italian', name: 'Italian', nativeName: 'Italiano' },
-  { id: 'Portuguese', name: 'Portuguese', nativeName: 'Português' },
-  { id: 'Dutch', name: 'Dutch', nativeName: 'Nederlands' },
-  { id: 'Russian', name: 'Russian', nativeName: 'Русский' },
-  { id: 'Japanese', name: 'Japanese', nativeName: '日本語' },
-  { id: 'Korean', name: 'Korean', nativeName: '한국어' },
-  { id: 'Chinese (Simplified)', name: 'Chinese (Simplified)', nativeName: '简体中文' },
-  { id: 'Chinese (Traditional)', name: 'Chinese (Traditional)', nativeName: '繁體中文' },
-  { id: 'Arabic', name: 'Arabic', nativeName: 'العربية' },
-  { id: 'Hindi', name: 'Hindi', nativeName: 'हिन्दी' },
-];
+// Re-export Language type for backward compatibility
+export type { Language } from "@/lib/language-utils";
 
 interface LanguageSelectorProps {
   value: Language;
@@ -61,16 +26,17 @@ interface LanguageSelectorProps {
 }
 
 export function LanguageSelector({ value, onChange, disabled }: LanguageSelectorProps) {
-  const selectedLanguage = languageInfo.find(l => l.id === value);
+  const selectedLanguage = LANGUAGE_INFO.find(l => l.id === value);
+  const isRTL = isRTLLanguage(value);
 
   return (
     <div className="flex items-center gap-2">
       <Select value={value} onValueChange={onChange} disabled={disabled}>
-        <SelectTrigger className="w-[200px]">
+        <SelectTrigger className="w-[200px]" aria-label="Select summary language">
           <SelectValue placeholder="Select a language" />
         </SelectTrigger>
         <SelectContent>
-          {languageInfo.map((lang) => (
+          {LANGUAGE_INFO.map((lang) => (
             <SelectItem key={lang.id} value={lang.id}>
               <span className="flex items-center justify-between w-full">
                 <span>{lang.name}</span>
@@ -94,6 +60,11 @@ export function LanguageSelector({ value, onChange, disabled }: LanguageSelector
               <p className="text-sm">
                 The video summary will be generated in {selectedLanguage?.nativeName || value}.
               </p>
+              {isRTL && (
+                <p className="text-sm text-muted-foreground">
+                  This language uses right-to-left text direction.
+                </p>
+              )}
               <p className="text-sm text-muted-foreground">
                 Note: The original transcript language detection and translation quality may vary 
                 depending on the source video's audio clarity and the target language.

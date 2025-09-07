@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { TranscriptSegment, VideoInfo } from '@/lib/types';
+import { TranscriptSegment } from '@/lib/types';
+import { isValidLanguage } from '@/lib/language-utils';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
@@ -8,16 +9,18 @@ function combineTranscript(segments: TranscriptSegment[]): string {
   return segments.map(s => s.text).join(' ');
 }
 
-function formatTime(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-}
-
 
 export async function POST(request: Request) {
   try {
-    const { transcript, videoInfo, videoId, model = 'gemini-2.5-flash', language = 'English' } = await request.json();
+    const { transcript, videoInfo, model = 'gemini-2.5-flash', language = 'English' } = await request.json();
+    
+    // Validate language parameter
+    if (!isValidLanguage(language)) {
+      return NextResponse.json(
+        { error: `Invalid language specified. Supported languages: ${['English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Dutch', 'Russian', 'Japanese', 'Korean', 'Chinese (Simplified)', 'Chinese (Traditional)', 'Arabic', 'Hindi'].join(', ')}` },
+        { status: 400 }
+      );
+    }
 
     if (!transcript || !Array.isArray(transcript)) {
       return NextResponse.json(
@@ -45,10 +48,10 @@ export async function POST(request: Request) {
     // Combine transcript into full text
     const fullTranscript = combineTranscript(transcript);
     
-    // Calculate video duration for the summary
-    const lastSegment = transcript[transcript.length - 1];
-    const totalDuration = lastSegment ? lastSegment.start + lastSegment.duration : 0;
-    const durationFormatted = formatTime(totalDuration);
+    // Calculate video duration for the summary (currently unused but may be needed later)
+    // const lastSegment = transcript[transcript.length - 1];
+    // const totalDuration = lastSegment ? lastSegment.start + lastSegment.duration : 0;
+    // const durationFormatted = formatTime(totalDuration);
 
     // Construct the summary generation prompt
     const prompt = `You are a professional video content transcriber and rewriter. Your task is to rewrite a YouTube video into a "reading version," divided into several sections based on content themes. The goal is to allow readers to fully understand what the video is about simply by reading, as if they were reading a comprehensive summary. The output must be based on the actual content of the video, without adding any external information or personal interpretation.

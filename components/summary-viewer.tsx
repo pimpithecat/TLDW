@@ -4,7 +4,7 @@ import React, { ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { parseTimestamp } from "@/lib/utils";
+import { parseTimestamp, TIMESTAMP_REGEX } from "@/lib/timestamp-utils";
 
 interface SummaryViewerProps {
   content: string;
@@ -16,8 +16,8 @@ export function SummaryViewer({ content, onTimestampClick }: SummaryViewerProps)
   const processTextWithTimestamps = (text: string | ReactNode): ReactNode => {
     if (!onTimestampClick || typeof text !== 'string') return text;
     
-    // Regex to match various timestamp formats: MM:SS, HH:MM:SS, with optional brackets/parentheses
-    const timestampRegex = /(?:[\[(])?\b(\d{1,2}:\d{2}(?::\d{2})?)\b(?:[\])])?/g;
+    // Use improved regex to avoid false matches with version numbers, ratios, etc.
+    const timestampRegex = new RegExp(TIMESTAMP_REGEX.source, 'g');
     
     const parts: ReactNode[] = [];
     let lastIndex = 0;
