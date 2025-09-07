@@ -101,7 +101,7 @@ export function SummaryViewer({ content, onTimestampClick }: SummaryViewerProps)
               ),
               // Paragraphs
               p: ({ children }) => (
-                <p className="mb-4 text-sm leading-relaxed text-foreground/90">
+                <p className="mb-4 text-sm leading-relaxed text-foreground/90 break-words">
                   {processChildren(children)}
                 </p>
               ),
@@ -117,7 +117,7 @@ export function SummaryViewer({ content, onTimestampClick }: SummaryViewerProps)
                 </ol>
               ),
               li: ({ children }) => (
-                <li className="ml-2 text-sm leading-relaxed">
+                <li className="ml-2 text-sm leading-relaxed break-words">
                   {processChildren(children)}
                 </li>
               ),
@@ -165,7 +165,7 @@ export function SummaryViewer({ content, onTimestampClick }: SummaryViewerProps)
                 </th>
               ),
               td: ({ children }) => (
-                <td className="px-3 py-2 text-sm text-foreground/90">{processChildren(children)}</td>
+                <td className="px-3 py-2 text-sm text-foreground/90 break-words">{processChildren(children)}</td>
               ),
               // Horizontal rules
               hr: () => (
