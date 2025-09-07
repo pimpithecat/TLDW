@@ -19,6 +19,11 @@ interface YouTubePlayerProps {
   onTopicSelect?: (topic: Topic) => void;
   onPlayTopic?: (topic: Topic) => void;
   transcript?: TranscriptSegment[];
+  isPlayingAll?: boolean;
+  playAllIndex?: number;
+  onTogglePlayAll?: () => void;
+  setPlayAllIndex?: (index: number | ((prev: number) => number)) => void;
+  setIsPlayingAll?: (playing: boolean) => void;
 }
 
 export function YouTubePlayer({
@@ -30,6 +35,11 @@ export function YouTubePlayer({
   onTopicSelect,
   onPlayTopic,
   transcript = [],
+  isPlayingAll = false,
+  playAllIndex = 0,
+  onTogglePlayAll,
+  setPlayAllIndex,
+  setIsPlayingAll,
 }: YouTubePlayerProps) {
   const playerRef = useRef<any>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -37,8 +47,6 @@ export function YouTubePlayer({
   const [citationReelSegmentIndex, setCitationReelSegmentIndex] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
-  const [isPlayingAll, setIsPlayingAll] = useState(false);
-  const [playAllIndex, setPlayAllIndex] = useState(0);
   const [playerReady, setPlayerReady] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -117,11 +125,11 @@ export function YouTubePlayer({
                         // Check if this is the last topic
                         if (playAllIndexRef.current >= topicsRef.current.length - 1) {
                           // End Play All mode
-                          setIsPlayingAll(false);
+                          setIsPlayingAll?.(false);
                           playerRef.current.pauseVideo();
                         } else {
                           // Advance to the next topic
-                          setPlayAllIndex(prev => prev + 1);
+                          setPlayAllIndex?.(prev => prev + 1);
                         }
                       }
                     }
@@ -315,7 +323,7 @@ export function YouTubePlayer({
     
     // If clicking a topic manually, exit play all mode
     if (isPlayingAll) {
-      setIsPlayingAll(false);
+      setIsPlayingAll?.(false);
     }
     
     // Seek to the start of the single segment and play
@@ -394,23 +402,8 @@ export function YouTubePlayer({
   };
 
   const playAllTopics = () => {
-    if (topics.length === 0) return;
-    
-    // Toggle play all mode
-    if (isPlayingAll) {
-      // Stop playing all
-      setIsPlayingAll(false);
-      playerRef.current?.pauseVideo();
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    } else {
-      // Start playing all from the beginning
-      setIsPlayingAll(true);
-      setPlayAllIndex(0);
-      // The useEffect will handle starting playback
-    }
+    // Delegate to parent component's handler
+    onTogglePlayAll?.();
   };
 
   const selectedTopicIndex = selectedTopic ? topics.findIndex(t => t.id === selectedTopic.id) : -1;
@@ -438,7 +431,7 @@ export function YouTubePlayer({
               onTopicSelect={onTopicSelect}
               onPlayTopic={playTopic}
               transcript={transcript}
-              onPlayAllTopics={playAllTopics}
+              onPlayAllTopics={onTogglePlayAll}
               isPlayingAll={isPlayingAll}
               playAllIndex={playAllIndex}
             />

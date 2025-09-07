@@ -35,6 +35,10 @@ export default function Home() {
   const [processingStartTime, setProcessingStartTime] = useState<number | null>(null);
   const rightColumnTabsRef = useRef<RightColumnTabsHandle>(null);
   
+  // Play All state (lifted from YouTubePlayer)
+  const [isPlayingAll, setIsPlayingAll] = useState(false);
+  const [playAllIndex, setPlayAllIndex] = useState(0);
+  
   // Summary generation state
   const [summaryContent, setSummaryContent] = useState<string | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState<boolean>(false);
@@ -218,6 +222,10 @@ export default function Home() {
   };
 
   const handleCitationClick = (citation: Citation) => {
+    // Reset Play All mode when clicking a citation
+    setIsPlayingAll(false);
+    setPlayAllIndex(0);
+    
     setSelectedTopic(null);
     setCitationHighlight(citation);
 
@@ -232,6 +240,10 @@ export default function Home() {
   const handleTimestampClick = (seconds: number, endSeconds?: number, isCitation: boolean = false, citationText?: string, isWithinHighlightReel: boolean = false, isWithinCitationHighlight: boolean = false) => {
     // Prevent rapid sequential clicks and state updates
     if (seekToTime === seconds) return;
+    
+    // Reset Play All mode when clicking any timestamp
+    setIsPlayingAll(false);
+    setPlayAllIndex(0);
     
     // Handle topic selection clearing:
     // Clear topic if it's a new citation click from AI chat OR
@@ -265,6 +277,13 @@ export default function Home() {
   };
 
   const handleTopicSelect = (topic: Topic | null) => {
+    // Reset Play All mode when manually selecting a topic
+    // (unless it's being called by Play All itself)
+    if (!isPlayingAll) {
+      setIsPlayingAll(false);
+      setPlayAllIndex(0);
+    }
+    
     // Clear citation highlight when selecting a topic
     setCitationHighlight(null);
     setSelectedTopic(topic);
@@ -283,6 +302,10 @@ export default function Home() {
   };
 
   const handlePlayAllCitations = (citations: Citation[]) => {
+    // Reset Play All mode when playing citations
+    setIsPlayingAll(false);
+    setPlayAllIndex(0);
+    
     // Clear existing highlights to avoid conflicts
     setCitationHighlight(null);
     
@@ -326,6 +349,22 @@ export default function Home() {
     }
   };
 
+  const handleTogglePlayAll = () => {
+    if (isPlayingAll) {
+      // Stop playing all
+      setIsPlayingAll(false);
+    } else {
+      // Start playing all from the beginning
+      setIsPlayingAll(true);
+      setPlayAllIndex(0);
+      // Select the first topic to start playback
+      if (topics.length > 0) {
+        setSelectedTopic(topics[0]);
+        setSeekToTime(topics[0].segments[0].start);
+        setTimeout(() => setSeekToTime(undefined), 100);
+      }
+    }
+  };
 
   // Dynamically adjust right column height to match video container
   useEffect(() => {
@@ -426,6 +465,11 @@ export default function Home() {
                     onTopicSelect={handleTopicSelect}
                     onTimeUpdate={handleTimeUpdate}
                     transcript={transcript}
+                    isPlayingAll={isPlayingAll}
+                    playAllIndex={playAllIndex}
+                    onTogglePlayAll={handleTogglePlayAll}
+                    setPlayAllIndex={setPlayAllIndex}
+                    setIsPlayingAll={setIsPlayingAll}
                   />
                 </div>
               </div>
