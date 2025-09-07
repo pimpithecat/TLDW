@@ -60,3 +60,17 @@ export function getTopicHSLColor(index: number): string {
   ];
   return hslColors[index % hslColors.length];
 }
+
+// Parse timestamp string (MM:SS or HH:MM:SS) to seconds
+export function parseTimestamp(timestamp: string): number | null {
+  const regex = /^(?:(\d{1,2}):)?(\d{1,2}):(\d{2})$/;
+  const match = timestamp.match(regex);
+  
+  if (!match) return null;
+  
+  const hours = match[1] ? parseInt(match[1], 10) : 0;
+  const minutes = parseInt(match[2], 10);
+  const seconds = parseInt(match[3], 10);
+  
+  return hours * 3600 + minutes * 60 + seconds;
+}

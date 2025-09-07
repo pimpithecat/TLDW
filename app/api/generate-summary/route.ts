@@ -17,7 +17,7 @@ function formatTime(seconds: number): string {
 
 export async function POST(request: Request) {
   try {
-    const { transcript, videoInfo, videoId, model = 'gemini-2.5-flash' } = await request.json();
+    const { transcript, videoInfo, videoId, model = 'gemini-2.5-flash', language = 'English' } = await request.json();
 
     if (!transcript || !Array.isArray(transcript)) {
       return NextResponse.json(
@@ -63,6 +63,12 @@ ${fullTranscript}
 
 **Output Requirements:**
 
+**Language Requirement:**
+- Your entire output MUST be written in ${language}.
+- All section titles, descriptions, and content must be in ${language}.
+- Do not mix languages. Everything including headers like "Video Notes", "Context", "Key takeaways" etc. must be translated to ${language}.
+- Maintain the same markdown structure but translate all text to ${language}.
+
 **【Video Notes】**
 
 1. **Context**
@@ -94,7 +100,7 @@ Highlight the 1-3 most intriguing and memorable and surprising stories/anecdotes
 * All the above content should be presented with clean and clear Markdown sections, paying attention to title hierarchy.
 * Note that the transcript might include transcription errors; you should deduce the correct spellings from the context and output the correct versions
 * Never over-summarize!
-* Format all timestamps as "00:00" and hyperlink the timestamps to the corresponding video sections
+* Include timestamps in MM:SS or HH:MM:SS format (e.g., 05:32 or 1:45:30) for important moments
 * Do not add new facts; if ambiguous statements appear, maintain the original meaning and note the uncertainty.
 * Avoid overly long paragraphs; longer ones can be broken down into multiple logical paragraphs
 * Try to preserve the original tone and voice of the video content. When rewriting, make sure your writing is concise, engaging, and highly readable

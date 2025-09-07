@@ -6,6 +6,7 @@ import { TopicCard } from "@/components/topic-card";
 import { RightColumnTabs, type RightColumnTabsHandle } from "@/components/right-column-tabs";
 import { YouTubePlayer } from "@/components/youtube-player";
 import { ModelSelector, type GeminiModel } from "@/components/model-selector";
+import { LanguageSelector, type Language } from "@/components/language-selector";
 import { LoadingContext } from "@/components/loading-context";
 import { LoadingTips } from "@/components/loading-tips";
 import { Topic, TranscriptSegment, VideoInfo, Citation } from "@/lib/types";
@@ -30,10 +31,15 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(0);
   const [transcriptHeight, setTranscriptHeight] = useState<string>("auto");
   const [selectedModel, setSelectedModel] = useState<GeminiModel>('gemini-2.5-flash');
+  const [summaryLanguage, setSummaryLanguage] = useState<Language>('English');
   const [citationHighlight, setCitationHighlight] = useState<Citation | null>(null);
   const [generationStartTime, setGenerationStartTime] = useState<number | null>(null);
   const [processingStartTime, setProcessingStartTime] = useState<number | null>(null);
   const rightColumnTabsRef = useRef<RightColumnTabsHandle>(null);
+  
+  // Play All state (lifted from YouTubePlayer)
+  const [isPlayingAll, setIsPlayingAll] = useState(false);
+  const [playAllIndex, setPlayAllIndex] = useState(0);
   
   // Summary generation state
   const [summaryContent, setSummaryContent] = useState<string | null>(null);
@@ -170,7 +176,8 @@ export default function Home() {
           transcript: fetchedTranscript,
           videoInfo: fetchedVideoInfo,
           videoId: extractedVideoId,
-          model: selectedModel
+          model: selectedModel,
+          language: summaryLanguage
         }),
         signal: summaryController.signal,
       });
@@ -179,33 +186,11 @@ export default function Home() {
       setShowSummaryTab(true);
       setIsGeneratingSummary(true);
       
-      // Handle summary generation asynchronously (non-blocking)
-      summaryPromise
-        .then(async (response) => {
-          clearTimeout(summaryTimeoutId);
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-            throw new Error(errorData.error || "Failed to generate summary");
-          }
-          const { summaryContent: generatedSummary } = await response.json();
-          setSummaryContent(generatedSummary);
-        })
-        .catch(err => {
-          clearTimeout(summaryTimeoutId);
-          if (err.name === 'AbortError') {
-            setSummaryError("Summary generation timed out. The content might be too long.");
-          } else {
-            setSummaryError(err instanceof Error ? err.message : "An error occurred generating the summary");
-          }
-        })
-        .finally(() => {
-          setIsGeneratingSummary(false);
-        });
-      
-      // Now await only the topics promise for the main UI
+      // Wait for topics to complete first (prioritize highlight reels)
       const topicsRes = await topicsPromise;
       clearTimeout(topicsTimeoutId);
       
+      // Check topics response
       if (!topicsRes.ok) {
         const errorData = await topicsRes.json().catch(() => ({ error: "Unknown error" }));
         throw new Error(errorData.error || "Failed to generate topics");
@@ -219,6 +204,31 @@ export default function Home() {
       const { topics: generatedTopics } = await topicsRes.json();
       setTopics(generatedTopics);
       
+      // Handle summary asynchronously in the background
+      summaryPromise
+        .then(async (summaryRes) => {
+          clearTimeout(summaryTimeoutId);
+          
+          if (!summaryRes.ok) {
+            const errorData = await summaryRes.json().catch(() => ({ error: "Unknown error" }));
+            setSummaryError(errorData.error || "Failed to generate summary");
+          } else {
+            const { summaryContent: generatedSummary } = await summaryRes.json();
+            setSummaryContent(generatedSummary);
+          }
+        })
+        .catch((err) => {
+          clearTimeout(summaryTimeoutId);
+          if (err.name === 'AbortError') {
+            setSummaryError("Summary generation timed out. The video might be too long.");
+          } else {
+            setSummaryError("Failed to generate summary. Please try again.");
+          }
+        })
+        .finally(() => {
+          setIsGeneratingSummary(false);
+        });
+      
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -229,6 +239,10 @@ export default function Home() {
   };
 
   const handleCitationClick = (citation: Citation) => {
+    // Reset Play All mode when clicking a citation
+    setIsPlayingAll(false);
+    setPlayAllIndex(0);
+    
     setSelectedTopic(null);
     setCitationHighlight(citation);
 
@@ -243,6 +257,10 @@ export default function Home() {
   const handleTimestampClick = (seconds: number, endSeconds?: number, isCitation: boolean = false, citationText?: string, isWithinHighlightReel: boolean = false, isWithinCitationHighlight: boolean = false) => {
     // Prevent rapid sequential clicks and state updates
     if (seekToTime === seconds) return;
+    
+    // Reset Play All mode when clicking any timestamp
+    setIsPlayingAll(false);
+    setPlayAllIndex(0);
     
     // Handle topic selection clearing:
     // Clear topic if it's a new citation click from AI chat OR
@@ -276,6 +294,13 @@ export default function Home() {
   };
 
   const handleTopicSelect = (topic: Topic | null) => {
+    // Reset Play All mode when manually selecting a topic
+    // (unless it's being called by Play All itself)
+    if (!isPlayingAll) {
+      setIsPlayingAll(false);
+      setPlayAllIndex(0);
+    }
+    
     // Clear citation highlight when selecting a topic
     setCitationHighlight(null);
     setSelectedTopic(topic);
@@ -294,6 +319,10 @@ export default function Home() {
   };
 
   const handlePlayAllCitations = (citations: Citation[]) => {
+    // Reset Play All mode when playing citations
+    setIsPlayingAll(false);
+    setPlayAllIndex(0);
+    
     // Clear existing highlights to avoid conflicts
     setCitationHighlight(null);
     
@@ -337,6 +366,22 @@ export default function Home() {
     }
   };
 
+  const handleTogglePlayAll = () => {
+    if (isPlayingAll) {
+      // Stop playing all
+      setIsPlayingAll(false);
+    } else {
+      // Start playing all from the beginning
+      setIsPlayingAll(true);
+      setPlayAllIndex(0);
+      // Select the first topic to start playback
+      if (topics.length > 0) {
+        setSelectedTopic(topics[0]);
+        setSeekToTime(topics[0].segments[0].start);
+        setTimeout(() => setSeekToTime(undefined), 100);
+      }
+    }
+  };
 
   // Dynamically adjust right column height to match video container
   useEffect(() => {
@@ -384,13 +429,23 @@ export default function Home() {
 
         <div className="flex flex-col items-center gap-4 mb-8">
           <UrlInput onSubmit={processVideo} isLoading={isLoading} />
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Model:</span>
-            <ModelSelector 
-              value={selectedModel} 
-              onChange={setSelectedModel} 
-              disabled={isLoading}
-            />
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Model:</span>
+              <ModelSelector 
+                value={selectedModel} 
+                onChange={setSelectedModel} 
+                disabled={isLoading}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Language:</span>
+              <LanguageSelector
+                value={summaryLanguage}
+                onChange={setSummaryLanguage}
+                disabled={isLoading}
+              />
+            </div>
           </div>
         </div>
 
@@ -437,6 +492,11 @@ export default function Home() {
                     onTopicSelect={handleTopicSelect}
                     onTimeUpdate={handleTimeUpdate}
                     transcript={transcript}
+                    isPlayingAll={isPlayingAll}
+                    playAllIndex={playAllIndex}
+                    onTogglePlayAll={handleTogglePlayAll}
+                    setPlayAllIndex={setPlayAllIndex}
+                    setIsPlayingAll={setIsPlayingAll}
                   />
                 </div>
               </div>
