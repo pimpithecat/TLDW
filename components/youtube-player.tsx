@@ -179,6 +179,11 @@ export function YouTubePlayer({
       
       playerRef.current.seekTo(seekToTime, true);
       
+      // Auto-play after seeking (for timestamp clicks)
+      if (playerRef.current?.playVideo) {
+        playerRef.current.playVideo();
+      }
+      
       // Delay time update to avoid feedback loop
       setTimeout(() => {
         if (playerRef.current?.getCurrentTime) {
