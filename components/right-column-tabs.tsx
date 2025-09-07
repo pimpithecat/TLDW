@@ -50,7 +50,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   summaryError,
   showSummaryTab,
 }, ref) => {
-  const [activeTab, setActiveTab] = useState<"transcript" | "chat" | "summary">("transcript");
+  const [activeTab, setActiveTab] = useState<"transcript" | "chat" | "summary">("summary");
 
   // Expose methods to parent to switch tabs
   useImperativeHandle(ref, () => ({
@@ -68,34 +68,6 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
     <TooltipProvider delayDuration={0}>
     <Card className="h-full flex flex-col overflow-hidden p-0 gap-0">
       <div className="flex items-center gap-1 p-1.5 border-b">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setActiveTab("transcript")}
-          className={cn(
-            "flex-1 justify-center gap-2",
-            activeTab === "transcript" 
-              ? "bg-accent text-accent-foreground" 
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <FileText className="h-4 w-4" />
-          Transcript
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setActiveTab("chat")}
-          className={cn(
-            "flex-1 justify-center gap-2",
-            activeTab === "chat" 
-              ? "bg-accent text-accent-foreground" 
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <MessageSquare className="h-4 w-4" />
-          AI Chat
-        </Button>
         {showSummaryTab && (
           <Button
             variant="ghost"
@@ -112,6 +84,34 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
             Summary
           </Button>
         )}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setActiveTab("chat")}
+          className={cn(
+            "flex-1 justify-center gap-2",
+            activeTab === "chat" 
+              ? "bg-accent text-accent-foreground" 
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <MessageSquare className="h-4 w-4" />
+          AI Chat
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setActiveTab("transcript")}
+          className={cn(
+            "flex-1 justify-center gap-2",
+            activeTab === "transcript" 
+              ? "bg-accent text-accent-foreground" 
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <FileText className="h-4 w-4" />
+          Transcript
+        </Button>
       </div>
       
       <div className="flex-1 overflow-hidden relative">

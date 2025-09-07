@@ -217,7 +217,7 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
         )}
       </div>
       
-      <div className={`flex-1 max-w-[80%] ${isUser ? 'text-right' : ''}`}>
+      <div className="flex-1 max-w-[80%]">
         <Card className={`p-4 ${isUser ? 'bg-primary/5 border-primary/20' : 'bg-muted/30'}`}>
           {isUser ? (
             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
