@@ -9,6 +9,19 @@ function combineTranscript(segments: TranscriptSegment[]): string {
   return segments.map(s => s.text).join(' ');
 }
 
+function cleanMarkdownFormatting(content: string): string {
+  // Fix bullet points with broken line breaks
+  // Only fix when there's actual content after the newline (not another bullet or empty line)
+  // Matches bullet followed by whitespace/newline and then actual text content
+  content = content.replace(/([•*-])[\s]*\n(?![\s]*[•*-])(?![\s]*\n)([^\n])/g, '$1 $2');
+  
+  // Fix timestamps missing spaces
+  // Matches timestamp format followed immediately by a letter
+  content = content.replace(/(\d{1,2}:\d{2}(?::\d{2})?)([A-Za-z])/g, '$1 $2');
+  
+  return content;
+}
+
 
 export async function POST(request: Request) {
   try {
@@ -135,6 +148,9 @@ Highlight the 1-3 most intriguing and memorable and surprising stories/anecdotes
       cleanedContent = cleanedContent.substring(0, cleanedContent.length - 3);
     }
     cleanedContent = cleanedContent.trim();
+    
+    // Apply formatting fixes for bullet points and timestamps
+    cleanedContent = cleanMarkdownFormatting(cleanedContent);
 
     return NextResponse.json({ summaryContent: cleanedContent });
   } catch (error) {
