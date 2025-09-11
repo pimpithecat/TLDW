@@ -452,6 +452,12 @@ export async function POST(request: Request) {
         quote: topic.quote || null
       }));
     
+    // Sort topics chronologically by their first segment's start time
+    topics.sort((a: any, b: any) => {
+      const startA = a.segments.length > 0 ? a.segments[0].start : Infinity;
+      const startB = b.segments.length > 0 ? b.segments[0].start : Infinity;
+      return startA - startB;
+    });
 
     return NextResponse.json({ topics });
   } catch (error) {
