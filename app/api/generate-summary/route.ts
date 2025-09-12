@@ -90,7 +90,6 @@ ${fullTranscript}
 1. **Context**
 - Who: (introduce each speaker's background and what makes them noteworthy in 1-3 sentences; include their social media/website links if available)
 - What: (key topics discussed)
-- Why should you care: (briefly describe what the viewer can get out of this video in one sentence; make it eye-catching)
 
 2. **Key takeaways**
 Highlight the key lessons that the viewer can learn from the video in 3-5 bullet points, each followed by the timestamps where those insights appeared. Make sure the insights are high-value, non-cliched, and actionable. Avoid generic statements.
@@ -106,13 +105,13 @@ Highlight the TOP 3-5 most insightful/contrarian/memorable/impactful/thought-pro
 Highlight the 1-3 most intriguing and memorable and surprising stories/anecdotes shared by the speaker in bullet points; make them engaging. 
 
 6. **Mentioned Resources**
- * Organize any books, blogs, podcasts, products, other cited shows or videos, key figures, website URLs, etc., mentioned in the video into a table in chronological order. 
- * a. Item (followed by timestamp mentioned)
- * b. Brief Description
- * c. Link
+ * List any books, blogs, podcasts, products, other cited shows or videos, key figures, website URLs, etc., mentioned in the video into a table in chronological order. 
+ * Use a bullet point list with the following format for each item:
+ * \`- Item Name (link): Brief description.\`
 
 **Style and Limitations:**
 
+* Your primary goal is conciseness. Get straight to the point and avoid filler words or overly descriptive sentences.
 * Note that the transcript might include transcription errors; you should deduce the correct spellings from the context and output the correct versions
 * Never over-summarize!
 * Include timestamps in MM:SS or HH:MM:SS format (e.g., 05:32 or 1:45:30) for important moments
