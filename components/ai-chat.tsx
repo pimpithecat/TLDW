@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from "react";
 import { ChatMessage, TranscriptSegment, Topic, Citation } from "@/lib/types";
 import { ChatMessageComponent } from "./chat-message";
 import { SuggestedQuestions } from "./suggested-questions";
-import { type GeminiModel } from "./model-selector";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
