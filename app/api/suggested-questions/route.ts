@@ -15,7 +15,7 @@ function formatTranscriptForContext(segments: TranscriptSegment[]): string {
 
 export async function POST(request: Request) {
   try {
-    const { transcript, topics, model, videoTitle } = await request.json();
+    const { transcript, topics, videoTitle } = await request.json();
 
     if (!transcript || !Array.isArray(transcript)) {
       return NextResponse.json(
@@ -66,12 +66,8 @@ Generate EXACTLY 3 questions that:
 Return ONLY a JSON array of 3 strings (no markdown, no extra text), e.g.:
 ["Question 1?", "Question 2?", "Question 3?"]`;
 
-    const selectedModel = model && ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-2.0-flash'].includes(model) 
-      ? model 
-      : 'gemini-2.5-flash-lite'; // Use lighter model by default for better rate limits
-
     const aiModel = genAI.getGenerativeModel({ 
-      model: selectedModel,
+      model: 'gemini-2.5-flash',
       generationConfig: {
         temperature: 0.8,
         maxOutputTokens: 200,

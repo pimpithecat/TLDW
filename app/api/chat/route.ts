@@ -37,7 +37,7 @@ function findClosestSegment(transcript: TranscriptSegment[], targetSeconds: numb
 
 export async function POST(request: Request) {
   try {
-    const { message, transcript, topics, chatHistory, model } = await request.json();
+    const { message, transcript, topics, chatHistory } = await request.json();
 
     if (!message || !transcript) {
       return NextResponse.json(
@@ -133,14 +133,10 @@ ${transcriptContext}
 
 ${message}`;
 
-    const selectedModel = model && ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-2.0-flash'].includes(model) 
-      ? model 
-      : 'gemini-2.5-flash';
-
-    const maxOutputTokens = selectedModel === 'gemini-2.0-flash' ? 8192 : 65536;
+    const maxOutputTokens = 65536; // gemini-2.5-flash-lite supports 65536 tokens
 
     const aiModel = genAI.getGenerativeModel({ 
-      model: selectedModel,
+      model: 'gemini-2.5-flash-lite',
       generationConfig: {
         responseMimeType: "application/json",
         temperature: 0.6,

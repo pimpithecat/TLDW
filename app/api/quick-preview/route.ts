@@ -56,8 +56,8 @@ Write the overview in 3-4 sentences:
 `;
 
     try {
-      // Use the faster Flash model for quick response
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      // Use the faster Flash Lite model for quick response
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
       const result = await model.generateContent(prompt);
       const preview = result.response.text().trim();
 

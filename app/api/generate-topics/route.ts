@@ -213,7 +213,7 @@ async function findExactQuotes(
 
 export async function POST(request: Request) {
   try {
-    const { transcript, model = 'gemini-2.5-flash' } = await request.json();
+    const { transcript } = await request.json();
 
     if (!transcript || !Array.isArray(transcript)) {
       return NextResponse.json(
@@ -222,14 +222,6 @@ export async function POST(request: Request) {
       );
     }
     
-    // Validate model
-    const validModels = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-2.0-flash'];
-    if (!validModels.includes(model)) {
-      return NextResponse.json(
-        { error: 'Invalid model specified' },
-        { status: 400 }
-      );
-    }
 
     const fullText = combineTranscript(transcript);
     
@@ -297,7 +289,7 @@ export async function POST(request: Request) {
 
     
     const geminiModel = genAI.getGenerativeModel({ 
-      model: model,
+      model: 'gemini-2.5-flash',
       generationConfig: {
         responseMimeType: "application/json",
         temperature: 0.7,

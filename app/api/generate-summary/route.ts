@@ -25,7 +25,7 @@ function cleanMarkdownFormatting(content: string): string {
 
 export async function POST(request: Request) {
   try {
-    const { transcript, videoInfo, model = 'gemini-2.5-flash', language = 'English' } = await request.json();
+    const { transcript, videoInfo, language = 'English' } = await request.json();
     
     // Validate language parameter
     if (!isValidLanguage(language)) {
@@ -49,14 +49,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate model
-    const validModels = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-2.0-flash'];
-    if (!validModels.includes(model)) {
-      return NextResponse.json(
-        { error: 'Invalid model specified' },
-        { status: 400 }
-      );
-    }
 
     // Combine transcript into full text
     const fullTranscript = combineTranscript(transcript);
@@ -67,65 +59,87 @@ export async function POST(request: Request) {
     // const durationFormatted = formatTime(totalDuration);
 
     // Construct the summary generation prompt
-    const prompt = `You are a professional video content transcriber and rewriter. Your task is to rewrite a YouTube video into a "reading version," divided into several sections based on content themes. The goal is to allow readers to fully understand what the video is about simply by reading, as if they were reading a comprehensive summary. The output must be based on the actual content of the video, without adding any external information or personal interpretation.
+    const prompt = `# Role: Professional Video Content Transcriber and Rewriter
 
-## Video Information
-- **Title**: ${videoInfo.title}
-- **Description**: ${videoInfo.description}
-- **Channel**: ${videoInfo.author || 'Unknown'}
+You are tasked with transforming a YouTube video transcript into a comprehensive "reading version." This version should be structured into thematic sections, allowing a user to fully grasp the video's content without watching it. Your output must be based **strictly** on the provided content, without adding external information or personal interpretation.
 
-## Video Transcript
+## Inputs
+
+### Video Information
+
+  - **Title**: ${videoInfo.title}
+  - **Description**: ${videoInfo.description}
+  - **Channel**: ${videoInfo.author || 'Unknown'}
+
+### Video Transcript
+
+\`\`\`
 ${fullTranscript}
+\`\`\`
 
-**Output Requirements:**
+## Output Structure
 
-**Language Requirement:**
-- Your entire output MUST be written in ${language}.
-- All section titles, descriptions, and content must be in ${language}.
-- Do not mix languages. Everything including headers like "Video Notes", "Context", "Key takeaways" etc. must be translated to ${language}.
-- Maintain the same markdown structure but translate all text to ${language}.
+### Context
 
-**【Video Notes】**
+  - **Who**: Introduce each speaker's background and relevance in 1-3 sentences. Include social media/website links if available.
+  - **What**: List the key topics discussed in the video.
 
-1. **Context**
-- Who: (introduce each speaker's background and what makes them noteworthy in 1-3 sentences; include their social media/website links if available)
-- What: (key topics discussed)
+### Key Takeaways
 
-2. **Key takeaways**
-Highlight the key lessons that the viewer can learn from the video in 3-5 bullet points, each followed by the timestamps where those insights appeared. Make sure the insights are high-value, non-cliched, and actionable. Avoid generic statements.
+  - Highlight 3-5 key lessons from the video.
+  - Each point must be high-value, non-clichéd, and actionable. Avoid generic statements.
+  - Append the relevant timestamp to each bullet point.
 
-3. **Smart Chapters**
- * a. Organize the content modules chronologically according to their speaking time.
- * b. Include a one-sentence concise chapter title and a description.
+### Smart Chapters
 
-4. **Key quotes**
-Highlight the TOP 3-5 most insightful/contrarian/memorable/impactful/thought-provoking quotes from the video in bullet point format, with speakers and timestamps. Don't change the original wording of the quotes, but feel free to modify typos in the transcript. Avoid generic statements.
+  - Organize content modules chronologically according to the video timeline.
+  - For each chapter, include:
+      - A concise, one-sentence title.
+      - A brief description.
 
-5. **Stories and anecdotes**
-Highlight the 1-3 most intriguing and memorable and surprising stories/anecdotes shared by the speaker in bullet points; make them engaging. 
+### Key Quotes
 
-6. **Mentioned Resources**
- * List any books, blogs, podcasts, products, other cited shows or videos, key figures, website URLs, etc., mentioned in the video into a table in chronological order. 
- * Use a bullet point list with the following format for each item:
- * \`- Item Name (link): Brief description.\`
+  - List the top 3-5 most insightful, contrarian, memorable, or impactful quotes.
+  - Use a bullet point format, including the speaker and timestamp for each quote.
+  - Do not alter the original wording, but you may correct obvious transcription typos.
+  - Avoid generic or bland statements.
 
-**Style and Limitations:**
+### Stories and Anecdotes
 
-* Your primary goal is conciseness. Get straight to the point and avoid filler words or overly descriptive sentences.
-* Note that the transcript might include transcription errors; you should deduce the correct spellings from the context and output the correct versions
-* Never over-summarize!
-* Include timestamps in MM:SS or HH:MM:SS format (e.g., 05:32 or 1:45:30) for important moments
-* Do not add new facts; if ambiguous statements appear, maintain the original meaning and note the uncertainty.
-* Avoid overly long paragraphs; longer ones can be broken down into multiple logical paragraphs
-* Try to preserve the original tone and voice of the video content. When rewriting, make sure your writing is concise, engaging, and highly readable
+  - Highlight 1-3 of the most intriguing, memorable, and surprising stories or anecdotes.
+  - Write them as engaging bullet points.
 
-**CRITICAL OUTPUT RULES:**
-1. **Summary Only**: Your response must contain ONLY the summary. Do not include any conversational text, greetings, or explanations.
-2. **Raw Markdown**: Provide the output as raw markdown text.`;
+### Mentioned Resources
+
+  - List any books, blogs, podcasts, products, other cited shows or videos, key figures, website URLs, etc., mentioned in the video into a table in chronological order.
+  - Format as a bulleted list in chronological order.
+  - Use this format for each item: Item (followed by timestamp mentioned): Brief description.
+
+## Style and Limitations
+  
+  - Be clear, concise and to the point. Avoid filler words and overly descriptive sentences.
+  - Note that the transcript might include transcription errors; you should deduce the correct spellings from the context and output the correct versions
+  - Never over-summarize!
+  - Include timestamps in MM:SS or HH:MM:SS format (e.g., 05:32 or 1:45:30) for important moments
+  - Do not add new facts; if ambiguous statements appear, maintain the original meaning and note the uncertainty.
+  - Avoid overly long paragraphs; longer ones can be broken down into multiple logical paragraphs
+  - Try to preserve the original tone and voice of the video content. When rewriting, make sure your writing is concise, engaging, and highly readable
+
+## Language Requirement
+
+  - Your entire output **MUST** be written in ${language}.
+  - All headers, descriptions, content, etc. must be in ${language}.
+
+## Critical Output Rules
+
+1.  Summary Only: Your response **MUST** contain ONLY the generated summary. Do not include any conversational text, greetings, or explanations.
+2.  Raw Markdown: Provide the entire output as a single block of raw markdown text.`;
+
+
 
     // Generate summary using Gemini
     const geminiModel = genAI.getGenerativeModel({ 
-      model: model,
+      model: 'gemini-2.5-flash',
       generationConfig: {
         temperature: 0.7
       }
