@@ -1,105 +1,115 @@
 # TLDW (Too Long; Didn't Watch)
 
-Smart video navigation that transforms long YouTube videos into topic-driven learning experiences.
+[](https://www.gnu.org/licenses/agpl-3.0)
+
+TLDW transforms long YouTube videos into topic-driven learning experiences. Using AI, it generates interactive "highlight reels", detailed summaries, and a context-aware chat to help you quickly find and understand the most valuable information.
 
 ## Features
 
-- **Cross-Transcript Smart Topics**: AI generates 4-6 nuanced topics that span the entire video, capturing complete perspectives scattered across multiple segments
-- **Interactive Multi-Segment Highlighting**: View entire transcript with highlighted relevant segments when topics are selected
-- **Smart Video Navigation**: Auto-play feature jumps between highlighted segments seamlessly
-- **Text-First Discovery**: Scan topics and preview transcript segments before committing time to video
+  - **🤖 AI-Generated Highlight Reels**: Identifies key themes across the entire video, creating concise, playable segments that capture the most important insights scattered throughout the content.
+  - **💬 Interactive AI Chat**: Ask specific questions about the video content and get answers grounded in the transcript, complete with timestamped citations that jump directly to the source.
+  - **📝 Multi-Language Summaries**: Get a comprehensive, structured summary of the video—including key takeaways, smart chapters, and memorable quotes—in one of several supported languages.
+  - **▶️ Synchronized Transcript & Player**: Read the full transcript with parts highlighted as the video plays. Click any sentence to jump to that moment in the video.
+  - **📊 Visual Timeline Navigation**: A dynamic progress bar visualizes where highlight reel segments are located, allowing for quick, non-linear navigation.
+  - **❓ Suggested Questions**: Kickstart your exploration with dynamically generated questions based on the video's content.
+
+## How It Works
+
+1.  **Paste a YouTube URL.** The app validates the link and prepares for analysis.
+2.  **Analyze Content.** The system fetches the video's transcript and metadata.
+3.  **Generate Insights.** In parallel, AI generates:
+      - A quick preview for immediate context.
+      - Insightful highlight reels based on recurring themes.
+      - A detailed, structured summary.
+      - A set of suggested questions to guide your inquiry.
+4.  **Explore Interactively.** Use the tabbed interface to:
+      - **Summary**: Get a quick, structured overview of the entire video.
+      - **AI Chat**: Ask specific questions and receive answers with clickable citations.
+      - **Transcript**: Read along with highlighting that is synchronized to the video playback.
+5.  **Navigate with Precision.** Click on highlight reels, chat citations, or transcript timestamps to instantly play the most relevant parts of the video, saving you time and effort.
+
+## Tech Stack
+
+  - **Framework**: [Next.js](https://nextjs.org/) 15 (with Turbopack)
+  - **UI**: [React](https://react.dev/) 19, [TypeScript](https://www.typescriptlang.org/), [Tailwind CSS](https://tailwindcss.com/), [shadcn/ui](https://ui.shadcn.com/)
+  - **AI**: [Google Gemini API](https://ai.google.dev/) (Gemini 2.5 Flash)
+  - **APIs**: [Supadata](https://supadata.ai/) (Transcripts), YouTube oEmbed API
+  - **Deployment**: [Vercel](https://vercel.com/)
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 18+ installed
-- Google Gemini API key for topic generation
-- Supadata API key for fetching YouTube transcripts
+  - Node.js 18+
+  - `npm`, `yarn`, or `pnpm`
+  - A Google Gemini API key
+  - A Supadata API key
 
 ### Installation
 
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/tldw.git
-cd tldw
-```
+1.  Clone the repository:
 
-2. Install dependencies:
-```bash
-npm install
-```
+    ```bash
+    git clone https://github.com/yourusername/tldw.git
+    cd tldw
+    ```
 
-3. Set up environment variables:
-Create a `.env.local` file in the root directory and add your API keys:
-```
-GEMINI_API_KEY=your_gemini_api_key_here
-SUPADATA_API_KEY=your_supadata_api_key_here
-```
+2.  Install dependencies:
 
-4. Run the development server:
-```bash
-npm run dev
-```
+    ```bash
+    npm install
+    ```
 
-5. Open [http://localhost:3000](http://localhost:3000) in your browser
+3.  Set up environment variables. Create a `.env.local` file in the root directory and add your API keys:
 
-## Usage
+    ```env
+    GEMINI_API_KEY="your_gemini_api_key_here"
+    SUPADATA_API_KEY="your_supadata_api_key_here"
+    ```
 
-1. **Input**: Paste a YouTube URL into the input field
-2. **Processing**: The app fetches the transcript and generates smart topics using AI
-3. **Discovery**: Browse the generated topics to identify your interests
-4. **Preview**: Select a topic to see highlighted transcript segments
-5. **Consumption**: Click timestamps or use "Play Topic Segments" to watch relevant parts
-6. **Navigation**: Switch between topics or jump to specific timestamps easily
+4.  Run the development server:
 
-## Tech Stack
+    ```bash
+    npm run dev
+    ```
 
-- **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS
-- **Backend**: Next.js API Routes
-- **AI**: Google Gemini 2.5 Flash for topic generation
-- **Video**: YouTube IFrame API for player integration
-- **Transcript**: Supadata API for fetching video transcripts
+5.  Open [http://localhost:3000](https://www.google.com/search?q=http://localhost:3000) in your browser.
 
 ## Project Structure
 
 ```
-tldw/
+.
 ├── app/
-│   ├── api/
-│   │   ├── transcript/        # Fetches YouTube transcripts
-│   │   └── generate-topics/   # AI topic generation
-│   ├── page.tsx               # Main application page
-│   └── layout.tsx             # App layout and metadata
+│   ├── api/                  # API routes for backend logic
+│   │   ├── chat/             # Handles AI chat Q&A with citations
+│   │   ├── generate-summary/ # Generates structured video summaries
+│   │   ├── generate-topics/  # Core "Highlight Reel" generation
+│   │   ├── quick-preview/    # Creates a fast initial summary
+│   │   ├── suggested-questions/ # Generates questions for the chat
+│   │   ├── transcript/       # Fetches video transcripts
+│   │   └── video-info/       # Fetches video metadata
+│   ├── page.tsx              # Main application page component
+│   └── layout.tsx            # Root layout
 ├── components/
-│   ├── url-input.tsx          # YouTube URL input component
-│   ├── topic-card.tsx         # Topic discovery cards
-│   ├── transcript-viewer.tsx  # Transcript with highlighting
-│   └── youtube-player.tsx     # Custom YouTube player controls
+│   ├── ai-chat.tsx           # Interactive chat interface
+│   ├── summary-viewer.tsx    # Renders the detailed summary
+│   ├── right-column-tabs.tsx # Tabbed UI for Summary, Chat, Transcript
+│   ├── transcript-viewer.tsx # Displays transcript with highlighting
+│   ├── video-progress-bar.tsx# Visual timeline with topic segments
+│   └── youtube-player.tsx    # YouTube player wrapper and custom controls
 ├── lib/
-│   ├── types.ts               # TypeScript type definitions
-│   └── utils.ts               # Utility functions
-└── prd.md                     # Product requirements document
+│   ├── quote-matcher.ts      # Algorithms for matching AI quotes to transcript text
+│   ├── types.ts              # Core TypeScript type definitions
+│   └── utils.ts              # Utility functions
+└── ...
 ```
 
-## Building for Production
+## Contributing
 
-```bash
-npm run build
-npm start
-```
+Contributions are welcome\! Please feel free to open an issue or submit a pull request.
 
-## Deployment
-
-The app is ready to deploy on Vercel:
-
-1. Push your code to GitHub
-2. Import the project in Vercel
-3. Add your environment variables in Vercel:
-   - `GEMINI_API_KEY`
-   - `SUPADATA_API_KEY`
-4. Deploy!
+This repository uses the [Anthropic Claude Action](https://github.com/anthropics/claude-code-action) to perform automated code reviews on pull requests. The AI provides feedback on code quality, potential bugs, and adherence to project conventions outlined in `CLAUDE.md`.
 
 ## License
 
-MIT
+This project is licensed under the **GNU Affero General Public License v3.0**. See the [LICENSE](https://www.google.com/search?q=./LICENSE) file for details.
