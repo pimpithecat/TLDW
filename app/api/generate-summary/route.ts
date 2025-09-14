@@ -79,29 +79,29 @@ ${fullTranscript}
 - Do not mix languages. Everything including headers like "Video Notes", "Context", "Key takeaways" etc. must be translated to ${language}.
 - Maintain the same markdown structure but translate all text to ${language}.
 
-## **Key takeaways**
+## Key takeaways
 Highlight the key lessons that the viewer can learn from the video in 3-5 bullet points, each followed by the timestamps where those insights appeared. Make sure the insights are high-value, non-cliched, and actionable. Avoid generic statements.
 
-## **Smart Chapters**
+## Smart Chapters
 Organize the content modules chronologically according to their speaking time. Include a one-sentence concise chapter title and a description.
 
-## **Key quotes**
+## Key quotes
 Highlight the TOP 3-5 most insightful/contrarian/memorable/impactful/thought-provoking quotes from the video in bullet point format, with speakers and timestamps. Don't change the original wording of the quotes, but feel free to modify typos in the transcript. Avoid generic statements.
 
-## **Stories and anecdotes**
+## Stories and anecdotes
 Highlight the 1-3 most intriguing and memorable and surprising stories/anecdotes shared by the speaker in bullet points; make them engaging. 
 
-## **Mentioned Resources**
+## Mentioned Resources
  * Organize any books, blogs, podcasts, products, other cited shows or videos, key figures, website URLs, etc., mentioned in the video as bulleted list in chronological order. 
  * Use this format for each item: 
-	 * Item name (timestamp mentioned): Brief description
+	 * Item name: Brief description (timestamp mentioned)
 
 **Style and Limitations:**
 
 * Your primary goal is conciseness. Get straight to the point and avoid filler words or overly descriptive sentences.
 * Note that the transcript might include transcription errors; you should deduce the correct spellings from the context and output the correct versions
 * Never over-summarize!
-* Include timestamps in MM:SS or HH:MM:SS format (e.g., 05:32 or 1:45:30) for important moments
+* Include timestamps in MM:SS or HH:MM:SS format (e.g., 05:32 or 1:45:30) for important moments. Timestamps should appear at the end of each point, acting as a citation.
 * Do not add new facts; if ambiguous statements appear, maintain the original meaning and note the uncertainty.
 * Avoid overly long paragraphs; longer ones can be broken down into multiple logical paragraphs
 * Try to preserve the original tone and voice of the video content. When rewriting, make sure your writing is concise, engaging, and highly readable

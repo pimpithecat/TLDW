@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { parseTimestamp, TIMESTAMP_REGEX } from "@/lib/timestamp-utils";
 import { ChevronDown } from "lucide-react";
+import { TimestampButton } from "./timestamp-button";
 
 interface SummaryViewerProps {
   content: string;
@@ -148,36 +149,50 @@ export function SummaryViewer({ content, onTimestampClick }: SummaryViewerProps)
       const seconds = parseTimestamp(timestamp);
       
       if (seconds !== null) {
+        // Add text before the match, but skip brackets and commas
         if (match.index > lastIndex) {
-          parts.push(text.slice(lastIndex, match.index));
+          let textBefore = text.slice(lastIndex, match.index);
+          // Remove trailing opening brackets or commas from the text before
+          textBefore = textBefore.replace(/[\[(,\s]+$/, '');
+          if (textBefore) {
+            parts.push(textBefore);
+          }
         }
         
+        // Don't add prefix characters (brackets, commas) - they're being removed
+        
         parts.push(
-          <button
-            key={`ts-${match.index}`}
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              handleTimestampClick(seconds);
-            }}
-            onMouseDown={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-            className="text-primary hover:text-primary/80 underline decoration-1 underline-offset-2 transition-colors cursor-pointer relative z-10"
-            style={{ pointerEvents: 'auto', userSelect: 'none' }}
-          >
-            {match[0]}
-          </button>
+          <span key={`ts-${match.index}`} className="inline-block mx-1 align-baseline">
+            <TimestampButton
+              timestamp={timestamp}
+              seconds={seconds}
+              onClick={handleTimestampClick}
+              className="text-[11px]"
+            />
+          </span>
         );
         
+        // Move past the entire match including any suffix characters
         lastIndex = match.index + match[0].length;
+        
+        // Check if the next characters are closing brackets or commas and skip them
+        while (lastIndex < text.length && /[\]),\s]/.test(text[lastIndex])) {
+          // Skip spaces after commas, but preserve other spaces
+          if (text[lastIndex] === ' ' && lastIndex > 0 && text[lastIndex - 1] !== ',') {
+            break;
+          }
+          lastIndex++;
+        }
       }
     }
     
     if (lastIndex < text.length) {
-      parts.push(text.slice(lastIndex));
+      let remainingText = text.slice(lastIndex);
+      // Clean up any leading brackets or commas
+      remainingText = remainingText.replace(/^[\]),\s]+/, '');
+      if (remainingText) {
+        parts.push(remainingText);
+      }
     }
     
     return parts.length > 0 ? <>{parts}</> : text;
@@ -291,22 +306,14 @@ export function SummaryViewer({ content, onTimestampClick }: SummaryViewerProps)
       
       if (seconds !== null && onTimestampClick) {
         return (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              handleTimestampClick(seconds);
-            }}
-            onMouseDown={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-            className="text-primary hover:text-primary/80 underline decoration-1 underline-offset-2 transition-colors cursor-pointer relative z-10"
-            style={{ pointerEvents: 'auto', userSelect: 'none' }}
-          >
-            {children}
-          </button>
+          <span className="inline-block mx-1 align-baseline">
+            <TimestampButton
+              timestamp={linkText}
+              seconds={seconds}
+              onClick={handleTimestampClick}
+              className="text-[11px]"
+            />
+          </span>
         );
       }
       

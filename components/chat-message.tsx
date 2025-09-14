@@ -8,6 +8,7 @@ import { User, Bot, Play } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { TimestampButton } from "./timestamp-button";
 
 interface ChatMessageProps {
   message: ChatMessage;
@@ -38,42 +39,31 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
     return map;
   }, [message.citations]);
 
-  // Memoized citation component with optimized tooltip
+  // Memoized citation component using TimestampButton
   const CitationComponent = React.memo(({ citationNumber }: { citationNumber: number }) => {
     const citation = citationMap.get(citationNumber);
     
     if (!citation) {
-      return <span>[{citationNumber}]</span>;
+      return <span className="text-xs text-muted-foreground">[{citationNumber}]</span>;
     }
 
-    const handleClick = React.useCallback((e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
+    const handleClick = React.useCallback(() => {
       onCitationClick(citation);
     }, [citation, onCitationClick]);
 
-    const handleMouseDown = React.useCallback((e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-    }, []);
+    const timestampText = formatTimestamp(citation.start);
 
     return (
       <Tooltip delayDuration={0} disableHoverableContent={true}>
         <TooltipTrigger asChild>
-          <sup className="inline-block ml-0.5 relative z-50">
-            <Button
-              variant="link"
-              size="sm"
-              className="h-auto p-0 text-[10px] text-primary hover:text-primary/80 font-bold no-underline hover:underline relative cursor-pointer pointer-events-auto"
+          <span className="inline-block ml-1 align-baseline">
+            <TimestampButton
+              timestamp={timestampText}
+              seconds={citation.start}
               onClick={handleClick}
-              onMouseDown={handleMouseDown}
-              tabIndex={0}
-              data-citation={citationNumber}
-              style={{ userSelect: 'none' }}
-            >
-              [{citationNumber}]
-            </Button>
-          </sup>
+              className="text-[11px]"
+            />
+          </span>
         </TooltipTrigger>
         <TooltipContent className="p-2 z-[100] pointer-events-none" sideOffset={5}>
           <div className="font-semibold text-xs whitespace-nowrap">
@@ -107,14 +97,17 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
 
       // Create a component for each number in the matched group
       const citationElements = citationNumbers.map((num, i) => (
-        <CitationComponent key={`citation-${match!.index}-${i}`} citationNumber={num} />
+        <React.Fragment key={`citation-${match!.index}-${i}`}>
+          {i > 0 && <span className="text-xs"> </span>}
+          <CitationComponent citationNumber={num} />
+        </React.Fragment>
       ));
 
       if (citationElements.length > 0) {
         allMatches.push({
           index: match.index,
           length: match[0].length,
-          element: <span key={`citations-${match!.index}`}>{citationElements}</span>
+          element: <span key={`citations-${match!.index}`} className="inline-block">{citationElements}</span>
         });
       }
     }
@@ -137,27 +130,14 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
           index: match.index,
           length: match[0].length,
           element: (
-            <sup key={`raw-timestamp-${match!.index}`} className="inline-block ml-0.5 relative z-50">
-              <Button
-                variant="link"
-                size="sm"
-                className="h-auto p-0 text-[10px] text-primary hover:text-primary/80 font-bold no-underline hover:underline relative cursor-pointer"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onTimestampClick(startSeconds, undefined, true);
-                }}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-                tabIndex={0}
-                data-timestamp={fullMatch}
-                style={{ pointerEvents: 'auto', userSelect: 'none' }}
-              >
-                {fullMatch}
-              </Button>
-            </sup>
+            <span key={`raw-timestamp-${match!.index}`} className="inline-block ml-1 align-baseline">
+              <TimestampButton
+                timestamp={startTime}
+                seconds={startSeconds}
+                onClick={() => onTimestampClick(startSeconds, undefined, true)}
+                className="text-[11px]"
+              />
+            </span>
           )
         });
       }

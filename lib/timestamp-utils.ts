@@ -1,8 +1,9 @@
 // Timestamp parsing and formatting utilities
 
 // More specific regex to avoid false matches with version numbers, ratios, etc.
-// Matches timestamps in context (whitespace, brackets, or start/end of string)
-export const TIMESTAMP_REGEX = /(?:^|\s|[\[(])(\d{1,2}:\d{2}(?::\d{2})?)(?:[\])]|\s|$)/g;
+// Matches timestamps in context (whitespace, brackets, commas, or start/end of string)
+// Updated to handle comma-separated timestamps like (12:20, 28:02)
+export const TIMESTAMP_REGEX = /(?:^|\s|[\[(,])(\d{1,2}:\d{2}(?::\d{2})?)(?:[\]),]|\s|$)/g;
 
 // Legacy regex for backward compatibility (if needed)
 export const TIMESTAMP_REGEX_LEGACY = /(?:[\[(])?\b(\d{1,2}:\d{2}(?::\d{2})?)\b(?:[\])])?/g;
