@@ -112,16 +112,47 @@ Highlight the 1-3 most intriguing and memorable and surprising stories/anecdotes
 
 
 
-    // Generate summary using Gemini
-    const geminiModel = genAI.getGenerativeModel({ 
-      model: 'gemini-2.5-flash',
-      generationConfig: {
-        temperature: 0.7
-      }
-    });
+    // Generate summary using Gemini with fallback to lighter model
+    let result;
+    let summaryContent: string | undefined;
 
-    const result = await geminiModel.generateContent(prompt);
-    const summaryContent = result.response.text();
+    try {
+      // Try with primary model first
+      const geminiModel = genAI.getGenerativeModel({
+        model: 'gemini-2.5-flash',
+        generationConfig: {
+          temperature: 0.7
+        }
+      });
+
+      result = await geminiModel.generateContent(prompt);
+      summaryContent = result.response.text();
+      console.log('Summary generated using gemini-2.5-flash');
+    } catch (error: any) {
+      // Check if it's a 503 overloaded error
+      const is503Error = error?.status === 503 ||
+                         error?.message?.includes('503') ||
+                         error?.message?.includes('overloaded');
+
+      if (is503Error) {
+        console.log('Primary model overloaded, falling back to gemini-2.5-flash-lite');
+
+        // Fallback to lighter model
+        const geminiModelLite = genAI.getGenerativeModel({
+          model: 'gemini-2.5-flash-lite',
+          generationConfig: {
+            temperature: 0.7
+          }
+        });
+
+        result = await geminiModelLite.generateContent(prompt);
+        summaryContent = result.response.text();
+        console.log('Summary generated using gemini-2.5-flash-lite (fallback)');
+      } else {
+        // Re-throw if it's not a 503 error
+        throw error;
+      }
+    }
 
     if (!summaryContent) {
       throw new Error('No response from AI model');
