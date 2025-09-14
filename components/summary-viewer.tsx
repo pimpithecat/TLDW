@@ -1,6 +1,6 @@
 "use client";
 
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -12,6 +12,45 @@ interface SummaryViewerProps {
 }
 
 export function SummaryViewer({ content, onTimestampClick }: SummaryViewerProps) {
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const scrollPositionRef = useRef<number>(0);
+  
+  // Get the actual scroll viewport element
+  const getScrollViewport = useCallback(() => {
+    if (scrollAreaRef.current) {
+      // The viewport is the element with data-slot="scroll-area-viewport"
+      return scrollAreaRef.current.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement;
+    }
+    return null;
+  }, []);
+  
+  // Save scroll position before any interaction
+  const saveScrollPosition = useCallback(() => {
+    const viewport = getScrollViewport();
+    if (viewport) {
+      scrollPositionRef.current = viewport.scrollTop;
+    }
+  }, [getScrollViewport]);
+  
+  // Restore scroll position if needed
+  const restoreScrollPosition = useCallback(() => {
+    const viewport = getScrollViewport();
+    if (viewport) {
+      viewport.scrollTop = scrollPositionRef.current;
+    }
+  }, [getScrollViewport]);
+  
+  // Handle timestamp click with scroll preservation
+  const handleTimestampClick = useCallback((seconds: number) => {
+    saveScrollPosition();
+    if (onTimestampClick) {
+      onTimestampClick(seconds);
+      // Use requestAnimationFrame to ensure DOM has updated before restoring
+      requestAnimationFrame(() => {
+        restoreScrollPosition();
+      });
+    }
+  }, [onTimestampClick, saveScrollPosition, restoreScrollPosition]);
   // Process text to make timestamps clickable
   const processTextWithTimestamps = (text: string | ReactNode): ReactNode => {
     if (!onTimestampClick || typeof text !== 'string') return text;
@@ -37,12 +76,18 @@ export function SummaryViewer({ content, onTimestampClick }: SummaryViewerProps)
         parts.push(
           <button
             key={`ts-${match.index}`}
+            type="button"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              onTimestampClick(seconds);
+              handleTimestampClick(seconds);
             }}
-            className="text-primary hover:text-primary/80 underline decoration-1 underline-offset-2 transition-colors cursor-pointer"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            className="text-primary hover:text-primary/80 underline decoration-1 underline-offset-2 transition-colors cursor-pointer relative z-10"
+            style={{ pointerEvents: 'auto', userSelect: 'none' }}
           >
             {match[0]}
           </button>
@@ -72,8 +117,9 @@ export function SummaryViewer({ content, onTimestampClick }: SummaryViewerProps)
     });
   };
   return (
-    <ScrollArea className="h-full w-full">
-      <div className="p-6 max-w-none">
+    <div ref={scrollAreaRef} className="h-full w-full">
+      <ScrollArea className="h-full w-full">
+        <div className="p-6 max-w-none">
         <article className="prose prose-sm dark:prose-invert max-w-none">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
@@ -181,11 +227,18 @@ export function SummaryViewer({ content, onTimestampClick }: SummaryViewerProps)
                   // It's a timestamp - render as a clickable button
                   return (
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.preventDefault();
-                        onTimestampClick(seconds);
+                        e.stopPropagation();
+                        handleTimestampClick(seconds);
                       }}
-                      className="text-primary hover:text-primary/80 underline decoration-1 underline-offset-2 transition-colors cursor-pointer"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      className="text-primary hover:text-primary/80 underline decoration-1 underline-offset-2 transition-colors cursor-pointer relative z-10"
+                      style={{ pointerEvents: 'auto', userSelect: 'none' }}
                     >
                       {children}
                     </button>
@@ -222,5 +275,6 @@ export function SummaryViewer({ content, onTimestampClick }: SummaryViewerProps)
         </article>
       </div>
     </ScrollArea>
+    </div>
   );
 }

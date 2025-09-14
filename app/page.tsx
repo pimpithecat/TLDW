@@ -285,6 +285,27 @@ export default function Home() {
     }, 100);
   };
 
+  const handleSummaryTimestampClick = (seconds: number) => {
+    // Prevent rapid sequential clicks and state updates
+    if (seekToTime === seconds) return;
+    
+    // Reset Play All mode when clicking any timestamp
+    setIsPlayingAll(false);
+    setPlayAllIndex(0);
+    
+    // Clear topic and citation highlight
+    setSelectedTopic(null);
+    setCitationHighlight(null);
+    
+    // Seek video to timestamp without scrolling
+    setSeekToTime(seconds);
+    
+    // Clear seek state after a short delay
+    setTimeout(() => {
+      setSeekToTime(undefined);
+    }, 100);
+  };
+
   const handleTimeUpdate = (seconds: number) => {
     setCurrentTime(seconds);
   };
@@ -501,6 +522,7 @@ export default function Home() {
                     transcript={transcript}
                     selectedTopic={selectedTopic}
                     onTimestampClick={handleTimestampClick}
+                    onSummaryTimestampClick={handleSummaryTimestampClick}
                     currentTime={currentTime}
                     topics={topics}
                     citationHighlight={citationHighlight}

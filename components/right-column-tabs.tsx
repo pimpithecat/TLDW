@@ -15,6 +15,7 @@ interface RightColumnTabsProps {
   transcript: TranscriptSegment[];
   selectedTopic: Topic | null;
   onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean, citationText?: string, isWithinHighlightReel?: boolean, isWithinCitationHighlight?: boolean) => void;
+  onSummaryTimestampClick?: (seconds: number) => void;
   currentTime?: number;
   topics?: Topic[];
   citationHighlight?: Citation | null;
@@ -37,6 +38,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   transcript,
   selectedTopic,
   onTimestampClick,
+  onSummaryTimestampClick,
   currentTime,
   topics,
   citationHighlight,
@@ -159,7 +161,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
               <p className="text-destructive">{summaryError}</p>
             </div>
           ) : summaryContent ? (
-            <SummaryViewer content={summaryContent} onTimestampClick={onTimestampClick} />
+            <SummaryViewer content={summaryContent} onTimestampClick={onSummaryTimestampClick || onTimestampClick} />
           ) : null}
         </div>
       </div>
