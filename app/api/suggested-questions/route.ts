@@ -29,6 +29,7 @@ export async function POST(request: Request) {
       `- ${t.title}: ${t.description}`
     ).join('\n') || 'No topics available';
 
+    
     const prompt = `You are an expert assistant that generates thoughtful QUESTIONS about a video using ONLY its transcript. Every question MUST be answerable from explicit statements in the transcript—no outside knowledge, inference, or speculation.
 
 ## Inputs
@@ -66,72 +67,37 @@ Generate EXACTLY 3 questions that:
 Return ONLY a JSON array of 3 strings (no markdown, no extra text), e.g.:
 ["Question 1?", "Question 2?", "Question 3?"]`;
 
-    const aiModel = genAI.getGenerativeModel({ 
-      model: 'gemini-2.5-flash',
-      generationConfig: {
-        temperature: 0.8,
-        maxOutputTokens: 200,
-        responseMimeType: "application/json",
-      }
-    });
-
     let response = '';
-    let retryCount = 0;
-    const maxRetries = 3; // Increased from 2 to 3
-    
-    while (retryCount <= maxRetries) {
+
+    try {
+      // Try with primary model first
+      const aiModel = genAI.getGenerativeModel({ 
+        model: 'gemini-2.5-flash',
+        generationConfig: {
+          temperature: 0.7,
+          responseMimeType: "application/json",
+        }
+      });
+      
+      const result = await aiModel.generateContent(prompt);
+      response = result.response.text();
+    } catch (error: any) {
+      // Fallback to lighter model on any error
+
       try {
-        const result = await aiModel.generateContent(prompt);
-        response = result.response?.text() || '';
-        
-        if (response) {
-          break;
-        }
-      } catch (error) {
-        
-        // Check if it's a rate limit error
-        const errorStatus = error instanceof Error && 'status' in error ? (error as any).status : undefined;
-        const errorMessage = error instanceof Error ? error.message : '';
-        const isRateLimit = errorStatus === 429 || 
-                          errorMessage.includes('429') || 
-                          errorMessage.includes('quota');
-        
-        if (isRateLimit) {
-        }
-        
-        if (retryCount === maxRetries) {
-          if (isRateLimit) {
+        // Fallback to lighter model
+        const aiModelLite = genAI.getGenerativeModel({ 
+          model: 'gemini-2.5-flash-lite',
+          generationConfig: {
+            temperature: 0.7,
+            responseMimeType: "application/json",
           }
-          break;
-        }
-        
-        // Parse retryDelay from error if available
-        let delayMs = 0;
-        const errorWithDetails = error as any;
-        if (errorWithDetails.errorDetails && Array.isArray(errorWithDetails.errorDetails)) {
-          const retryInfo = errorWithDetails.errorDetails.find((detail: any) => 
-            detail['@type'] === 'type.googleapis.com/google.rpc.RetryInfo'
-          );
-          if (retryInfo?.retryDelay) {
-            // Parse delay like "7s" to milliseconds
-            const delayMatch = retryInfo.retryDelay.match(/(\d+)s/);
-            if (delayMatch) {
-              delayMs = parseInt(delayMatch[1]) * 1000;
-            }
-          }
-        }
-        
-        // If no retryDelay found, use exponential backoff with jitter
-        if (!delayMs) {
-          // Base delay: 2s, 4s, 8s, 16s
-          delayMs = Math.min(2000 * Math.pow(2, retryCount), 16000);
-          // Add jitter (±25%)
-          const jitter = delayMs * 0.25 * (Math.random() * 2 - 1);
-          delayMs = Math.round(delayMs + jitter);
-        }
-        
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-        retryCount++;
+        });
+
+        const result = await aiModelLite.generateContent(prompt);
+        response = result.response.text();
+      } catch (fallbackError: any) {
+        // Fallback error - continue to default questions
       }
     }
     
@@ -181,6 +147,7 @@ Return ONLY a JSON array of 3 strings (no markdown, no extra text), e.g.:
       .filter(q => typeof q === 'string' && q.trim().length > 0)
       .map(q => q.trim())
       .slice(0, 3);
+    
     
     if (questions.length === 0) {
       questions = [
