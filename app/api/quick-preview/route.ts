@@ -43,7 +43,7 @@ export async function POST(request: Request) {
 
     const prompt = `${videoTitle ? `Video Title: "${videoTitle}"\n\n` : ''}Based on the provided video transcript excerpt, write a concise overview for a potential viewer. Your overview should:
 
-1.  Identify the speaker's apparent role or expertise.
+1.  Introduce each speaker's background and what makes them noteworthy.
 2.  Introduce the central topic of discussion.
 3.  Summarize the primary viewpoint or argument they are presenting.
 
