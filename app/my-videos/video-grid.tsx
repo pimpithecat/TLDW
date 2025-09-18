@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import { formatDuration } from '@/lib/utils';
-import { Calendar, Clock, Play, Star, Search } from 'lucide-react';
+import { Calendar, Clock, Play, Star, Search, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import Link from 'next/link';
+import { toast } from 'sonner';
+import { useAuth } from '@/contexts/auth-context';
 
 interface VideoAnalysis {
   id: string;
@@ -34,13 +36,18 @@ interface VideoGridProps {
 }
 
 export function VideoGrid({ videos }: VideoGridProps) {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [showFavorites, setShowFavorites] = useState(false);
+  const [favoriteStatuses, setFavoriteStatuses] = useState<Record<string, boolean>>(
+    videos.reduce((acc, video) => ({ ...acc, [video.id]: video.is_favorite }), {})
+  );
+  const [updatingFavorites, setUpdatingFavorites] = useState<Set<string>>(new Set());
 
   const filteredVideos = videos.filter(userVideo => {
     const matchesSearch = userVideo.video.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           userVideo.video.author?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFavorite = !showFavorites || userVideo.is_favorite;
+    const matchesFavorite = !showFavorites || favoriteStatuses[userVideo.id];
     return matchesSearch && matchesFavorite;
   });
 
@@ -61,6 +68,52 @@ export function VideoGrid({ videos }: VideoGridProps) {
       return `${days} ${days === 1 ? 'day' : 'days'} ago`;
     } else {
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+  };
+
+  const handleToggleFavorite = async (e: React.MouseEvent, userVideoId: string, videoYoutubeId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!user) {
+      toast.error('Please sign in to save favorites');
+      return;
+    }
+
+    setUpdatingFavorites(prev => new Set(prev).add(userVideoId));
+    const currentStatus = favoriteStatuses[userVideoId];
+    const newStatus = !currentStatus;
+
+    try {
+      const response = await fetch('/api/toggle-favorite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoId: videoYoutubeId,
+          isFavorite: newStatus
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update favorite status');
+      }
+
+      const data = await response.json();
+      setFavoriteStatuses(prev => ({ ...prev, [userVideoId]: data.isFavorite }));
+
+      toast.success(
+        data.isFavorite
+          ? 'Added to favorites'
+          : 'Removed from favorites'
+      );
+    } catch (error) {
+      toast.error('Failed to update favorite status');
+    } finally {
+      setUpdatingFavorites(prev => {
+        const next = new Set(prev);
+        next.delete(userVideoId);
+        return next;
+      });
     }
   };
 
@@ -111,6 +164,28 @@ export function VideoGrid({ videos }: VideoGridProps) {
                 <div className="absolute bottom-2 right-2 bg-black/80 text-white px-2 py-1 rounded text-xs">
                   {formatDuration(userVideo.video.duration)}
                 </div>
+                {user && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => handleToggleFavorite(e, userVideo.id, userVideo.video.youtube_id)}
+                    disabled={updatingFavorites.has(userVideo.id)}
+                    className="absolute top-2 right-2 h-8 w-8 bg-black/60 hover:bg-black/80 border-0 transition-all"
+                    aria-label={favoriteStatuses[userVideo.id] ? 'Remove from favorites' : 'Add to favorites'}
+                  >
+                    {updatingFavorites.has(userVideo.id) ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-white" />
+                    ) : (
+                      <Star
+                        className={`h-4 w-4 transition-all ${
+                          favoriteStatuses[userVideo.id]
+                            ? 'text-yellow-400 fill-yellow-400'
+                            : 'text-white hover:text-yellow-400'
+                        }`}
+                      />
+                    )}
+                  </Button>
+                )}
               </div>
 
               <div className="p-4">
@@ -136,11 +211,6 @@ export function VideoGrid({ videos }: VideoGridProps) {
                   )}
                 </div>
 
-                {userVideo.is_favorite && (
-                  <div className="mt-2">
-                    <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                  </div>
-                )}
               </div>
             </div>
           </Link>

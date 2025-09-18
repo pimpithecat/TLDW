@@ -49,6 +49,13 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({
           topics: cachedVideo.topics,
+          transcript: cachedVideo.transcript,
+          videoInfo: {
+            title: cachedVideo.title,
+            author: cachedVideo.author,
+            duration: cachedVideo.duration,
+            thumbnail: cachedVideo.thumbnail_url
+          },
           summary: cachedVideo.summary,
           suggestedQuestions: cachedVideo.suggested_questions,
           cached: true,

@@ -57,6 +57,8 @@ export function YouTubePlayer({
   const isPlayingAllRef = useRef(false);
   const playAllIndexRef = useRef(0);
   const topicsRef = useRef<Topic[]>([]);
+  const currentVideoIdRef = useRef<string | null>(null);
+  const isInitializingRef = useRef(false);
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -72,13 +74,29 @@ export function YouTubePlayer({
   }, [topics]);
 
   useEffect(() => {
+    // Skip if videoId hasn't changed or is being initialized
+    if (currentVideoIdRef.current === videoId || isInitializingRef.current) {
+      return;
+    }
+
+    // Skip if no videoId
+    if (!videoId) {
+      return;
+    }
+
+    isInitializingRef.current = true;
     let iframeAPIReady = false;
 
     // Function to initialize the player
     const initPlayer = () => {
-      if (playerRef.current) {
+      // Only destroy if we're changing videos
+      if (playerRef.current && currentVideoIdRef.current !== videoId) {
         playerRef.current.destroy();
+        playerRef.current = null;
       }
+
+      // Update the current video ID
+      currentVideoIdRef.current = videoId;
 
       playerRef.current = new (window as any).YT.Player("youtube-player", {
         videoId: videoId,
@@ -92,6 +110,7 @@ export function YouTubePlayer({
           onReady: (event: { target: any }) => {
             setVideoDuration(event.target.getDuration());
             setPlayerReady(true);
+            isInitializingRef.current = false;
           },
           onStateChange: (event: { data: number; target: any }) => {
             const playing = event.data === 1;
@@ -175,16 +194,21 @@ export function YouTubePlayer({
     }
 
     return () => {
-      setPlayerReady(false);
-      if (playerRef.current) {
-        playerRef.current.destroy();
+      // Only clean up if we're actually changing videos
+      if (currentVideoIdRef.current !== videoId) {
+        setPlayerReady(false);
+        if (playerRef.current) {
+          playerRef.current.destroy();
+          playerRef.current = null;
+        }
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+        }
+        if (timeUpdateIntervalRef.current) {
+          clearInterval(timeUpdateIntervalRef.current);
+        }
       }
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-      if (timeUpdateIntervalRef.current) {
-        clearInterval(timeUpdateIntervalRef.current);
-      }
+      isInitializingRef.current = false;
     };
   }, [videoId]);
 

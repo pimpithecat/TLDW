@@ -18,7 +18,7 @@ import { toast } from "sonner";
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingStage, setLoadingStage] = useState<'fetching' | 'understanding' | 'generating' | 'processing'>('fetching');
+  const [loadingStage, setLoadingStage] = useState<'fetching' | 'understanding' | 'generating' | 'processing' | null>(null);
   const [error, setError] = useState("");
   const [videoId, setVideoId] = useState<string | null>(null);
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
@@ -115,6 +115,11 @@ export default function Home() {
     setIsLoading(true);
     setLoadingStage('fetching');
     setError("");
+    setTopics([]);
+    setTranscript([]);
+    setSelectedTopic(null);
+    setSeekToTime(undefined);
+    setCitationHighlight(null);
     setVideoInfo(null);
     setVideoPreview("");
 
@@ -125,15 +130,100 @@ export default function Home() {
 
     // Reset cached suggested questions
     setCachedSuggestedQuestions(null);
-    
+
     try {
       const extractedVideoId = extractVideoId(url);
       if (!extractedVideoId) {
         throw new Error("Invalid YouTube URL");
       }
-      
-      setVideoId(extractedVideoId);
 
+      // Only set videoId if it's different to prevent unnecessary re-renders
+      if (videoId !== extractedVideoId) {
+        setVideoId(extractedVideoId);
+      }
+
+      // Check cache first before fetching transcript/metadata
+      const cacheResponse = await fetch("/api/check-video-cache", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url })
+      });
+
+      if (cacheResponse.ok) {
+        const cacheData = await cacheResponse.json();
+
+        if (cacheData.cached) {
+          // Video is cached - use all cached data
+          setLoadingStage('processing');
+          setProcessingStartTime(Date.now());
+
+          // Set all the data from cache
+          setTranscript(cacheData.transcript);
+          setVideoInfo(cacheData.videoInfo);
+          setTopics(cacheData.topics);
+
+          // Set cached summary and questions
+          if (cacheData.summary) {
+            setSummaryContent(cacheData.summary);
+            setShowSummaryTab(true);
+            setIsGeneratingSummary(false);
+          }
+          if (cacheData.suggestedQuestions) {
+            setCachedSuggestedQuestions(cacheData.suggestedQuestions);
+          }
+
+          // Clear loading state
+          setIsLoading(false);
+          setLoadingStage(null);
+          setProcessingStartTime(null);
+
+          // Auto-start summary generation if not available
+          if (!cacheData.summary) {
+            setShowSummaryTab(true);
+            setIsGeneratingSummary(true);
+
+            fetch("/api/generate-summary", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                transcript: cacheData.transcript,
+                videoInfo: cacheData.videoInfo,
+                videoId: extractedVideoId,
+                language: summaryLanguage
+              }),
+            })
+            .then(async (summaryRes) => {
+              if (summaryRes.ok) {
+                const { summaryContent: generatedSummary } = await summaryRes.json();
+                setSummaryContent(generatedSummary);
+
+                // Update the video analysis with the summary
+                fetch("/api/update-video-analysis", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    videoId: extractedVideoId,
+                    summary: generatedSummary
+                  }),
+                }).catch(err => console.error("Failed to update video analysis with summary:", err));
+              } else {
+                const errorData = await summaryRes.json().catch(() => ({ error: "Unknown error" }));
+                setSummaryError(errorData.error || "Failed to generate summary");
+              }
+            })
+            .catch((err) => {
+              setSummaryError("Failed to generate summary. Please try again.");
+            })
+            .finally(() => {
+              setIsGeneratingSummary(false);
+            });
+          }
+
+          return; // Exit early - no need to fetch anything else
+        }
+      }
+
+      // Not cached, proceed with normal flow
       // Create AbortControllers for both requests
       const transcriptController = new AbortController();
       const videoInfoController = new AbortController();
