@@ -12,7 +12,6 @@ import {
 
 interface ParsedTopic {
   title: string;
-  description?: string;
   quote?: {
     timestamp: string;
     text: string;
@@ -318,7 +317,6 @@ export async function POST(request: Request) {
           // Create a fallback response
           parsedResponse = [{
             title: "Full Video",
-            description: "Complete video content",
             quote: {
               timestamp: "[00:00-00:30]",
               text: fullText.substring(0, 200)
@@ -329,7 +327,6 @@ export async function POST(request: Request) {
         // Create a fallback response
         parsedResponse = [{
           title: "Full Video",
-          description: "Complete video content",
           quote: {
             timestamp: "[00:00-00:30]",
             text: fullText.substring(0, 200)
@@ -367,7 +364,6 @@ export async function POST(request: Request) {
           
           topicsArray.push({
             title: `Part ${i + 1}`,
-            description: `Section ${i + 1} of the video`,
             quote: {
               timestamp: `[${formatTime(startTime)}-${formatTime(endTime)}]`,
               text: chunkSegments.map(s => s.text).join(' ').substring(0, 200) + '...'
@@ -397,7 +393,6 @@ export async function POST(request: Request) {
         return {
           id: `topic-${index}`,
           title: topic.title,
-          description: topic.description || '',
           duration: Math.round(totalDuration),
           segments: segments,
           quote: topic.quote // Store original quote for display
@@ -410,7 +405,6 @@ export async function POST(request: Request) {
       topicsArray.map((topic: ParsedTopic, index: number) => ({
         id: `topic-${index}`,
         title: topic.title,
-        description: topic.description || '',
         duration: 0,
         segments: [],
         quote: topic.quote || null

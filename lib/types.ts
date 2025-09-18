@@ -7,7 +7,7 @@ export interface TranscriptSegment {
 export interface Topic {
   id: string;
   title: string;
-  description: string;
+  description?: string;
   duration: number;
   segments: {
     start: number;
