@@ -18,10 +18,16 @@ export default async function ProfilePage() {
     .eq('id', user.id)
     .single();
 
+  // Fetch video count from user_videos
+  const { count: videoCount } = await supabase
+    .from('user_videos')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', user.id);
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl">
       <h1 className="text-3xl font-bold mb-8">Profile Settings</h1>
-      <ProfileForm user={user} profile={profile} />
+      <ProfileForm user={user} profile={profile} videoCount={videoCount || 0} />
     </div>
   );
 }

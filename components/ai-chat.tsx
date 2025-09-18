@@ -26,7 +26,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>(cachedSuggestedQuestions || []);
+  const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [askedQuestions, setAskedQuestions] = useState<Set<string>>(new Set());
   const [showSuggestions, setShowSuggestions] = useState(true);
@@ -37,6 +37,12 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Reset questions when video changes
+  useEffect(() => {
+    setSuggestedQuestions([]);
+    setAskedQuestions(new Set());
+  }, [videoId]);
 
   // Update suggested questions when cached questions change
   useEffect(() => {

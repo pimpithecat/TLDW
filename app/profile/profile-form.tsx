@@ -25,9 +25,10 @@ interface Profile {
 interface ProfileFormProps {
   user: User;
   profile: Profile | null;
+  videoCount: number;
 }
 
-export default function ProfileForm({ user, profile }: ProfileFormProps) {
+export default function ProfileForm({ user, profile, videoCount }: ProfileFormProps) {
   const router = useRouter();
   const supabase = createClient();
 
@@ -221,7 +222,7 @@ export default function ProfileForm({ user, profile }: ProfileFormProps) {
             <div className="flex justify-between">
               <span className="text-sm text-muted-foreground">Videos Analyzed</span>
               <span className="text-sm font-medium">
-                {profile?.free_generations_used || 0} videos
+                {videoCount} videos
               </span>
             </div>
           </div>

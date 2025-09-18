@@ -117,11 +117,14 @@ export default function Home() {
     setError("");
     setVideoInfo(null);
     setVideoPreview("");
-    
+
     // Reset summary-related states
     setSummaryContent(null);
     setSummaryError("");
     setShowSummaryTab(false);
+
+    // Reset cached suggested questions
+    setCachedSuggestedQuestions(null);
     
     try {
       const extractedVideoId = extractVideoId(url);
