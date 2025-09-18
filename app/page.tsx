@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { UrlInput } from "@/components/url-input";
-import { TopicCard } from "@/components/topic-card";
 import { RightColumnTabs, type RightColumnTabsHandle } from "@/components/right-column-tabs";
 import { YouTubePlayer } from "@/components/youtube-player";
 import { LanguageSelector, type Language } from "@/components/language-selector";
@@ -11,10 +10,11 @@ import { LoadingTips } from "@/components/loading-tips";
 import { Topic, TranscriptSegment, VideoInfo, Citation } from "@/lib/types";
 import { extractVideoId } from "@/lib/utils";
 import { useElapsedTimer } from "@/lib/hooks/use-elapsed-timer";
-import { Loader2, Video, FileText, Sparkles } from "lucide-react";
+import { Loader2, Video } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
+import { AuthModal } from "@/components/auth-modal";
+import { useAuth } from "@/contexts/auth-context";
+import { toast } from "sonner";
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
@@ -49,7 +49,66 @@ export default function Home() {
   const elapsedTime = useElapsedTimer(generationStartTime);
   const processingElapsedTime = useElapsedTimer(processingStartTime);
 
+  // Auth and generation limit state
+  const { user } = useAuth();
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [generationCount, setGenerationCount] = useState(0);
+
+  // Memoize processVideo to prevent infinite loops
+  const processVideoMemo = useCallback((url: string) => {
+    processVideo(url);
+  }, []);
+
+  // Load generation count from localStorage on mount
+  useEffect(() => {
+    if (!user) {
+      const count = parseInt(localStorage.getItem('generationCount') || '0');
+      setGenerationCount(count);
+    }
+  }, [user]);
+
+  // Check for URL params on mount (separate effect to prevent loops)
+  useEffect(() => {
+    // Check for auth error in URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    const authError = urlParams.get('auth_error');
+
+    if (authError) {
+      toast.error(`Authentication failed: ${decodeURIComponent(authError)}`);
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+      return;
+    }
+
+    // Check for video ID in URL params (for loading cached videos)
+    const videoIdParam = urlParams.get('v');
+    const cachedParam = urlParams.get('cached');
+
+    if (videoIdParam && cachedParam === 'true' && !isLoading && !videoId) {
+      // Load cached video directly
+      const youtubeUrl = `https://www.youtube.com/watch?v=${videoIdParam}`;
+      processVideoMemo(youtubeUrl);
+    }
+  }, []); // Empty dependency array - only run once on mount
+
+  // Check if user can generate
+  const checkGenerationLimit = (): boolean => {
+    if (user) return true; // Authenticated users have no limits
+
+    const count = parseInt(localStorage.getItem('generationCount') || '0');
+    if (count >= 1) {
+      // Show auth modal for second generation
+      setAuthModalOpen(true);
+      return false;
+    }
+    return true;
+  };
+
   const processVideo = async (url: string) => {
+    // Check generation limit for anonymous users
+    if (!checkGenerationLimit()) {
+      return;
+    }
     setIsLoading(true);
     setLoadingStage('fetching');
     setError("");
@@ -151,13 +210,15 @@ export default function Home() {
       const topicsTimeoutId = setTimeout(() => topicsController.abort(), 600000); // 60 second timeout
       const summaryTimeoutId = setTimeout(() => summaryController.abort(), 600000); // 60 second timeout
       
-      // Start topics generation (promise, not awaited yet)
-      const topicsPromise = fetch("/api/generate-topics", {
+      // Start topics generation using cached video-analysis endpoint
+      const topicsPromise = fetch("/api/video-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
+          videoId: extractedVideoId,
+          videoInfo: fetchedVideoInfo,
           transcript: fetchedTranscript,
-          videoId: extractedVideoId
+          model: 'gemini-2.0-flash-exp'
         }),
         signal: topicsController.signal,
       }).catch(err => {
@@ -200,8 +261,16 @@ export default function Home() {
       setGenerationStartTime(null);
       setProcessingStartTime(Date.now());
       
-      const { topics: generatedTopics } = await topicsRes.json();
+      const topicsData = await topicsRes.json();
+      const generatedTopics = topicsData.topics;
       setTopics(generatedTopics);
+
+      // Update generation count for anonymous users if not cached
+      if (!user && !topicsData.cached) {
+        const newCount = generationCount + 1;
+        localStorage.setItem('generationCount', newCount.toString());
+        setGenerationCount(newCount);
+      }
       
       // Handle summary asynchronously in the background
       summaryPromise
@@ -253,7 +322,7 @@ export default function Home() {
     setTimeout(() => setSeekToTime(undefined), 100);
   };
 
-  const handleTimestampClick = (seconds: number, endSeconds?: number, isCitation: boolean = false, citationText?: string, isWithinHighlightReel: boolean = false, isWithinCitationHighlight: boolean = false) => {
+  const handleTimestampClick = (seconds: number, _endSeconds?: number, isCitation: boolean = false, _citationText?: string, isWithinHighlightReel: boolean = false, isWithinCitationHighlight: boolean = false) => {
     // Prevent rapid sequential clicks and state updates
     if (seekToTime === seconds) return;
     
@@ -329,12 +398,6 @@ export default function Home() {
     if (topic && topic.segments.length > 0) {
       setSeekToTime(topic.segments[0].start);
       setTimeout(() => setSeekToTime(undefined), 100);
-    }
-  };
-
-  const handlePlayTopic = () => {
-    if (selectedTopic && selectedTopic.segments.length > 0) {
-      setSeekToTime(selectedTopic.segments[0].start);
     }
   };
 
@@ -556,6 +619,16 @@ export default function Home() {
           </Card>
         )}
       </div>
+      <AuthModal
+        open={authModalOpen}
+        onOpenChange={setAuthModalOpen}
+        trigger="generation-limit"
+        onSuccess={() => {
+          // Reset generation count after successful auth
+          localStorage.removeItem('generationCount');
+          setGenerationCount(0);
+        }}
+      />
     </div>
   );
 }
