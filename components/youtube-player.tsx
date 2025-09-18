@@ -72,14 +72,14 @@ export function YouTubePlayer({
   }, [topics]);
 
   useEffect(() => {
-    // Load YouTube IFrame API
-    const tag = document.createElement("script");
-    tag.src = "https://www.youtube.com/iframe_api";
-    const firstScriptTag = document.getElementsByTagName("script")[0];
-    firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+    let iframeAPIReady = false;
 
-    // Initialize player when API is ready
-    (window as any).onYouTubeIframeAPIReady = () => {
+    // Function to initialize the player
+    const initPlayer = () => {
+      if (playerRef.current) {
+        playerRef.current.destroy();
+      }
+
       playerRef.current = new (window as any).YT.Player("youtube-player", {
         videoId: videoId,
         playerVars: {
@@ -154,6 +154,25 @@ export function YouTubePlayer({
         },
       });
     };
+
+    // Check if YouTube API is already loaded
+    if ((window as any).YT && (window as any).YT.Player) {
+      initPlayer();
+    } else {
+      // Load YouTube IFrame API
+      if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+        const tag = document.createElement("script");
+        tag.src = "https://www.youtube.com/iframe_api";
+        const firstScriptTag = document.getElementsByTagName("script")[0];
+        firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+      }
+
+      // Set up callback for when API is ready
+      (window as any).onYouTubeIframeAPIReady = () => {
+        iframeAPIReady = true;
+        initPlayer();
+      };
+    }
 
     return () => {
       setPlayerReady(false);

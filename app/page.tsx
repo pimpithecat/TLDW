@@ -45,6 +45,9 @@ export default function Home() {
   const [summaryError, setSummaryError] = useState<string>("");
   const [showSummaryTab, setShowSummaryTab] = useState<boolean>(false);
 
+  // Cached suggested questions
+  const [cachedSuggestedQuestions, setCachedSuggestedQuestions] = useState<string[] | null>(null);
+
   // Use custom hook for timer logic
   const elapsedTime = useElapsedTimer(generationStartTime);
   const processingElapsedTime = useElapsedTimer(processingStartTime);
@@ -127,58 +130,76 @@ export default function Home() {
       }
       
       setVideoId(extractedVideoId);
-      
-      // Create AbortController for timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-      
-      // Fetch transcript
-      const transcriptRes = await fetch("/api/transcript", {
+
+      // Create AbortControllers for both requests
+      const transcriptController = new AbortController();
+      const videoInfoController = new AbortController();
+      const transcriptTimeoutId = setTimeout(() => transcriptController.abort(), 30000); // 30 second timeout
+      const videoInfoTimeoutId = setTimeout(() => videoInfoController.abort(), 10000); // 10 second timeout
+
+      // Fetch transcript and video info in parallel
+      const transcriptPromise = fetch("/api/transcript", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
-        signal: controller.signal,
+        signal: transcriptController.signal,
       }).catch(err => {
-        clearTimeout(timeoutId);
+        clearTimeout(transcriptTimeoutId);
         if (err.name === 'AbortError') {
-          throw new Error("Request timed out. Please try again.");
+          throw new Error("Transcript request timed out. Please try again.");
         }
-        throw new Error("Network error: Unable to connect to server. Please ensure the server is running.");
+        throw new Error("Network error: Unable to fetch transcript. Please ensure the server is running.");
       });
-      
-      clearTimeout(timeoutId);
-      
-      if (!transcriptRes.ok) {
-        const errorData = await transcriptRes.json().catch(() => ({ error: "Unknown error" }));
+
+      const videoInfoPromise = fetch("/api/video-info", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+        signal: videoInfoController.signal,
+      }).catch(err => {
+        clearTimeout(videoInfoTimeoutId);
+        if (err.name === 'AbortError') {
+          console.error("Video info request timed out");
+          return null;
+        }
+        console.error("Failed to fetch video info:", err);
+        return null;
+      });
+
+      // Wait for both requests to complete
+      const [transcriptRes, videoInfoRes] = await Promise.all([
+        transcriptPromise,
+        videoInfoPromise
+      ]);
+
+      clearTimeout(transcriptTimeoutId);
+      clearTimeout(videoInfoTimeoutId);
+
+      // Process transcript response (required)
+      if (!transcriptRes || !transcriptRes.ok) {
+        const errorData = transcriptRes ? await transcriptRes.json().catch(() => ({ error: "Unknown error" })) : { error: "Failed to fetch transcript" };
         throw new Error(errorData.error || "Failed to fetch transcript");
       }
-      
+
       const { transcript: fetchedTranscript } = await transcriptRes.json();
       setTranscript(fetchedTranscript);
-      
-      // Move to understanding stage
-      setLoadingStage('understanding');
-      
-      // Fetch video info before starting generation
+
+      // Process video info response (optional)
       let fetchedVideoInfo = null;
-      try {
-        const videoInfoRes = await fetch("/api/video-info", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url }),
-        });
-        
-        if (videoInfoRes.ok) {
+      if (videoInfoRes && videoInfoRes.ok) {
+        try {
           const videoInfoData = await videoInfoRes.json();
           if (videoInfoData && !videoInfoData.error) {
             setVideoInfo(videoInfoData);
             fetchedVideoInfo = videoInfoData;
           }
+        } catch (error) {
+          console.error("Failed to parse video info:", error);
         }
-      } catch (error) {
-        // Video info fetch failed, but continue anyway
-        console.error("Failed to fetch video info:", error);
       }
+
+      // Move to understanding stage
+      setLoadingStage('understanding');
       
       // Generate quick preview (non-blocking)
       fetch("/api/quick-preview", {
@@ -204,12 +225,10 @@ export default function Home() {
       setLoadingStage('generating');
       setGenerationStartTime(Date.now());
       
-      // Create abort controllers for both requests
+      // Create abort controller for topics request
       const topicsController = new AbortController();
-      const summaryController = new AbortController();
       const topicsTimeoutId = setTimeout(() => topicsController.abort(), 600000); // 60 second timeout
-      const summaryTimeoutId = setTimeout(() => summaryController.abort(), 600000); // 60 second timeout
-      
+
       // Start topics generation using cached video-analysis endpoint
       const topicsPromise = fetch("/api/video-analysis", {
         method: "POST",
@@ -218,7 +237,7 @@ export default function Home() {
           videoId: extractedVideoId,
           videoInfo: fetchedVideoInfo,
           transcript: fetchedTranscript,
-          model: 'gemini-2.0-flash-exp'
+          model: 'gemini-2.5-flash'
         }),
         signal: topicsController.signal,
       }).catch(err => {
@@ -228,24 +247,7 @@ export default function Home() {
         }
         throw new Error("Network error: Unable to generate topics. Please check your connection.");
       });
-      
-      // Start summary generation (promise, not awaited)
-      const summaryPromise = fetch("/api/generate-summary", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transcript: fetchedTranscript,
-          videoInfo: fetchedVideoInfo,
-          videoId: extractedVideoId,
-          language: summaryLanguage
-        }),
-        signal: summaryController.signal,
-      });
-      
-      // Show summary tab immediately and set generating state
-      setShowSummaryTab(true);
-      setIsGeneratingSummary(true);
-      
+
       // Wait for topics to complete first (prioritize highlight reels)
       const topicsRes = await topicsPromise;
       clearTimeout(topicsTimeoutId);
@@ -265,37 +267,109 @@ export default function Home() {
       const generatedTopics = topicsData.topics;
       setTopics(generatedTopics);
 
-      // Update generation count for anonymous users if not cached
-      if (!user && !topicsData.cached) {
-        const newCount = generationCount + 1;
-        localStorage.setItem('generationCount', newCount.toString());
-        setGenerationCount(newCount);
-      }
-      
-      // Handle summary asynchronously in the background
-      summaryPromise
-        .then(async (summaryRes) => {
-          clearTimeout(summaryTimeoutId);
-          
-          if (!summaryRes.ok) {
-            const errorData = await summaryRes.json().catch(() => ({ error: "Unknown error" }));
-            setSummaryError(errorData.error || "Failed to generate summary");
-          } else {
-            const { summaryContent: generatedSummary } = await summaryRes.json();
-            setSummaryContent(generatedSummary);
-          }
-        })
-        .catch((err) => {
-          clearTimeout(summaryTimeoutId);
-          if (err.name === 'AbortError') {
-            setSummaryError("Summary generation timed out. The video might be too long.");
-          } else {
-            setSummaryError("Failed to generate summary. Please try again.");
-          }
-        })
-        .finally(() => {
+      // If data is cached, use the cached summary and suggested questions
+      if (topicsData.cached) {
+        // Use cached summary if available
+        if (topicsData.summary) {
+          setSummaryContent(topicsData.summary);
+          setShowSummaryTab(true);
           setIsGeneratingSummary(false);
+        }
+
+        // Use cached suggested questions if available
+        if (topicsData.suggestedQuestions) {
+          setCachedSuggestedQuestions(topicsData.suggestedQuestions);
+        }
+      } else {
+        // Update generation count for anonymous users
+        if (!user) {
+          const newCount = generationCount + 1;
+          localStorage.setItem('generationCount', newCount.toString());
+          setGenerationCount(newCount);
+        }
+
+        // Generate new summary
+        setShowSummaryTab(true);
+        setIsGeneratingSummary(true);
+
+        const summaryController = new AbortController();
+        const summaryTimeoutId = setTimeout(() => summaryController.abort(), 600000); // 60 second timeout
+
+        const summaryPromise = fetch("/api/generate-summary", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            transcript: fetchedTranscript,
+            videoInfo: fetchedVideoInfo,
+            videoId: extractedVideoId,
+            language: summaryLanguage
+          }),
+          signal: summaryController.signal,
         });
+
+        // Handle summary generation in the background
+        summaryPromise
+          .then(async (summaryRes) => {
+            clearTimeout(summaryTimeoutId);
+
+            if (!summaryRes.ok) {
+              const errorData = await summaryRes.json().catch(() => ({ error: "Unknown error" }));
+              setSummaryError(errorData.error || "Failed to generate summary");
+            } else {
+              const { summaryContent: generatedSummary } = await summaryRes.json();
+              setSummaryContent(generatedSummary);
+
+              // Update the video analysis with the summary
+              fetch("/api/update-video-analysis", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  videoId: extractedVideoId,
+                  summary: generatedSummary
+                }),
+              }).catch(err => console.error("Failed to update video analysis with summary:", err));
+            }
+          })
+          .catch((err) => {
+            clearTimeout(summaryTimeoutId);
+            if (err.name === 'AbortError') {
+              setSummaryError("Summary generation timed out. The video might be too long.");
+            } else {
+              setSummaryError("Failed to generate summary. Please try again.");
+            }
+          })
+          .finally(() => {
+            setIsGeneratingSummary(false);
+          });
+
+        // Generate suggested questions
+        fetch("/api/suggested-questions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            transcript: fetchedTranscript,
+            topics: generatedTopics,
+            videoTitle: fetchedVideoInfo?.title
+          }),
+        })
+          .then(async (res) => {
+            if (res.ok) {
+              const { questions } = await res.json();
+              setCachedSuggestedQuestions(questions);
+
+              // Update video analysis with suggested questions
+              fetch("/api/update-video-analysis", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  videoId: extractedVideoId,
+                  suggestedQuestions: questions
+                }),
+              }).catch(err => console.error("Failed to update suggested questions:", err));
+            }
+          })
+          .catch(err => console.error("Failed to generate suggested questions:", err));
+      }
       
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
@@ -600,6 +674,7 @@ export default function Home() {
                     isGeneratingSummary={isGeneratingSummary}
                     summaryError={summaryError}
                     showSummaryTab={showSummaryTab}
+                    cachedSuggestedQuestions={cachedSuggestedQuestions}
                   />
                 </div>
               </div>

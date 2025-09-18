@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { TranscriptSegment, Topic, VideoInfo } from '@/lib/types';
 
 export async function POST(req: NextRequest) {
   try {
@@ -8,8 +7,10 @@ export async function POST(req: NextRequest) {
       videoId,
       videoInfo,
       transcript,
-      model = 'gemini-2.0-flash-exp',
-      forceRegenerate = false
+      model = 'gemini-2.5-flash',
+      forceRegenerate = false,
+      summary = null,
+      suggestedQuestions = null
     } = await req.json();
 
     if (!videoId || !transcript || !videoInfo) {
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
           topics: cachedVideo.topics,
           summary: cachedVideo.summary,
+          suggestedQuestions: cachedVideo.suggested_questions,
           cached: true,
           cacheDate: cachedVideo.created_at
         });
@@ -87,6 +89,8 @@ export async function POST(req: NextRequest) {
         thumbnail_url: videoInfo.thumbnail,
         transcript: transcript,
         topics: topics,
+        summary: summary,
+        suggested_questions: suggestedQuestions,
         model_used: model,
         updated_at: new Date().toISOString()
       }, {

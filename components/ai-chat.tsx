@@ -19,13 +19,14 @@ interface AIChatProps {
   onCitationClick: (citation: Citation) => void;
   onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean, citationText?: string) => void;
   onPlayAllCitations?: (citations: Citation[]) => void;
+  cachedSuggestedQuestions?: string[] | null;
 }
 
-export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClick, onTimestampClick, onPlayAllCitations }: AIChatProps) {
+export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClick, onTimestampClick, onPlayAllCitations, cachedSuggestedQuestions }: AIChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
+  const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>(cachedSuggestedQuestions || []);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [askedQuestions, setAskedQuestions] = useState<Set<string>>(new Set());
   const [showSuggestions, setShowSuggestions] = useState(true);
@@ -37,11 +38,19 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
     }
   }, [messages]);
 
+  // Update suggested questions when cached questions change
   useEffect(() => {
-    if (transcript.length > 0 && suggestedQuestions.length === 0) {
+    if (cachedSuggestedQuestions && cachedSuggestedQuestions.length > 0) {
+      setSuggestedQuestions(cachedSuggestedQuestions);
+    }
+  }, [cachedSuggestedQuestions]);
+
+  // Only fetch new questions if we don't have cached ones
+  useEffect(() => {
+    if (transcript.length > 0 && suggestedQuestions.length === 0 && !cachedSuggestedQuestions) {
       fetchSuggestedQuestions();
     }
-  }, [transcript]);
+  }, [transcript, cachedSuggestedQuestions]);
 
 
   const fetchSuggestedQuestions = async () => {
