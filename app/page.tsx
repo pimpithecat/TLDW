@@ -125,9 +125,12 @@ export default function Home() {
       fetch("/api/quick-preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           transcript: fetchedTranscript,
-          videoTitle: fetchedVideoInfo?.title
+          videoTitle: fetchedVideoInfo?.title,
+          videoDescription: fetchedVideoInfo?.description,
+          channelName: fetchedVideoInfo?.author,
+          tags: fetchedVideoInfo?.tags
         }),
       })
         .then(res => res.json())

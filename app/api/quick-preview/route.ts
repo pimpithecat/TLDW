@@ -6,7 +6,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 export async function POST(request: Request) {
   try {
-    const { transcript, videoTitle } = await request.json();
+    const { transcript, videoTitle, videoDescription, channelName, tags } = await request.json();
 
     if (!transcript || !Array.isArray(transcript)) {
       return NextResponse.json(
@@ -41,19 +41,22 @@ export async function POST(request: Request) {
       });
     }
 
-    const prompt = `${videoTitle ? `Video Title: "${videoTitle}"\n\n` : ''}Based on the provided video transcript excerpt, write a concise overview for a potential viewer. Your overview should:
+    const prompt = `Video Metadata:
+${videoTitle ? `Title: ${videoTitle}` : ''}
+${channelName ? `Channel: ${channelName}` : ''}
+${tags && tags.length > 0 ? `Tags: ${tags.join(', ')}` : ''}
+${videoDescription ? `Description: ${videoDescription}` : ''}
+
+Based on the provided video metadata and transcript excerpt, write a clear, concise, and engaging overview for a potential viewer. Your overview should:
 
 1.  Introduce each speaker's background and what makes them noteworthy.
 2.  Introduce the central topic of discussion.
 3.  Summarize the primary viewpoint or argument they are presenting.
 
-Be concise and engaging.
-
 Transcript:
 ${previewText}
 
-Write the overview in 3-4 sentences:
-`;
+Write the overview in 3-4 sentences:`;
 
     try {
       // Use the faster Flash Lite model for quick response

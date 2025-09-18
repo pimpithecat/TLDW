@@ -12,7 +12,7 @@ import {
 
 interface ParsedTopic {
   title: string;
-  description: string;
+  description?: string;
   quote?: {
     timestamp: string;
     text: string;
@@ -298,14 +298,7 @@ export async function POST(request: Request) {
 
     const result = await geminiModel.generateContent(prompt);
     const response = result.response.text();
-    
-    // DEBUG: Print the raw response from Gemini
-    console.log('=== RAW GEMINI RESPONSE ===');
-    console.log('Response length:', response?.length || 0);
-    console.log('Response content:');
-    console.log(response);
-    console.log('=== END RAW RESPONSE ===');
-    
+
     if (!response) {
       throw new Error('No response from Gemini');
     }
@@ -314,26 +307,14 @@ export async function POST(request: Request) {
     let parsedResponse;
     try {
       parsedResponse = JSON.parse(response);
-      console.log('=== PARSED RESPONSE ===');
-      console.log('Parsed successfully. Type:', typeof parsedResponse);
-      console.log('Is Array:', Array.isArray(parsedResponse));
-      console.log('Keys:', Object.keys(parsedResponse));
-      console.log('Content:', JSON.stringify(parsedResponse, null, 2));
-      console.log('=== END PARSED RESPONSE ===');
     } catch (parseError) {
-      console.log('=== JSON PARSE ERROR ===');
-      console.log('Parse error:', parseError);
-      console.log('Attempting to extract JSON array from response...');
       
       // Try to extract JSON array from the response
       const jsonMatch = response.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
-        console.log('Found JSON array match:', jsonMatch[0].substring(0, 200) + '...');
         try {
           parsedResponse = JSON.parse(jsonMatch[0]);
-          console.log('Successfully parsed extracted JSON array');
         } catch (e) {
-          console.log('Failed to parse extracted JSON:', e);
           // Create a fallback response
           parsedResponse = [{
             title: "Full Video",
@@ -345,7 +326,6 @@ export async function POST(request: Request) {
           }];
         }
       } else {
-        console.log('No JSON array found in response, using fallback');
         // Create a fallback response
         parsedResponse = [{
           title: "Full Video",
@@ -397,14 +377,6 @@ export async function POST(request: Request) {
       }
     }
     
-    
-    // Validate that topics have required fields
-    topicsArray.forEach((topic: ParsedTopic, index: number) => {
-      console.log({
-        title: topic.title,
-        hasQuote: !!topic.quote
-      });
-    });
 
     // Pre-build transcript index once for all quotes
     const transcriptIndex = buildTranscriptIndex(transcript);

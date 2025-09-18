@@ -62,4 +62,6 @@ export interface VideoInfo {
   author: string;
   thumbnail: string;
   duration: number | null;
+  description?: string;
+  tags?: string[];
 }
