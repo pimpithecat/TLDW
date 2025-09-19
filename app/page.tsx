@@ -1,13 +1,27 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { UrlInput } from "@/components/url-input";
 import { RightColumnTabs, type RightColumnTabsHandle } from "@/components/right-column-tabs";
 import { YouTubePlayer } from "@/components/youtube-player";
 import { LanguageSelector, type Language } from "@/components/language-selector";
 import { LoadingContext } from "@/components/loading-context";
 import { LoadingTips } from "@/components/loading-tips";
-import { Topic, TranscriptSegment, VideoInfo, Citation } from "@/lib/types";
+import { VideoSkeleton } from "@/components/video-skeleton";
+import { Topic, TranscriptSegment, VideoInfo, Citation, PlaybackCommand } from "@/lib/types";
+
+// Playback context for tracking what's currently playing
+interface PlaybackContext {
+  type: 'TOPIC' | 'CITATIONS' | 'PLAY_ALL';
+  endTime: number;
+  topicId?: string;
+  playAllIndex?: number;
+  segments?: { start: number; end: number }[];
+  currentSegmentIndex?: number;
+}
+
+// Page state for better UX
+type PageState = 'IDLE' | 'ANALYZING_NEW' | 'LOADING_CACHED';
 import { extractVideoId } from "@/lib/utils";
 import { useElapsedTimer } from "@/lib/hooks/use-elapsed-timer";
 import { Loader2, Video } from "lucide-react";
@@ -17,7 +31,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { toast } from "sonner";
 
 export default function Home() {
-  const [isLoading, setIsLoading] = useState(false);
+  const [pageState, setPageState] = useState<PageState>('IDLE');
   const hasAttemptedLinking = useRef(false);
   const [loadingStage, setLoadingStage] = useState<'fetching' | 'understanding' | 'generating' | 'processing' | null>(null);
   const [error, setError] = useState("");
@@ -27,8 +41,12 @@ export default function Home() {
   const [transcript, setTranscript] = useState<TranscriptSegment[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
-  const [seekToTime, setSeekToTime] = useState<number | undefined>();
   const [currentTime, setCurrentTime] = useState(0);
+
+  // Centralized playback control state
+  const [playbackCommand, setPlaybackCommand] = useState<PlaybackCommand | null>(null);
+  const [isPlayerReady, setIsPlayerReady] = useState(false);
+  const [playbackContext, setPlaybackContext] = useState<PlaybackContext | null>(null);
   const [transcriptHeight, setTranscriptHeight] = useState<string>("auto");
   const [summaryLanguage, setSummaryLanguage] = useState<Language>('English');
   const [citationHighlight, setCitationHighlight] = useState<Citation | null>(null);
@@ -39,6 +57,15 @@ export default function Home() {
   // Play All state (lifted from YouTubePlayer)
   const [isPlayingAll, setIsPlayingAll] = useState(false);
   const [playAllIndex, setPlayAllIndex] = useState(0);
+
+  // Memoized setters for Play All state
+  const memoizedSetPlayAllIndex = useCallback((value: number | ((prev: number) => number)) => {
+    setPlayAllIndex(value);
+  }, []);
+
+  const memoizedSetIsPlayingAll = useCallback((value: boolean) => {
+    setIsPlayingAll(value);
+  }, []);
   
   // Summary generation state
   const [summaryContent, setSummaryContent] = useState<string | null>(null);
@@ -64,6 +91,67 @@ export default function Home() {
   // Memoize processVideo to prevent infinite loops
   const processVideoMemo = useCallback((url: string) => {
     processVideo(url);
+  }, []);
+
+  // Centralized playback request functions
+  const requestSeek = useCallback((time: number) => {
+    if (!isPlayerReady) return;
+    // Clear playback context for direct seeks
+    setPlaybackContext(null);
+    setPlaybackCommand({ type: 'SEEK', time });
+  }, [isPlayerReady]);
+
+  const requestPlayTopic = useCallback((topic: Topic) => {
+    if (!isPlayerReady) return;
+    // Set playback context for segment-end detection
+    if (topic.segments.length > 0) {
+      setPlaybackContext({
+        type: 'TOPIC',
+        endTime: topic.segments[topic.segments.length - 1].end,
+        topicId: topic.id,
+        segments: topic.segments,
+        currentSegmentIndex: 0
+      });
+    }
+    setPlaybackCommand({ type: 'PLAY_TOPIC', topic, autoPlay: true });
+  }, [isPlayerReady]);
+
+  const requestPlaySegment = useCallback((segment: TranscriptSegment) => {
+    if (!isPlayerReady) return;
+    setPlaybackCommand({ type: 'PLAY_SEGMENT', segment });
+  }, [isPlayerReady]);
+
+  const requestPlayCitations = useCallback((citations: Citation[]) => {
+    if (!isPlayerReady) return;
+    // Set playback context for citation segments
+    if (citations.length > 0) {
+      setPlaybackContext({
+        type: 'CITATIONS',
+        endTime: citations[citations.length - 1].end,
+        segments: citations.map(c => ({ start: c.start, end: c.end })),
+        currentSegmentIndex: 0
+      });
+    }
+    setPlaybackCommand({ type: 'PLAY_CITATIONS', citations, autoPlay: true });
+  }, [isPlayerReady]);
+
+  const requestPlayAll = useCallback(() => {
+    if (!isPlayerReady || topics.length === 0) return;
+    // Set playback context for play all mode
+    setPlaybackContext({
+      type: 'PLAY_ALL',
+      endTime: topics[0].segments[0].end,
+      playAllIndex: 0
+    });
+    setPlaybackCommand({ type: 'PLAY_ALL', autoPlay: true });
+  }, [isPlayerReady, topics]);
+
+  const clearPlaybackCommand = useCallback(() => {
+    setPlaybackCommand(null);
+  }, []);
+
+  const handlePlayerReady = useCallback(() => {
+    setIsPlayerReady(true);
   }, []);
 
   // Store current video data in sessionStorage before auth
@@ -159,7 +247,7 @@ export default function Home() {
     const videoIdParam = urlParams.get('v');
     const cachedParam = urlParams.get('cached');
 
-    if (videoIdParam && cachedParam === 'true' && !isLoading && !videoId) {
+    if (videoIdParam && cachedParam === 'true' && pageState === 'IDLE' && !videoId) {
       // Store video ID for potential post-auth linking before loading
       if (!user) {
         sessionStorage.setItem('pendingVideoId', videoIdParam);
@@ -193,13 +281,12 @@ export default function Home() {
       }
       return;
     }
-    setIsLoading(true);
+    setPageState('ANALYZING_NEW');
     setLoadingStage('fetching');
     setError("");
     setTopics([]);
     setTranscript([]);
     setSelectedTopic(null);
-    setSeekToTime(undefined);
     setCitationHighlight(null);
     setVideoInfo(null);
     setVideoPreview("");
@@ -240,14 +327,15 @@ export default function Home() {
         const cacheData = await cacheResponse.json();
 
         if (cacheData.cached) {
-          // Video is cached - use all cached data
-          setLoadingStage('processing');
-          setProcessingStartTime(Date.now());
+          // Show skeleton loader for cached videos
+          setPageState('LOADING_CACHED');
 
-          // Set all the data from cache
-          setTranscript(cacheData.transcript);
-          setVideoInfo(cacheData.videoInfo);
-          setTopics(cacheData.topics);
+          // Small delay for smooth transition
+          setTimeout(() => {
+            // Load all cached data
+            setTranscript(cacheData.transcript);
+            setVideoInfo(cacheData.videoInfo);
+            setTopics(cacheData.topics);
 
           // Set cached summary and questions
           if (cacheData.summary) {
@@ -265,8 +353,9 @@ export default function Home() {
             console.log('Stored cached video ID for potential post-auth linking:', extractedVideoId);
           }
 
-          // Clear loading state
-          setIsLoading(false);
+            // Set page state back to idle
+            setPageState('IDLE');
+          }, 100); // Very brief delay for smooth transition
           setLoadingStage(null);
           setProcessingStartTime(null);
 
@@ -304,7 +393,7 @@ export default function Home() {
                 setSummaryError(errorData.error || "Failed to generate summary");
               }
             })
-            .catch((err) => {
+            .catch(() => {
               setSummaryError("Failed to generate summary. Please try again.");
             })
             .finally(() => {
@@ -566,7 +655,7 @@ export default function Home() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
-      setIsLoading(false);
+      setPageState('IDLE');
       setGenerationStartTime(null);
       setProcessingStartTime(null);
     }
@@ -584,153 +673,155 @@ export default function Home() {
     if (videoContainer) {
       videoContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-    setSeekToTime(citation.start);
-    setTimeout(() => setSeekToTime(undefined), 100);
+
+    // Request seek through centralized command system
+    requestSeek(citation.start);
   };
 
   const handleTimestampClick = (seconds: number, _endSeconds?: number, isCitation: boolean = false, _citationText?: string, isWithinHighlightReel: boolean = false, isWithinCitationHighlight: boolean = false) => {
-    // Prevent rapid sequential clicks and state updates
-    if (seekToTime === seconds) return;
-    
     // Reset Play All mode when clicking any timestamp
     setIsPlayingAll(false);
     setPlayAllIndex(0);
-    
+
     // Handle topic selection clearing:
     // Clear topic if it's a new citation click from AI chat OR
     // if clicking outside the current highlight reel (and not within a citation)
     if (isCitation || (!isWithinHighlightReel && !isWithinCitationHighlight)) {
       setSelectedTopic(null);
     }
-    
+
     // Clear citation highlight for non-citation clicks
     if (!isCitation) {
       setCitationHighlight(null);
     }
-    
+
     // Scroll to video player
     const videoContainer = document.getElementById("video-container");
     if (videoContainer) {
       videoContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-    
-    // Seek video to timestamp
-    setSeekToTime(seconds);
-    
-    // Clear seek state after a short delay
-    setTimeout(() => {
-      setSeekToTime(undefined);
-    }, 100);
+
+    // Request seek through centralized command system
+    requestSeek(seconds);
   };
 
   const handleSummaryTimestampClick = (seconds: number) => {
-    // Prevent rapid sequential clicks and state updates
-    if (seekToTime === seconds) return;
-    
     // Reset Play All mode when clicking any timestamp
     setIsPlayingAll(false);
     setPlayAllIndex(0);
-    
+
     // Clear topic and citation highlight
     setSelectedTopic(null);
     setCitationHighlight(null);
-    
-    // Seek video to timestamp without scrolling
-    setSeekToTime(seconds);
-    
-    // Clear seek state after a short delay
-    setTimeout(() => {
-      setSeekToTime(undefined);
-    }, 100);
+
+    // Request seek through centralized command system
+    requestSeek(seconds);
   };
 
-  const handleTimeUpdate = (seconds: number) => {
+  const handleTimeUpdate = useCallback((seconds: number) => {
     setCurrentTime(seconds);
-  };
+  }, []);
 
-  const handleTopicSelect = (topic: Topic | null) => {
+  // Centralized segment-end detection
+  useEffect(() => {
+    if (!playbackContext || !isPlayerReady) return;
+
+    // Check if we've reached the end of current segment/topic
+    if (currentTime >= playbackContext.endTime) {
+      if (playbackContext.type === 'PLAY_ALL') {
+        // Handle Play All mode transitions
+        const nextIndex = (playbackContext.playAllIndex || 0) + 1;
+        if (nextIndex < topics.length) {
+          // Move to next topic
+          const nextTopic = topics[nextIndex];
+          setPlaybackContext({
+            ...playbackContext,
+            playAllIndex: nextIndex,
+            endTime: nextTopic.segments[0].end
+          });
+          setSelectedTopic(nextTopic);
+          setPlaybackCommand({ type: 'SEEK', time: nextTopic.segments[0].start });
+          setPlayAllIndex(nextIndex);
+        } else {
+          // End of all topics
+          setPlaybackCommand({ type: 'PAUSE' });
+          setPlaybackContext(null);
+          setIsPlayingAll(false);
+        }
+      } else if (playbackContext.type === 'CITATIONS' && playbackContext.segments) {
+        // Handle citation reel transitions
+        const currentSegIdx = playbackContext.currentSegmentIndex || 0;
+        if (currentSegIdx < playbackContext.segments.length - 1) {
+          // Move to next citation segment
+          const nextIdx = currentSegIdx + 1;
+          const nextSegment = playbackContext.segments[nextIdx];
+          setPlaybackContext({
+            ...playbackContext,
+            currentSegmentIndex: nextIdx,
+            endTime: nextSegment.end
+          });
+          setPlaybackCommand({ type: 'SEEK', time: nextSegment.start });
+        } else {
+          // End of citations
+          setPlaybackCommand({ type: 'PAUSE' });
+          setPlaybackContext(null);
+        }
+      } else {
+        // Regular topic - just pause
+        setPlaybackCommand({ type: 'PAUSE' });
+        setPlaybackContext(null);
+      }
+    }
+  }, [currentTime, playbackContext, isPlayerReady, topics, setSelectedTopic, setPlayAllIndex, setIsPlayingAll]);
+
+  const handleTopicSelect = useCallback((topic: Topic | null) => {
     // Reset Play All mode when manually selecting a topic
     // (unless it's being called by Play All itself)
     if (!isPlayingAll) {
       setIsPlayingAll(false);
       setPlayAllIndex(0);
     }
-    
+
     // Clear citation highlight when selecting a topic
     setCitationHighlight(null);
     setSelectedTopic(topic);
-    
-    // Immediately play the topic when selected
-    if (topic && topic.segments.length > 0) {
-      setSeekToTime(topic.segments[0].start);
-      setTimeout(() => setSeekToTime(undefined), 100);
+
+    // Request to play the topic through centralized command system
+    if (topic) {
+      requestPlayTopic(topic);
+    } else {
+      // Clear playback context when deselecting
+      setPlaybackContext(null);
     }
-  };
+  }, [isPlayingAll, requestPlayTopic]);
 
   const handlePlayAllCitations = (citations: Citation[]) => {
     // Reset Play All mode when playing citations
     setIsPlayingAll(false);
     setPlayAllIndex(0);
-    
+
     // Clear existing highlights to avoid conflicts
     setCitationHighlight(null);
-    
-    // Create a "citation reel" - a temporary Topic object from citations
-    const citationReel: Topic = {
-      id: `citation-reel-${Date.now()}`,
-      title: "Cited Clips",
-      description: "Playing all clips cited in the AI response",
-      duration: citations.reduce((total, c) => total + (c.end - c.start), 0),
-      segments: citations.map(c => ({
-        start: c.start,
-        end: c.end,
-        text: c.text,
-        startSegmentIdx: c.startSegmentIdx,
-        endSegmentIdx: c.endSegmentIdx,
-        startCharOffset: c.startCharOffset,
-        endCharOffset: c.endCharOffset,
-      })),
-      isCitationReel: true, // Set the flag to identify this as a citation reel
-      autoPlay: true, // Add flag to indicate this should auto-play
-    };
-    
-    // Set the citation reel as the selected topic to trigger playback
-    setSelectedTopic(citationReel);
-    
-    // Seek to the first citation to start playback
-    if (citations.length > 0) {
-      setSeekToTime(citations[0].start);
-    }
-    
+
     // Scroll to video player
     const videoContainer = document.getElementById("video-container");
     if (videoContainer) {
       videoContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-    
-    // Start playing the first citation
-    if (citations.length > 0) {
-      setSeekToTime(citations[0].start);
-      setTimeout(() => setSeekToTime(undefined), 100);
-    }
+
+    // Request to play citations through centralized command system
+    requestPlayCitations(citations);
   };
 
-  const handleTogglePlayAll = () => {
+  const handleTogglePlayAll = useCallback(() => {
     if (isPlayingAll) {
       // Stop playing all
       setIsPlayingAll(false);
     } else {
-      // Start playing all from the beginning
-      setIsPlayingAll(true);
-      setPlayAllIndex(0);
-      // Select the first topic to start playback
-      if (topics.length > 0) {
-        setSelectedTopic(topics[0]);
-        setSeekToTime(topics[0].segments[0].start);
-        setTimeout(() => setSeekToTime(undefined), 100);
-      }
+      // Request to play all topics through centralized command system
+      requestPlayAll();
     }
-  };
+  }, [isPlayingAll, requestPlayAll]);
 
   // Dynamically adjust right column height to match video container
   useEffect(() => {
@@ -777,14 +868,14 @@ export default function Home() {
         </header>
 
         <div className="flex flex-col items-center gap-4 mb-8">
-          <UrlInput onSubmit={processVideo} isLoading={isLoading} />
+          <UrlInput onSubmit={processVideo} isLoading={pageState === 'ANALYZING_NEW'} />
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Language:</span>
               <LanguageSelector
                 value={summaryLanguage}
                 onChange={setSummaryLanguage}
-                disabled={isLoading}
+                disabled={pageState !== 'IDLE'}
               />
             </div>
           </div>
@@ -796,7 +887,11 @@ export default function Home() {
           </Card>
         )}
 
-        {isLoading && (
+        {pageState === 'LOADING_CACHED' && (
+          <VideoSkeleton />
+        )}
+
+        {pageState === 'ANALYZING_NEW' && (
           <div className="max-w-6xl mx-auto">
             <div className="flex flex-col items-center justify-center mb-8">
               <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
@@ -819,7 +914,7 @@ export default function Home() {
           </div>
         )}
 
-        {videoId && topics.length > 0 && !isLoading && (
+        {videoId && topics.length > 0 && pageState === 'IDLE' && (
           <>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
               {/* Left Column - Video (2/3 width) */}
@@ -828,7 +923,9 @@ export default function Home() {
                   <YouTubePlayer
                     videoId={videoId}
                     selectedTopic={selectedTopic}
-                    seekToTime={seekToTime}
+                    playbackCommand={playbackCommand}
+                    onCommandExecuted={clearPlaybackCommand}
+                    onPlayerReady={handlePlayerReady}
                     topics={topics}
                     onTopicSelect={handleTopicSelect}
                     onTimeUpdate={handleTimeUpdate}
@@ -836,8 +933,8 @@ export default function Home() {
                     isPlayingAll={isPlayingAll}
                     playAllIndex={playAllIndex}
                     onTogglePlayAll={handleTogglePlayAll}
-                    setPlayAllIndex={setPlayAllIndex}
-                    setIsPlayingAll={setIsPlayingAll}
+                    setPlayAllIndex={memoizedSetPlayAllIndex}
+                    setIsPlayingAll={memoizedSetIsPlayingAll}
                   />
                 </div>
               </div>
@@ -874,7 +971,7 @@ export default function Home() {
           </>
         )}
 
-        {!isLoading && !error && topics.length === 0 && !videoId && (
+        {pageState === 'IDLE' && !error && topics.length === 0 && !videoId && (
           <Card className="max-w-2xl mx-auto p-12 text-center bg-muted/30">
             <Video className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
             <p className="text-foreground mb-2 text-lg">
