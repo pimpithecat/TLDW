@@ -321,13 +321,22 @@ export default function Home() {
           tags: fetchedVideoInfo?.tags
         }),
       })
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) {
+            console.error('Quick preview generation failed:', res.status);
+            return null;
+          }
+          return res.json();
+        })
         .then(data => {
           if (data && data.preview) {
+            console.log('Quick preview generated:', data.preview);
             setVideoPreview(data.preview);
           }
         })
-        .catch(() => {});
+        .catch((error) => {
+          console.error('Error generating quick preview:', error);
+        });
       
       // Initiate parallel API requests for topics and summary
       setLoadingStage('generating');
