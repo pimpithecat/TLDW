@@ -18,6 +18,7 @@ import { toast } from "sonner";
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
+  const hasAttemptedLinking = useRef(false);
   const [loadingStage, setLoadingStage] = useState<'fetching' | 'understanding' | 'generating' | 'processing' | null>(null);
   const [error, setError] = useState("");
   const [videoId, setVideoId] = useState<string | null>(null);
@@ -65,10 +66,66 @@ export default function Home() {
     processVideo(url);
   }, []);
 
-  // Check rate limit status on mount
+  // Store current video data in sessionStorage before auth
+  const storeCurrentVideoForAuth = () => {
+    if (videoId && !user) {
+      sessionStorage.setItem('pendingVideoId', videoId);
+      console.log('Stored video for post-auth linking:', videoId);
+    }
+  };
+
+  // Check for pending video linking after auth
+  const checkPendingVideoLink = async () => {
+    // Check both sessionStorage and current videoId state
+    const pendingVideoId = sessionStorage.getItem('pendingVideoId');
+    const currentVideoId = videoId;
+    const videoToLink = pendingVideoId || currentVideoId;
+
+    console.log('Checking for video to link:', {
+      pendingVideoId,
+      currentVideoId,
+      user: user?.email
+    });
+
+    if (videoToLink && user) {
+      console.log('Found video to link:', videoToLink);
+
+      try {
+        const response = await fetch('/api/link-video', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videoId: videoToLink })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Link video response:', data);
+          // Only show toast for newly linked videos, not already linked ones
+          if (!data.alreadyLinked) {
+            toast.success('Video saved to your library!');
+          }
+          sessionStorage.removeItem('pendingVideoId');
+        } else {
+          const errorData = await response.json();
+          console.error('Failed to link video:', errorData);
+        }
+      } catch (error) {
+        console.error('Error linking video:', error);
+      }
+    }
+  };
+
+  // Check rate limit status on mount and handle pending video
   useEffect(() => {
     checkRateLimit();
-  }, [user]);
+    if (user && !hasAttemptedLinking.current) {
+      hasAttemptedLinking.current = true;
+      // Small delay to ensure videoId state is set
+      setTimeout(() => {
+        checkPendingVideoLink();
+      }, 500);
+    }
+  }, [user]); // Only depend on user, not videoId
 
   const checkRateLimit = async () => {
     try {
@@ -103,6 +160,11 @@ export default function Home() {
     const cachedParam = urlParams.get('cached');
 
     if (videoIdParam && cachedParam === 'true' && !isLoading && !videoId) {
+      // Store video ID for potential post-auth linking before loading
+      if (!user) {
+        sessionStorage.setItem('pendingVideoId', videoIdParam);
+        console.log('Stored URL param video ID for potential post-auth linking:', videoIdParam);
+      }
       // Load cached video directly
       const youtubeUrl = `https://www.youtube.com/watch?v=${videoIdParam}`;
       processVideoMemo(youtubeUrl);
@@ -125,6 +187,10 @@ export default function Home() {
   const processVideo = async (url: string) => {
     // Check generation limit for anonymous users
     if (!checkGenerationLimit()) {
+      // Store current video before showing auth modal
+      if (videoId) {
+        storeCurrentVideoForAuth();
+      }
       return;
     }
     setIsLoading(true);
@@ -150,6 +216,12 @@ export default function Home() {
       const extractedVideoId = extractVideoId(url);
       if (!extractedVideoId) {
         throw new Error("Invalid YouTube URL");
+      }
+
+      // Store video ID immediately for potential post-auth linking
+      if (!user) {
+        sessionStorage.setItem('pendingVideoId', extractedVideoId);
+        console.log('Stored video ID for potential post-auth linking:', extractedVideoId);
       }
 
       // Only set videoId if it's different to prevent unnecessary re-renders
@@ -185,6 +257,12 @@ export default function Home() {
           }
           if (cacheData.suggestedQuestions) {
             setCachedSuggestedQuestions(cacheData.suggestedQuestions);
+          }
+
+          // Store video ID for potential post-auth linking (for cached videos)
+          if (!user) {
+            sessionStorage.setItem('pendingVideoId', extractedVideoId);
+            console.log('Stored cached video ID for potential post-auth linking:', extractedVideoId);
           }
 
           // Clear loading state
@@ -810,12 +888,20 @@ export default function Home() {
       </div>
       <AuthModal
         open={authModalOpen}
-        onOpenChange={setAuthModalOpen}
+        onOpenChange={(open) => {
+          // Store video before modal opens
+          if (open && videoId && !user) {
+            storeCurrentVideoForAuth();
+          }
+          setAuthModalOpen(open);
+        }}
         trigger="generation-limit"
         onSuccess={() => {
           // Refresh rate limit info after successful auth
           checkRateLimit();
+          // Check for pending video linking will happen via useEffect
         }}
+        currentVideoId={videoId}
       />
     </div>
   );

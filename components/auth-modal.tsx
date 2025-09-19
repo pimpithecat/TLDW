@@ -16,9 +16,10 @@ interface AuthModalProps {
   onOpenChange: (open: boolean) => void
   onSuccess?: () => void
   trigger?: 'generation-limit' | 'save-video' | 'manual'
+  currentVideoId?: string | null
 }
 
-export function AuthModal({ open, onOpenChange, onSuccess, trigger = 'manual' }: AuthModalProps) {
+export function AuthModal({ open, onOpenChange, onSuccess, trigger = 'manual', currentVideoId }: AuthModalProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -51,6 +52,12 @@ export function AuthModal({ open, onOpenChange, onSuccess, trigger = 'manual' }:
     setLoading(true)
     setError(null)
 
+    // Store current video ID in sessionStorage before signing in
+    if (currentVideoId) {
+      sessionStorage.setItem('pendingVideoId', currentVideoId)
+      console.log('Stored video for post-auth linking:', currentVideoId)
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -63,7 +70,10 @@ export function AuthModal({ open, onOpenChange, onSuccess, trigger = 'manual' }:
       toast.success('Successfully signed in!')
       onSuccess?.()
       onOpenChange(false)
-      window.location.reload()
+      // Delay reload slightly to allow auth state to update
+      setTimeout(() => {
+        window.location.reload()
+      }, 100)
     }
 
     setLoading(false)
@@ -72,6 +82,12 @@ export function AuthModal({ open, onOpenChange, onSuccess, trigger = 'manual' }:
   const handleGoogleSignIn = async () => {
     setLoading(true)
     setError(null)
+
+    // Store current video ID in sessionStorage before OAuth redirect
+    if (currentVideoId) {
+      sessionStorage.setItem('pendingVideoId', currentVideoId)
+      console.log('Stored video for post-auth linking:', currentVideoId)
+    }
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',

@@ -31,5 +31,6 @@ export async function GET(request: Request) {
   }
 
   // URL to redirect to after sign in process completes
+  // The pending video will be linked via the useEffect in page.tsx
   return NextResponse.redirect(origin)
 }
