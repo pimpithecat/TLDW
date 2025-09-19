@@ -40,18 +40,7 @@ export async function POST(req: NextRequest) {
     // Get current user if logged in
     const { data: { user } } = await supabase.auth.getUser();
 
-    // Apply rate limiting
-    const rateLimitConfig = user ? RATE_LIMITS.AUTH_GENERATION : RATE_LIMITS.ANON_GENERATION;
-    const rateLimitResult = await RateLimiter.check('video-analysis', rateLimitConfig);
-
-    if (!rateLimitResult.allowed) {
-      return rateLimitResponse(rateLimitResult) || NextResponse.json(
-        { error: 'Rate limit exceeded' },
-        { status: 429 }
-      );
-    }
-
-    // Check for cached analysis if not forcing regeneration
+    // Check for cached analysis FIRST (before consuming rate limit)
     if (!forceRegenerate) {
       const { data: cachedVideo } = await supabase
         .from('video_analyses')
@@ -88,6 +77,17 @@ export async function POST(req: NextRequest) {
           cacheDate: cachedVideo.created_at
         });
       }
+    }
+
+    // Only apply rate limiting for NEW video analysis (not cached)
+    const rateLimitConfig = user ? RATE_LIMITS.AUTH_GENERATION : RATE_LIMITS.ANON_GENERATION;
+    const rateLimitResult = await RateLimiter.check('video-analysis', rateLimitConfig);
+
+    if (!rateLimitResult.allowed) {
+      return rateLimitResponse(rateLimitResult) || NextResponse.json(
+        { error: 'Rate limit exceeded' },
+        { status: 429 }
+      );
     }
 
     // Generate new topics using existing logic

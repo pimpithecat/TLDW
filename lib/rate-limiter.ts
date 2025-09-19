@@ -33,9 +33,75 @@ export class RateLimiter {
     const realIp = headersList.get('x-real-ip');
     const ip = forwardedFor?.split(',')[0] || realIp || 'unknown';
 
+
     // Hash the IP for privacy
     const hash = crypto.createHash('sha256').update(ip).digest('hex');
     return `anon:${hash.substring(0, 16)}`;
+  }
+
+  static async peek(
+    key: string,
+    config: RateLimitConfig
+  ): Promise<RateLimitResult> {
+    const identifier = await this.getIdentifier(config.identifier);
+    const rateLimitKey = `ratelimit:${key}:${identifier}`;
+
+    const supabase = await createClient();
+    const now = Date.now();
+    const windowStart = now - config.windowMs;
+
+    try {
+      // Count recent requests without modifying
+      const { data: recentRequests, error: countError } = await supabase
+        .from('rate_limits')
+        .select('id')
+        .eq('key', rateLimitKey)
+        .gte('timestamp', new Date(windowStart).toISOString());
+
+      if (countError) throw countError;
+
+      const requestCount = recentRequests?.length || 0;
+      const remaining = Math.max(0, config.maxRequests - requestCount);
+      const resetAt = new Date(now + config.windowMs);
+
+      if (requestCount >= config.maxRequests) {
+        // Calculate when the oldest request will expire
+        const { data: oldestRequest } = await supabase
+          .from('rate_limits')
+          .select('timestamp')
+          .eq('key', rateLimitKey)
+          .order('timestamp', { ascending: true })
+          .limit(1)
+          .single();
+
+        let retryAfter = Math.ceil(config.windowMs / 1000);
+        if (oldestRequest) {
+          const oldestTime = new Date(oldestRequest.timestamp).getTime();
+          retryAfter = Math.ceil((oldestTime + config.windowMs - now) / 1000);
+        }
+
+        return {
+          allowed: false,
+          remaining: 0,
+          resetAt,
+          retryAfter
+        };
+      }
+
+      return {
+        allowed: true,
+        remaining,
+        resetAt
+      };
+    } catch (error) {
+      console.error('Rate limiter peek error:', error);
+      // On error, allow the request but log it
+      return {
+        allowed: true,
+        remaining: config.maxRequests,
+        resetAt: new Date(now + config.windowMs)
+      };
+    }
   }
 
   static async check(
@@ -94,13 +160,19 @@ export class RateLimiter {
       }
 
       // Record this request
-      await supabase
+      const { error: insertError } = await supabase
         .from('rate_limits')
         .insert({
           key: rateLimitKey,
           timestamp: new Date(now).toISOString(),
           identifier
         });
+
+      if (insertError) {
+        console.error('Failed to insert rate limit record:', insertError);
+        console.error('Rate limit key:', rateLimitKey);
+        console.error('Identifier:', identifier);
+      }
 
       return {
         allowed: true,

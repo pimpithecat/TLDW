@@ -12,31 +12,15 @@ export async function GET() {
     // Use appropriate rate limit config based on auth status
     const rateLimitConfig = user ? RATE_LIMITS.AUTH_GENERATION : RATE_LIMITS.ANON_GENERATION;
 
-    // Check rate limit without consuming it (peek)
-    const identifier = user ? `user:${user.id}` : undefined;
-    const rateLimitKey = `video-analysis`;
-
-    // Get current rate limit status without incrementing counter
-    const now = Date.now();
-    const windowStart = now - rateLimitConfig.windowMs;
-
-    // Count recent requests
-    const { data: recentRequests } = await supabase
-      .from('rate_limits')
-      .select('id')
-      .eq('key', `ratelimit:${rateLimitKey}:${identifier || 'anon'}`)
-      .gte('timestamp', new Date(windowStart).toISOString());
-
-    const requestCount = recentRequests?.length || 0;
-    const remaining = Math.max(0, rateLimitConfig.maxRequests - requestCount);
-    const resetAt = new Date(now + rateLimitConfig.windowMs);
+    // Use the peek method to check rate limit without consuming it
+    const rateLimitResult = await RateLimiter.peek('video-analysis', rateLimitConfig);
 
     return NextResponse.json({
-      canGenerate: remaining > 0,
+      canGenerate: rateLimitResult.allowed,
       isAuthenticated: !!user,
-      remaining,
+      remaining: rateLimitResult.remaining,
       limit: rateLimitConfig.maxRequests,
-      resetAt: resetAt.toISOString(),
+      resetAt: rateLimitResult.resetAt.toISOString(),
       windowMs: rateLimitConfig.windowMs
     });
 
