@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { TranscriptSegment, Topic } from '@/lib/types';
-import { 
+import {
   normalizeWhitespace,
   normalizeForMatching,
   calculateNgramSimilarity,
@@ -9,6 +9,8 @@ import {
   findTextInTranscript,
   TranscriptIndex
 } from '@/lib/quote-matcher';
+import { generateTopicsRequestSchema, formatValidationError } from '@/lib/validation';
+import { z } from 'zod';
 
 interface ParsedTopic {
   title: string;
@@ -212,14 +214,26 @@ async function findExactQuotes(
 
 export async function POST(request: Request) {
   try {
-    const { transcript } = await request.json();
+    // Parse and validate request body
+    const body = await request.json();
 
-    if (!transcript || !Array.isArray(transcript)) {
-      return NextResponse.json(
-        { error: 'Valid transcript is required' },
-        { status: 400 }
-      );
+    let validatedData;
+    try {
+      validatedData = generateTopicsRequestSchema.parse(body);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return NextResponse.json(
+          {
+            error: 'Validation failed',
+            details: formatValidationError(error)
+          },
+          { status: 400 }
+        );
+      }
+      throw error;
     }
+
+    const { transcript, model } = validatedData;
     
 
     const fullText = combineTranscript(transcript);
@@ -419,8 +433,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ topics });
   } catch (error) {
+    // Log error details server-side only
+    console.error('Error generating topics:', error);
+
+    // Return generic error message to client
     return NextResponse.json(
-      { error: 'Failed to generate topics' },
+      { error: 'An error occurred while processing your request' },
       { status: 500 }
     );
   }

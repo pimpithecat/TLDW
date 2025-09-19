@@ -1,16 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { toggleFavoriteRequestSchema, formatValidationError } from '@/lib/validation';
+import { z } from 'zod';
 
 export async function POST(req: NextRequest) {
   try {
-    const { videoId, isFavorite } = await req.json();
+    // Parse and validate request body
+    const body = await req.json();
 
-    if (!videoId) {
-      return NextResponse.json(
-        { error: 'Video ID is required' },
-        { status: 400 }
-      );
+    let validatedData;
+    try {
+      validatedData = toggleFavoriteRequestSchema.parse(body);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return NextResponse.json(
+          {
+            error: 'Validation failed',
+            details: formatValidationError(error)
+          },
+          { status: 400 }
+        );
+      }
+      throw error;
     }
+
+    const { videoId, isFavorite } = validatedData;
 
     const supabase = await createClient();
 
@@ -79,9 +93,12 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error) {
+    // Log error details server-side only
     console.error('Error toggling favorite:', error);
+
+    // Return generic error message to client
     return NextResponse.json(
-      { error: 'Failed to toggle favorite status' },
+      { error: 'An error occurred while processing your request' },
       { status: 500 }
     );
   }

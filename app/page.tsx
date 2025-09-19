@@ -55,20 +55,35 @@ export default function Home() {
   // Auth and generation limit state
   const { user } = useAuth();
   const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [generationCount, setGenerationCount] = useState(0);
+  const [rateLimitInfo, setRateLimitInfo] = useState<{
+    remaining: number;
+    resetAt: Date | null;
+  }>({ remaining: -1, resetAt: null });
 
   // Memoize processVideo to prevent infinite loops
   const processVideoMemo = useCallback((url: string) => {
     processVideo(url);
   }, []);
 
-  // Load generation count from localStorage on mount
+  // Check rate limit status on mount
   useEffect(() => {
-    if (!user) {
-      const count = parseInt(localStorage.getItem('generationCount') || '0');
-      setGenerationCount(count);
-    }
+    checkRateLimit();
   }, [user]);
+
+  const checkRateLimit = async () => {
+    try {
+      const response = await fetch('/api/check-limit');
+      const data = await response.json();
+      if (data.remaining !== undefined) {
+        setRateLimitInfo({
+          remaining: data.remaining,
+          resetAt: data.resetAt ? new Date(data.resetAt) : null
+        });
+      }
+    } catch (error) {
+      console.error('Error checking rate limit:', error);
+    }
+  };
 
   // Check for URL params on mount (separate effect to prevent loops)
   useEffect(() => {
@@ -94,14 +109,14 @@ export default function Home() {
     }
   }, []); // Empty dependency array - only run once on mount
 
-  // Check if user can generate
+  // Check if user can generate based on server-side rate limits
   const checkGenerationLimit = (): boolean => {
-    if (user) return true; // Authenticated users have no limits
+    if (user) return true; // Authenticated users have higher limits
 
-    const count = parseInt(localStorage.getItem('generationCount') || '0');
-    if (count >= 1) {
-      // Show auth modal for second generation
+    if (rateLimitInfo.remaining === 0) {
+      // Show auth modal when rate limited
       setAuthModalOpen(true);
+      toast.error('Daily limit reached. Sign in for more generations!');
       return false;
     }
     return true;
@@ -374,12 +389,9 @@ export default function Home() {
           setCachedSuggestedQuestions(topicsData.suggestedQuestions);
         }
       } else {
-        // Update generation count for anonymous users
-        if (!user) {
-          const newCount = generationCount + 1;
-          localStorage.setItem('generationCount', newCount.toString());
-          setGenerationCount(newCount);
-        }
+        // Rate limit is handled server-side now
+        // Refresh rate limit info after successful generation
+        checkRateLimit();
 
         // Generate new summary
         setShowSummaryTab(true);
@@ -792,9 +804,8 @@ export default function Home() {
         onOpenChange={setAuthModalOpen}
         trigger="generation-limit"
         onSuccess={() => {
-          // Reset generation count after successful auth
-          localStorage.removeItem('generationCount');
-          setGenerationCount(0);
+          // Refresh rate limit info after successful auth
+          checkRateLimit();
         }}
       />
     </div>

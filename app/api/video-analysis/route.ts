@@ -1,29 +1,55 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { videoAnalysisRequestSchema, formatValidationError } from '@/lib/validation';
+import { RateLimiter, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limiter';
+import { z } from 'zod';
 
 export async function POST(req: NextRequest) {
   try {
+    // Parse and validate request body
+    const body = await req.json();
+
+    let validatedData;
+    try {
+      validatedData = videoAnalysisRequestSchema.parse(body);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return NextResponse.json(
+          {
+            error: 'Validation failed',
+            details: formatValidationError(error)
+          },
+          { status: 400 }
+        );
+      }
+      throw error;
+    }
+
     const {
       videoId,
       videoInfo,
       transcript,
-      model = 'gemini-2.5-flash',
-      forceRegenerate = false,
-      summary = null,
-      suggestedQuestions = null
-    } = await req.json();
-
-    if (!videoId || !transcript || !videoInfo) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
-    }
+      model,
+      forceRegenerate,
+      summary,
+      suggestedQuestions
+    } = validatedData;
 
     const supabase = await createClient();
 
     // Get current user if logged in
     const { data: { user } } = await supabase.auth.getUser();
+
+    // Apply rate limiting
+    const rateLimitConfig = user ? RATE_LIMITS.AUTH_GENERATION : RATE_LIMITS.ANON_GENERATION;
+    const rateLimitResult = await RateLimiter.check('video-analysis', rateLimitConfig);
+
+    if (!rateLimitResult.allowed) {
+      return rateLimitResponse(rateLimitResult) || NextResponse.json(
+        { error: 'Rate limit exceeded' },
+        { status: 429 }
+      );
+    }
 
     // Check for cached analysis if not forcing regeneration
     if (!forceRegenerate) {
@@ -132,9 +158,12 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error) {
+    // Log error details server-side only
     console.error('Error in video analysis:', error);
+
+    // Return generic error message to client
     return NextResponse.json(
-      { error: 'Failed to process video analysis' },
+      { error: 'An error occurred while processing your request' },
       { status: 500 }
     );
   }

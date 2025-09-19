@@ -3,6 +3,10 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { TranscriptSegment, Topic, ChatMessage, Citation } from '@/lib/types';
 import { buildTranscriptIndex, findTextInTranscript } from '@/lib/quote-matcher';
 import { TIMESTAMP_REGEX, parseTimestamp } from '@/lib/timestamp-utils';
+import { chatRequestSchema, formatValidationError } from '@/lib/validation';
+import { RateLimiter, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limiter';
+import { z } from 'zod';
+import { createClient } from '@/lib/supabase/server';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
@@ -37,21 +41,46 @@ function findClosestSegment(transcript: TranscriptSegment[], targetSeconds: numb
 
 export async function POST(request: Request) {
   try {
-    const { message, transcript, topics, chatHistory } = await request.json();
+    // Parse and validate request body
+    const body = await request.json();
 
-    if (!message || !transcript) {
-      return NextResponse.json(
-        { error: 'Message and transcript are required' },
-        { status: 400 }
+    let validatedData;
+    try {
+      validatedData = chatRequestSchema.parse(body);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return NextResponse.json(
+          {
+            error: 'Validation failed',
+            details: formatValidationError(error)
+          },
+          { status: 400 }
+        );
+      }
+      throw error;
+    }
+
+    const { message, transcript, topics, chatHistory } = validatedData;
+
+    // Check rate limiting
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const rateLimitConfig = user ? RATE_LIMITS.AUTH_CHAT : RATE_LIMITS.ANON_CHAT;
+    const rateLimitResult = await RateLimiter.check('chat', rateLimitConfig);
+
+    if (!rateLimitResult.allowed) {
+      return rateLimitResponse(rateLimitResult) || NextResponse.json(
+        { error: 'Rate limit exceeded' },
+        { status: 429 }
       );
     }
 
     const transcriptContext = formatTranscriptForContext(transcript);
-    const topicsContext = topics.map((t: Topic) => 
-      `- ${t.title}: ${t.description}`
-    ).join('\n');
+    const topicsContext = topics ? topics.map((t: Topic) =>
+      `- ${t.title}: ${t.description || ''}`
+    ).join('\n') : '';
 
-    const chatHistoryContext = chatHistory?.map((msg: ChatMessage) => 
+    const chatHistoryContext = chatHistory?.map((msg: any) =>
       `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
     ).join('\n\n') || '';
 
