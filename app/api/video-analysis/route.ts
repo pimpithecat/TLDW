@@ -4,6 +4,7 @@ import { videoAnalysisRequestSchema, formatValidationError } from '@/lib/validat
 import { RateLimiter, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limiter';
 import { z } from 'zod';
 import { withSecurity, SECURITY_PRESETS } from '@/lib/security-middleware';
+import { generateTopicsFromTranscript } from '@/lib/ai-processing';
 
 async function handler(req: NextRequest) {
   try {
@@ -60,8 +61,8 @@ async function handler(req: NextRequest) {
             p_thumbnail_url: cachedVideo.thumbnail_url,
             p_transcript: cachedVideo.transcript,
             p_topics: cachedVideo.topics,
-            p_summary: cachedVideo.summary,
-            p_suggested_questions: cachedVideo.suggested_questions,
+            p_summary: cachedVideo.summary || null,  // Ensure null instead of undefined
+            p_suggested_questions: cachedVideo.suggested_questions || null,
             p_model_used: cachedVideo.model_used,
             p_user_id: user.id
           });
@@ -95,26 +96,17 @@ async function handler(req: NextRequest) {
       );
     }
 
-    // Generate new topics using existing logic
-    // Use the request's origin to construct the API URL
-    const origin = req.headers.get('origin') || req.headers.get('host')
-      ? `${req.headers.get('x-forwarded-proto') || 'http'}://${req.headers.get('host')}`
-      : 'http://localhost:3000';
-
-    const generateResponse = await fetch(`${origin}/api/generate-topics`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ transcript, model })
-    });
-
-    if (!generateResponse.ok) {
-      const error = await generateResponse.json();
-      return NextResponse.json(error, { status: generateResponse.status });
+    // Generate new topics using shared function
+    let topics;
+    try {
+      topics = await generateTopicsFromTranscript(transcript, model);
+    } catch (error) {
+      console.error('Error generating topics:', error);
+      return NextResponse.json(
+        { error: 'Failed to generate topics. Please try again.' },
+        { status: 500 }
+      );
     }
-
-    const { topics } = await generateResponse.json();
 
     // Use transactional RPC function to save video and link to user atomically
     const { data: result, error: saveError } = await supabase
@@ -126,8 +118,8 @@ async function handler(req: NextRequest) {
         p_thumbnail_url: videoInfo.thumbnail,
         p_transcript: transcript,
         p_topics: topics,
-        p_summary: summary,
-        p_suggested_questions: suggestedQuestions,
+        p_summary: summary || null,  // Ensure null instead of undefined
+        p_suggested_questions: suggestedQuestions || null,  // Ensure null instead of undefined
         p_model_used: model,
         p_user_id: user?.id || null
       })
@@ -135,8 +127,14 @@ async function handler(req: NextRequest) {
 
     if (saveError) {
       console.error('Error saving video analysis:', saveError);
-      // Still return the generated topics even if saving failed
-      return NextResponse.json({ topics, cached: false });
+      // Return error response - do not return topics if save failed
+      return NextResponse.json(
+        {
+          error: 'Failed to save video analysis. Please try again.',
+          details: saveError.message
+        },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({

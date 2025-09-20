@@ -35,8 +35,13 @@ async function handler(req: NextRequest) {
       .single();
 
     if (videoError || !video) {
+      console.log('Video not found in database:', { videoId, error: videoError });
       return NextResponse.json(
-        { error: 'Video not found in analyses' },
+        {
+          error: 'Video not found in analyses',
+          details: 'The video must be analyzed before it can be linked to your account',
+          videoId
+        },
         { status: 404 }
       );
     }

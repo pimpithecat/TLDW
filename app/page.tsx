@@ -175,7 +175,7 @@ export default function Home() {
   };
 
   // Check for pending video linking after auth
-  const checkPendingVideoLink = async () => {
+  const checkPendingVideoLink = async (retryCount = 0) => {
     // Check both sessionStorage and current videoId state
     const pendingVideoId = sessionStorage.getItem('pendingVideoId');
     const currentVideoId = videoId;
@@ -184,11 +184,32 @@ export default function Home() {
     console.log('Checking for video to link:', {
       pendingVideoId,
       currentVideoId,
-      user: user?.email
+      user: user?.email,
+      retryCount
     });
 
     if (videoToLink && user) {
       console.log('Found video to link:', videoToLink);
+
+      // First, check if the video exists in the database
+      try {
+        // Construct YouTube URL from videoId for the cache check
+        const checkUrl = `https://www.youtube.com/watch?v=${videoToLink}`;
+        const checkResponse = await fetch('/api/check-video-cache', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: checkUrl })
+        });
+
+        if (!checkResponse.ok || !(await checkResponse.json()).cached) {
+          // Video doesn't exist yet, don't try to link
+          console.log('Video not yet in database, skipping link');
+          return;
+        }
+      } catch (error) {
+        console.error('Error checking video cache:', error);
+        return;
+      }
 
       try {
         const response = await fetch('/api/link-video', {
@@ -205,9 +226,16 @@ export default function Home() {
             toast.success('Video saved to your library!');
           }
           sessionStorage.removeItem('pendingVideoId');
+        } else if (response.status === 404 && retryCount < 3) {
+          // Retry with exponential backoff if video not found
+          console.log(`Video not found, retrying in ${1000 * (retryCount + 1)}ms...`);
+          setTimeout(() => {
+            checkPendingVideoLink(retryCount + 1);
+          }, 1000 * (retryCount + 1));
         } else {
-          const errorData = await response.json();
+          const errorData = await response.json().catch(() => ({}));
           console.error('Failed to link video:', errorData);
+          // Don't remove pendingVideoId on error, so it can be retried later
         }
       } catch (error) {
         console.error('Error linking video:', error);
@@ -224,7 +252,10 @@ export default function Home() {
   useEffect(() => {
     if (user && !hasAttemptedLinking.current && (videoId || sessionStorage.getItem('pendingVideoId'))) {
       hasAttemptedLinking.current = true;
-      checkPendingVideoLink();
+      // Delay the link attempt to ensure authentication is fully propagated
+      setTimeout(() => {
+        checkPendingVideoLink();
+      }, 1500);
     }
   }, [user, videoId]); // Properly track both dependencies
 
@@ -569,10 +600,17 @@ export default function Home() {
       // Wait for topics to complete first (prioritize highlight reels)
       const topicsRes = await topicsPromise;
       // AbortManager handles timeout cleanup automatically
-      
+
       // Check topics response
       if (!topicsRes.ok) {
         const errorData = await topicsRes.json().catch(() => ({ error: "Unknown error" }));
+
+        // Check if this is specifically a save error
+        if (errorData.error && errorData.error.includes('Failed to save')) {
+          toast.error('Unable to save video analysis. Please try again.');
+          throw new Error(errorData.error);
+        }
+
         throw new Error(errorData.error || "Failed to generate topics");
       }
       
