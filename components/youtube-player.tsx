@@ -26,6 +26,7 @@ interface YouTubePlayerProps {
   onTogglePlayAll?: () => void;
   setPlayAllIndex?: (index: number | ((prev: number) => number)) => void;
   setIsPlayingAll?: (playing: boolean) => void;
+  initialDuration?: number;
 }
 
 export function YouTubePlayer({
@@ -44,12 +45,13 @@ export function YouTubePlayer({
   onTogglePlayAll,
   setPlayAllIndex,
   setIsPlayingAll,
+  initialDuration = 0,
 }: YouTubePlayerProps) {
   const playerRef = useRef<any>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [citationReelSegmentIndex, setCitationReelSegmentIndex] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
-  const [videoDuration, setVideoDuration] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(initialDuration);
   const [playerReady, setPlayerReady] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
