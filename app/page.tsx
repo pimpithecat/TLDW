@@ -1003,7 +1003,6 @@ export default function Home() {
                     onTogglePlayAll={handleTogglePlayAll}
                     setPlayAllIndex={memoizedSetPlayAllIndex}
                     setIsPlayingAll={memoizedSetIsPlayingAll}
-                    initialDuration={videoInfo?.duration || 0}
                   />
                 </div>
               </div>
