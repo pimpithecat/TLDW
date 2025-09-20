@@ -90,8 +90,8 @@ export default function Home() {
   }>({ remaining: -1, resetAt: null });
 
   // Memoize processVideo to prevent infinite loops
-  const processVideoMemo = useCallback((url: string) => {
-    processVideo(url);
+  const processVideoMemo = useCallback((url: string, isCached: boolean = false) => {
+    processVideo(url, isCached);
   }, []);
 
   // Centralized playback request functions
@@ -263,9 +263,9 @@ export default function Home() {
         sessionStorage.setItem('pendingVideoId', videoIdParam);
         console.log('Stored URL param video ID for potential post-auth linking:', videoIdParam);
       }
-      // Load cached video directly
+      // Load cached video directly with isCached flag
       const youtubeUrl = `https://www.youtube.com/watch?v=${videoIdParam}`;
-      processVideoMemo(youtubeUrl);
+      processVideoMemo(youtubeUrl, true);
     }
   }, []); // Empty dependency array - only run once on mount
 
@@ -282,7 +282,7 @@ export default function Home() {
     return true;
   };
 
-  const processVideo = async (url: string) => {
+  const processVideo = async (url: string, isCached: boolean = false) => {
     // Check generation limit for anonymous users
     if (!checkGenerationLimit()) {
       // Store current video before showing auth modal
@@ -291,8 +291,15 @@ export default function Home() {
       }
       return;
     }
-    setPageState('ANALYZING_NEW');
-    setLoadingStage('fetching');
+
+    // For cached videos, skip the analyzing state and go directly to loading
+    if (isCached) {
+      setPageState('LOADING_CACHED');
+    } else {
+      setPageState('ANALYZING_NEW');
+      setLoadingStage('fetching');
+    }
+
     setError("");
     setTopics([]);
     setTranscript([]);
@@ -337,8 +344,11 @@ export default function Home() {
         const cacheData = await cacheResponse.json();
 
         if (cacheData.cached) {
-          // Show skeleton loader for cached videos
-          setPageState('LOADING_CACHED');
+          // For cached videos, we're already in LOADING_CACHED state if isCached was true
+          // Otherwise, set it now
+          if (!isCached) {
+            setPageState('LOADING_CACHED');
+          }
 
           // Small delay for smooth transition
           setTimeout(() => {
