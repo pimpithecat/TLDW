@@ -18,7 +18,7 @@ interface YouTubePlayerProps {
   onCommandExecuted?: () => void;
   onPlayerReady?: () => void;
   topics?: Topic[];
-  onTopicSelect?: (topic: Topic) => void;
+  onTopicSelect?: (topic: Topic, fromPlayAll?: boolean) => void;
   onPlayTopic?: (topic: Topic) => void;
   transcript?: TranscriptSegment[];
   isPlayingAll?: boolean;
@@ -269,9 +269,9 @@ export function YouTubePlayer({
 
         case 'PLAY_ALL':
           if (topics.length > 0) {
-            setIsPlayingAll?.(true);
-            setPlayAllIndex?.(0);
-            onTopicSelect?.(topics[0]);
+            // Play All state is already set in requestPlayAll
+            // Just select the first topic and start playing
+            onTopicSelect?.(topics[0], true);  // Pass true for fromPlayAll
             playerRef.current.seekTo(topics[0].segments[0].start, true);
             if (playbackCommand.autoPlay) {
               playerRef.current.playVideo();
@@ -320,13 +320,13 @@ export function YouTubePlayer({
   // State-driven playback effect for Play All mode
   useEffect(() => {
     if (!isPlayingAll || !playerReady || !playerRef.current || topics.length === 0) return;
-    
+
     const currentTopic = topics[playAllIndex];
     if (!currentTopic || currentTopic.segments.length === 0) return;
-    
-    // Select the topic in the UI
-    onTopicSelect?.(currentTopic);
-    
+
+    // Select the topic in the UI (with fromPlayAll flag to prevent state reset)
+    onTopicSelect?.(currentTopic, true);
+
     // Small delay to ensure player is ready
     setTimeout(() => {
       if (playerRef.current?.seekTo && playerRef.current?.playVideo) {

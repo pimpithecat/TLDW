@@ -53,7 +53,8 @@ export default function Home() {
   const [generationStartTime, setGenerationStartTime] = useState<number | null>(null);
   const [processingStartTime, setProcessingStartTime] = useState<number | null>(null);
   const rightColumnTabsRef = useRef<RightColumnTabsHandle>(null);
-  
+  const lastSeekTimeRef = useRef<number>(0);
+
   // Play All state (lifted from YouTubePlayer)
   const [isPlayingAll, setIsPlayingAll] = useState(false);
   const [playAllIndex, setPlayAllIndex] = useState(0);
@@ -103,6 +104,8 @@ export default function Home() {
 
   const requestPlayTopic = useCallback((topic: Topic) => {
     if (!isPlayerReady) return;
+    // Track that we're initiating a seek
+    lastSeekTimeRef.current = Date.now();
     // Set playback context for segment-end detection
     if (topic.segments.length > 0) {
       setPlaybackContext({
@@ -123,6 +126,8 @@ export default function Home() {
 
   const requestPlayCitations = useCallback((citations: Citation[]) => {
     if (!isPlayerReady) return;
+    // Track that we're initiating a seek
+    lastSeekTimeRef.current = Date.now();
     // Set playback context for citation segments
     if (citations.length > 0) {
       setPlaybackContext({
@@ -137,6 +142,11 @@ export default function Home() {
 
   const requestPlayAll = useCallback(() => {
     if (!isPlayerReady || topics.length === 0) return;
+    // Track that we're initiating a seek
+    lastSeekTimeRef.current = Date.now();
+    // Set Play All state first
+    setIsPlayingAll(true);
+    setPlayAllIndex(0);
     // Set playback context for play all mode
     setPlaybackContext({
       type: 'PLAY_ALL',
@@ -726,6 +736,13 @@ export default function Home() {
   useEffect(() => {
     if (!playbackContext || !isPlayerReady) return;
 
+    // Check if we just initiated a seek (within last 1 second)
+    const timeSinceLastSeek = Date.now() - lastSeekTimeRef.current;
+    if (timeSinceLastSeek < 1000) {
+      // Skip segment-end detection immediately after seeking
+      return;
+    }
+
     // Check if we've reached the end of current segment/topic
     if (currentTime >= playbackContext.endTime) {
       if (playbackContext.type === 'PLAY_ALL') {
@@ -734,6 +751,7 @@ export default function Home() {
         if (nextIndex < topics.length) {
           // Move to next topic
           const nextTopic = topics[nextIndex];
+          lastSeekTimeRef.current = Date.now(); // Track the seek for next topic
           setPlaybackContext({
             ...playbackContext,
             playAllIndex: nextIndex,
@@ -747,6 +765,7 @@ export default function Home() {
           setPlaybackCommand({ type: 'PAUSE' });
           setPlaybackContext(null);
           setIsPlayingAll(false);
+          setPlayAllIndex(0);
         }
       } else if (playbackContext.type === 'CITATIONS' && playbackContext.segments) {
         // Handle citation reel transitions
@@ -755,6 +774,7 @@ export default function Home() {
           // Move to next citation segment
           const nextIdx = currentSegIdx + 1;
           const nextSegment = playbackContext.segments[nextIdx];
+          lastSeekTimeRef.current = Date.now(); // Track the seek for next segment
           setPlaybackContext({
             ...playbackContext,
             currentSegmentIndex: nextIdx,
@@ -774,12 +794,12 @@ export default function Home() {
     }
   }, [currentTime, playbackContext, isPlayerReady, topics, setSelectedTopic, setPlayAllIndex, setIsPlayingAll]);
 
-  const handleTopicSelect = useCallback((topic: Topic | null) => {
-    // Reset Play All mode when manually selecting a topic
-    // (unless it's being called by Play All itself)
-    if (!isPlayingAll) {
+  const handleTopicSelect = useCallback((topic: Topic | null, fromPlayAll: boolean = false) => {
+    // Reset Play All mode only when manually selecting a topic (not from Play All)
+    if (!fromPlayAll && isPlayingAll) {
       setIsPlayingAll(false);
       setPlayAllIndex(0);
+      setPlaybackContext(null);
     }
 
     // Clear citation highlight when selecting a topic
@@ -787,9 +807,9 @@ export default function Home() {
     setSelectedTopic(topic);
 
     // Request to play the topic through centralized command system
-    if (topic) {
+    if (topic && !fromPlayAll) {
       requestPlayTopic(topic);
-    } else {
+    } else if (!topic) {
       // Clear playback context when deselecting
       setPlaybackContext(null);
     }
@@ -817,7 +837,13 @@ export default function Home() {
     if (isPlayingAll) {
       // Stop playing all
       setIsPlayingAll(false);
+      setPlayAllIndex(0);
+      setPlaybackContext(null);
+      setPlaybackCommand({ type: 'PAUSE' });
     } else {
+      // Clear any existing selection to start fresh
+      setSelectedTopic(null);
+      setPlaybackContext(null);
       // Request to play all topics through centralized command system
       requestPlayAll();
     }
