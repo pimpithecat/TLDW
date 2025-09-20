@@ -28,6 +28,7 @@ import { Loader2, Video } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { AuthModal } from "@/components/auth-modal";
 import { useAuth } from "@/contexts/auth-context";
+import { backgroundOperation, AbortManager } from "@/lib/promise-utils";
 import { toast } from "sonner";
 
 export default function Home() {
@@ -54,6 +55,7 @@ export default function Home() {
   const [processingStartTime, setProcessingStartTime] = useState<number | null>(null);
   const rightColumnTabsRef = useRef<RightColumnTabsHandle>(null);
   const lastSeekTimeRef = useRef<number>(0);
+  const abortManager = useRef(new AbortManager());
 
   // Play All state (lifted from YouTubePlayer)
   const [isPlayingAll, setIsPlayingAll] = useState(false);
@@ -213,17 +215,27 @@ export default function Home() {
     }
   };
 
-  // Check rate limit status on mount and handle pending video
+  // Check rate limit status on mount
   useEffect(() => {
     checkRateLimit();
-    if (user && !hasAttemptedLinking.current) {
+  }, []);
+
+  // Handle pending video linking when user logs in and videoId is available
+  useEffect(() => {
+    if (user && !hasAttemptedLinking.current && (videoId || sessionStorage.getItem('pendingVideoId'))) {
       hasAttemptedLinking.current = true;
-      // Small delay to ensure videoId state is set
-      setTimeout(() => {
-        checkPendingVideoLink();
-      }, 500);
+      checkPendingVideoLink();
     }
-  }, [user]); // Only depend on user, not videoId
+  }, [user, videoId]); // Properly track both dependencies
+
+  // Cleanup AbortManager on component unmount
+  useEffect(() => {
+    const currentAbortManager = abortManager.current;
+    return () => {
+      // Abort all pending requests when component unmounts
+      currentAbortManager.cleanup();
+    };
+  }, []);
 
   const checkRateLimit = async () => {
     try {
@@ -292,6 +304,9 @@ export default function Home() {
       return;
     }
 
+    // Cleanup any pending requests from previous analysis
+    abortManager.current.cleanup();
+
     // For cached videos, skip the analyzing state and go directly to loading
     if (isCached) {
       setPageState('LOADING_CACHED');
@@ -350,12 +365,10 @@ export default function Home() {
             setPageState('LOADING_CACHED');
           }
 
-          // Small delay for smooth transition
-          setTimeout(() => {
-            // Load all cached data
-            setTranscript(cacheData.transcript);
-            setVideoInfo(cacheData.videoInfo);
-            setTopics(cacheData.topics);
+          // Load all cached data
+          setTranscript(cacheData.transcript);
+          setVideoInfo(cacheData.videoInfo);
+          setTopics(cacheData.topics);
 
           // Set cached summary and questions
           if (cacheData.summary) {
@@ -373,9 +386,8 @@ export default function Home() {
             console.log('Stored cached video ID for potential post-auth linking:', extractedVideoId);
           }
 
-            // Set page state back to idle
-            setPageState('IDLE');
-          }, 100); // Very brief delay for smooth transition
+          // Set page state back to idle
+          setPageState('IDLE');
           setLoadingStage(null);
           setProcessingStartTime(null);
 
@@ -384,39 +396,48 @@ export default function Home() {
             setShowSummaryTab(true);
             setIsGeneratingSummary(true);
 
-            fetch("/api/generate-summary", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                transcript: cacheData.transcript,
-                videoInfo: cacheData.videoInfo,
-                videoId: extractedVideoId,
-                language: summaryLanguage
-              }),
-            })
-            .then(async (summaryRes) => {
-              if (summaryRes.ok) {
-                const { summaryContent: generatedSummary } = await summaryRes.json();
-                setSummaryContent(generatedSummary);
-
-                // Update the video analysis with the summary
-                fetch("/api/update-video-analysis", {
+            backgroundOperation(
+              'generate-cached-summary',
+              async () => {
+                const summaryRes = await fetch("/api/generate-summary", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
+                    transcript: cacheData.transcript,
+                    videoInfo: cacheData.videoInfo,
                     videoId: extractedVideoId,
-                    summary: generatedSummary
+                    language: summaryLanguage
                   }),
-                }).catch(err => console.error("Failed to update video analysis with summary:", err));
-              } else {
-                const errorData = await summaryRes.json().catch(() => ({ error: "Unknown error" }));
-                setSummaryError(errorData.error || "Failed to generate summary");
+                });
+
+                if (summaryRes.ok) {
+                  const { summaryContent: generatedSummary } = await summaryRes.json();
+                  setSummaryContent(generatedSummary);
+
+                  // Update the video analysis with the summary
+                  await backgroundOperation(
+                    'update-cached-summary',
+                    async () => {
+                      await fetch("/api/update-video-analysis", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          videoId: extractedVideoId,
+                          summary: generatedSummary
+                        }),
+                      });
+                    }
+                  );
+                  return generatedSummary;
+                } else {
+                  const errorData = await summaryRes.json().catch(() => ({ error: "Unknown error" }));
+                  throw new Error(errorData.error || "Failed to generate summary");
+                }
+              },
+              (error) => {
+                setSummaryError(error.message || "Failed to generate summary. Please try again.");
               }
-            })
-            .catch(() => {
-              setSummaryError("Failed to generate summary. Please try again.");
-            })
-            .finally(() => {
+            ).finally(() => {
               setIsGeneratingSummary(false);
             });
           }
@@ -427,10 +448,8 @@ export default function Home() {
 
       // Not cached, proceed with normal flow
       // Create AbortControllers for both requests
-      const transcriptController = new AbortController();
-      const videoInfoController = new AbortController();
-      const transcriptTimeoutId = setTimeout(() => transcriptController.abort(), 30000); // 30 second timeout
-      const videoInfoTimeoutId = setTimeout(() => videoInfoController.abort(), 10000); // 10 second timeout
+      const transcriptController = abortManager.current.createController('transcript', 30000);
+      const videoInfoController = abortManager.current.createController('videoInfo', 10000);
 
       // Fetch transcript and video info in parallel
       const transcriptPromise = fetch("/api/transcript", {
@@ -439,7 +458,6 @@ export default function Home() {
         body: JSON.stringify({ url }),
         signal: transcriptController.signal,
       }).catch(err => {
-        clearTimeout(transcriptTimeoutId);
         if (err.name === 'AbortError') {
           throw new Error("Transcript request timed out. Please try again.");
         }
@@ -452,7 +470,6 @@ export default function Home() {
         body: JSON.stringify({ url }),
         signal: videoInfoController.signal,
       }).catch(err => {
-        clearTimeout(videoInfoTimeoutId);
         if (err.name === 'AbortError') {
           console.error("Video info request timed out");
           return null;
@@ -467,8 +484,7 @@ export default function Home() {
         videoInfoPromise
       ]);
 
-      clearTimeout(transcriptTimeoutId);
-      clearTimeout(videoInfoTimeoutId);
+      // AbortManager handles timeout cleanup automatically
 
       // Process transcript response (required)
       if (!transcriptRes || !transcriptRes.ok) {
@@ -530,8 +546,7 @@ export default function Home() {
       setGenerationStartTime(Date.now());
       
       // Create abort controller for topics request
-      const topicsController = new AbortController();
-      const topicsTimeoutId = setTimeout(() => topicsController.abort(), 600000); // 60 second timeout
+      const topicsController = abortManager.current.createController('topics', 60000);
 
       // Start topics generation using cached video-analysis endpoint
       const topicsPromise = fetch("/api/video-analysis", {
@@ -545,7 +560,6 @@ export default function Home() {
         }),
         signal: topicsController.signal,
       }).catch(err => {
-        clearTimeout(topicsTimeoutId);
         if (err.name === 'AbortError') {
           throw new Error("Topic generation timed out. The video might be too long. Please try a shorter video.");
         }
@@ -554,7 +568,7 @@ export default function Home() {
 
       // Wait for topics to complete first (prioritize highlight reels)
       const topicsRes = await topicsPromise;
-      clearTimeout(topicsTimeoutId);
+      // AbortManager handles timeout cleanup automatically
       
       // Check topics response
       if (!topicsRes.ok) {
@@ -593,8 +607,7 @@ export default function Home() {
         setShowSummaryTab(true);
         setIsGeneratingSummary(true);
 
-        const summaryController = new AbortController();
-        const summaryTimeoutId = setTimeout(() => summaryController.abort(), 600000); // 60 second timeout
+        const summaryController = abortManager.current.createController('summary', 60000);
 
         const summaryPromise = fetch("/api/generate-summary", {
           method: "POST",
@@ -609,67 +622,86 @@ export default function Home() {
         });
 
         // Handle summary generation in the background
-        summaryPromise
-          .then(async (summaryRes) => {
-            clearTimeout(summaryTimeoutId);
+        backgroundOperation(
+          'generate-summary',
+          async () => {
+            const summaryRes = await summaryPromise;
 
             if (!summaryRes.ok) {
               const errorData = await summaryRes.json().catch(() => ({ error: "Unknown error" }));
-              setSummaryError(errorData.error || "Failed to generate summary");
-            } else {
-              const { summaryContent: generatedSummary } = await summaryRes.json();
-              setSummaryContent(generatedSummary);
-
-              // Update the video analysis with the summary
-              fetch("/api/update-video-analysis", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  videoId: extractedVideoId,
-                  summary: generatedSummary
-                }),
-              }).catch(err => console.error("Failed to update video analysis with summary:", err));
+              throw new Error(errorData.error || "Failed to generate summary");
             }
-          })
-          .catch((err) => {
-            clearTimeout(summaryTimeoutId);
-            if (err.name === 'AbortError') {
+
+            const { summaryContent: generatedSummary } = await summaryRes.json();
+            setSummaryContent(generatedSummary);
+
+            // Update the video analysis with the summary
+            await backgroundOperation(
+              'update-summary',
+              async () => {
+                await fetch("/api/update-video-analysis", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    videoId: extractedVideoId,
+                    summary: generatedSummary
+                  }),
+                });
+              }
+            );
+            return generatedSummary;
+          },
+          (error) => {
+            if (error.name === 'AbortError') {
               setSummaryError("Summary generation timed out. The video might be too long.");
             } else {
-              setSummaryError("Failed to generate summary. Please try again.");
+              setSummaryError(error.message || "Failed to generate summary. Please try again.");
             }
-          })
-          .finally(() => {
-            setIsGeneratingSummary(false);
-          });
+          }
+        ).finally(() => {
+          setIsGeneratingSummary(false);
+        });
 
         // Generate suggested questions
-        fetch("/api/suggested-questions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            transcript: fetchedTranscript,
-            topics: generatedTopics,
-            videoTitle: fetchedVideoInfo?.title
-          }),
-        })
-          .then(async (res) => {
+        backgroundOperation(
+          'generate-questions',
+          async () => {
+            const res = await fetch("/api/suggested-questions", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                transcript: fetchedTranscript,
+                topics: generatedTopics,
+                videoTitle: fetchedVideoInfo?.title
+              }),
+            });
+
             if (res.ok) {
               const { questions } = await res.json();
               setCachedSuggestedQuestions(questions);
 
               // Update video analysis with suggested questions
-              fetch("/api/update-video-analysis", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  videoId: extractedVideoId,
-                  suggestedQuestions: questions
-                }),
-              }).catch(err => console.error("Failed to update suggested questions:", err));
+              await backgroundOperation(
+                'update-questions',
+                async () => {
+                  await fetch("/api/update-video-analysis", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      videoId: extractedVideoId,
+                      suggestedQuestions: questions
+                    }),
+                  });
+                }
+              );
+              return questions;
             }
-          })
-          .catch(err => console.error("Failed to generate suggested questions:", err));
+            return null;
+          },
+          (error) => {
+            console.error("Failed to generate suggested questions:", error);
+          }
+        );
       }
       
     } catch (err) {

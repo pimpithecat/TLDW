@@ -49,17 +49,21 @@ export async function POST(req: NextRequest) {
         .single();
 
       if (cachedVideo && cachedVideo.topics) {
-        // If user is logged in, track their access to this video
+        // If user is logged in, track their access to this video atomically
         if (user) {
-          await supabase
-            .from('user_videos')
-            .upsert({
-              user_id: user.id,
-              video_id: cachedVideo.id,
-              accessed_at: new Date().toISOString()
-            }, {
-              onConflict: 'user_id,video_id'
-            });
+          await supabase.rpc('upsert_video_analysis_with_user_link', {
+            p_youtube_id: videoId,
+            p_title: cachedVideo.title,
+            p_author: cachedVideo.author,
+            p_duration: cachedVideo.duration,
+            p_thumbnail_url: cachedVideo.thumbnail_url,
+            p_transcript: cachedVideo.transcript,
+            p_topics: cachedVideo.topics,
+            p_summary: cachedVideo.summary,
+            p_suggested_questions: cachedVideo.suggested_questions,
+            p_model_used: cachedVideo.model_used,
+            p_user_id: user.id
+          });
         }
 
         return NextResponse.json({
@@ -111,44 +115,27 @@ export async function POST(req: NextRequest) {
 
     const { topics } = await generateResponse.json();
 
-    // Save to database
-    const { data: savedVideo, error: saveError } = await supabase
-      .from('video_analyses')
-      .upsert({
-        youtube_id: videoId,
-        title: videoInfo.title,
-        author: videoInfo.author,
-        duration: videoInfo.duration,
-        thumbnail_url: videoInfo.thumbnail,
-        transcript: transcript,
-        topics: topics,
-        summary: summary,
-        suggested_questions: suggestedQuestions,
-        model_used: model,
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'youtube_id'
+    // Use transactional RPC function to save video and link to user atomically
+    const { data: result, error: saveError } = await supabase
+      .rpc('upsert_video_analysis_with_user_link', {
+        p_youtube_id: videoId,
+        p_title: videoInfo.title,
+        p_author: videoInfo.author,
+        p_duration: videoInfo.duration,
+        p_thumbnail_url: videoInfo.thumbnail,
+        p_transcript: transcript,
+        p_topics: topics,
+        p_summary: summary,
+        p_suggested_questions: suggestedQuestions,
+        p_model_used: model,
+        p_user_id: user?.id || null
       })
-      .select()
       .single();
 
     if (saveError) {
       console.error('Error saving video analysis:', saveError);
       // Still return the generated topics even if saving failed
       return NextResponse.json({ topics, cached: false });
-    }
-
-    // If user is logged in, link video to their account
-    if (user && savedVideo) {
-      await supabase
-        .from('user_videos')
-        .upsert({
-          user_id: user.id,
-          video_id: savedVideo.id,
-          accessed_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id,video_id'
-        });
     }
 
     return NextResponse.json({

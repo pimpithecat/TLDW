@@ -6,7 +6,7 @@ export async function GET(request: Request) {
   const code = requestUrl.searchParams.get('code')
   const error = requestUrl.searchParams.get('error')
   const errorDescription = requestUrl.searchParams.get('error_description')
-  const origin = requestUrl.origin
+  const origin = process.env.NEXT_PUBLIC_APP_URL || requestUrl.origin
 
   // Handle OAuth errors
   if (error) {
