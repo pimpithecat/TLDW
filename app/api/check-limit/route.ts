@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { RateLimiter, RATE_LIMITS } from '@/lib/rate-limiter';
+import { withSecurity, SECURITY_PRESETS } from '@/lib/security-middleware';
 
-export async function GET() {
+async function handler(request: NextRequest) {
   try {
     const supabase = await createClient();
 
@@ -35,3 +36,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = withSecurity(handler, SECURITY_PRESETS.PUBLIC);

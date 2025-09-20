@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { TranscriptSegment, Topic } from '@/lib/types';
 import {
@@ -11,6 +11,8 @@ import {
 } from '@/lib/quote-matcher';
 import { generateTopicsRequestSchema, formatValidationError } from '@/lib/validation';
 import { z } from 'zod';
+import { withSecurity } from '@/lib/security-middleware';
+import { RATE_LIMITS } from '@/lib/rate-limiter';
 
 interface ParsedTopic {
   title: string;
@@ -212,7 +214,7 @@ async function findExactQuotes(
   return results.filter(r => r !== null) as any[];
 }
 
-export async function POST(request: Request) {
+async function handler(request: NextRequest) {
   try {
     // Parse and validate request body
     const body = await request.json();
@@ -443,3 +445,10 @@ export async function POST(request: Request) {
     );
   }
 }
+
+// Apply security with generation rate limits (dynamic based on auth)
+export const POST = withSecurity(handler, {
+  maxBodySize: 10 * 1024 * 1024, // 10MB for large transcripts
+  allowedMethods: ['POST']
+  // Note: Rate limiting is handled internally by the route for dynamic limits based on auth
+});

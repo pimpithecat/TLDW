@@ -3,8 +3,9 @@ import { createClient } from '@/lib/supabase/server';
 import { videoAnalysisRequestSchema, formatValidationError } from '@/lib/validation';
 import { RateLimiter, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limiter';
 import { z } from 'zod';
+import { withSecurity, SECURITY_PRESETS } from '@/lib/security-middleware';
 
-export async function POST(req: NextRequest) {
+async function handler(req: NextRequest) {
   try {
     // Parse and validate request body
     const body = await req.json();
@@ -155,3 +156,5 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export const POST = withSecurity(handler, SECURITY_PRESETS.PUBLIC);

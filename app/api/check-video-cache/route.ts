@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { extractVideoId } from '@/lib/utils';
+import { withSecurity, SECURITY_PRESETS } from '@/lib/security-middleware';
 
-export async function POST(req: NextRequest) {
+async function handler(req: NextRequest) {
   try {
     const { url } = await req.json();
 
@@ -80,3 +81,5 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export const POST = withSecurity(handler, SECURITY_PRESETS.PUBLIC);

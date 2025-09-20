@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { RateLimiter, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limiter';
 import { AuditLogger, AuditAction } from '@/lib/audit-logger';
 import { createClient } from '@/lib/supabase/server';
+import { validateCSRF, injectCSRFToken } from '@/lib/csrf-protection';
 
 export interface SecurityMiddlewareConfig {
   rateLimit?: {
@@ -17,7 +18,7 @@ export interface SecurityMiddlewareConfig {
 /**
  * Security middleware for API routes
  */
-export async function withSecurity(
+export function withSecurity(
   handler: (req: NextRequest) => Promise<NextResponse>,
   config: SecurityMiddlewareConfig = {}
 ) {
@@ -80,7 +81,27 @@ export async function withSecurity(
         }
       }
 
-      // 5. Add security headers to response
+      // 5. CSRF Protection for state-changing operations
+      if (config.csrfProtection && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+        const csrfValidation = await validateCSRF(req);
+        if (!csrfValidation.valid) {
+          await AuditLogger.logSecurityEvent(
+            AuditAction.UNAUTHORIZED_ACCESS,
+            {
+              endpoint: req.url,
+              reason: 'CSRF validation failed',
+              error: csrfValidation.error
+            }
+          );
+
+          return NextResponse.json(
+            { error: csrfValidation.error || 'CSRF validation failed' },
+            { status: 403 }
+          );
+        }
+      }
+
+      // 6. Add security headers to response
       const response = await handler(req);
 
       // Add security headers
@@ -95,6 +116,12 @@ export async function withSecurity(
       if (origin && isAllowedOrigin(origin)) {
         response.headers.set('Access-Control-Allow-Origin', origin);
         response.headers.set('Access-Control-Allow-Credentials', 'true');
+      }
+
+      // Inject new CSRF token for subsequent requests (if CSRF is enabled)
+      if (config.csrfProtection) {
+        const { response: csrfResponse } = injectCSRFToken(response);
+        return csrfResponse;
       }
 
       return response;
@@ -138,7 +165,8 @@ export const SECURITY_PRESETS = {
     requireAuth: true,
     rateLimit: RATE_LIMITS.AUTH_GENERATION,
     maxBodySize: 5 * 1024 * 1024, // 5MB
-    allowedMethods: ['GET', 'POST', 'PUT', 'DELETE']
+    allowedMethods: ['GET', 'POST', 'PUT', 'DELETE'],
+    csrfProtection: true
   },
   STRICT: {
     requireAuth: true,

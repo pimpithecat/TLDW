@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { TranscriptSegment, Topic, ChatMessage, Citation } from '@/lib/types';
 import { buildTranscriptIndex, findTextInTranscript } from '@/lib/quote-matcher';
@@ -7,6 +7,7 @@ import { chatRequestSchema, formatValidationError } from '@/lib/validation';
 import { RateLimiter, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limiter';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+import { withSecurity } from '@/lib/security-middleware';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
@@ -39,7 +40,7 @@ function findClosestSegment(transcript: TranscriptSegment[], targetSeconds: numb
   };
 }
 
-export async function POST(request: Request) {
+async function handler(request: NextRequest) {
   try {
     // Parse and validate request body
     const body = await request.json();
@@ -392,3 +393,9 @@ ${message}`;
     );
   }
 }
+
+// Apply security (rate limiting is handled internally in the route)
+export const POST = withSecurity(handler, {
+  maxBodySize: 10 * 1024 * 1024, // 10MB for large transcripts and chat history
+  allowedMethods: ['POST']
+});

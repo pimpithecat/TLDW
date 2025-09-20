@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { withSecurity } from '@/lib/security-middleware';
+import { RATE_LIMITS } from '@/lib/rate-limiter';
 
-export async function POST(req: NextRequest) {
+async function handler(req: NextRequest) {
   try {
     const { videoId } = await req.json();
 
@@ -14,10 +16,11 @@ export async function POST(req: NextRequest) {
 
     const supabase = await createClient();
 
-    // Get current user
+    // Authentication is handled by the security middleware
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
+      // This shouldn't happen as middleware checks authentication
       return NextResponse.json(
         { error: 'User not authenticated' },
         { status: 401 }
@@ -91,3 +94,11 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export const POST = withSecurity(handler, {
+  requireAuth: true,
+  rateLimit: RATE_LIMITS.AUTH_GENERATION,
+  maxBodySize: 1024 * 1024, // 1MB
+  allowedMethods: ['POST']
+  // CSRF protection not needed as authentication is already required
+});

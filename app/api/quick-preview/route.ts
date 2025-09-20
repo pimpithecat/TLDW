@@ -1,10 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { TranscriptSegment } from '@/lib/types';
+import { withSecurity, SECURITY_PRESETS } from '@/lib/security-middleware';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
-export async function POST(request: Request) {
+async function handler(request: NextRequest) {
   try {
     const { transcript, videoTitle, videoDescription, channelName, tags } = await request.json();
 
@@ -125,3 +126,5 @@ Write the overview in 3-4 sentences:`;
     );
   }
 }
+
+export const POST = withSecurity(handler, SECURITY_PRESETS.PUBLIC);
