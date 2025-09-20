@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Play } from "lucide-react";
-import { Topic, TranscriptSegment } from "@/lib/types";
+import { Topic, TranscriptSegment, PlaybackCommand, Citation } from "@/lib/types";
 import { formatDuration, getTopicHSLColor } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,7 +14,9 @@ interface YouTubePlayerProps {
   videoId: string;
   selectedTopic: Topic | null;
   onTimeUpdate?: (seconds: number) => void;
-  seekToTime?: number;
+  playbackCommand?: PlaybackCommand | null;
+  onCommandExecuted?: () => void;
+  onPlayerReady?: () => void;
   topics?: Topic[];
   onTopicSelect?: (topic: Topic) => void;
   onPlayTopic?: (topic: Topic) => void;
@@ -30,7 +32,9 @@ export function YouTubePlayer({
   videoId,
   selectedTopic,
   onTimeUpdate,
-  seekToTime,
+  playbackCommand,
+  onCommandExecuted,
+  onPlayerReady,
   topics = [],
   onTopicSelect,
   onPlayTopic,
@@ -92,6 +96,7 @@ export function YouTubePlayer({
             playerRef.current = player;
             setVideoDuration(event.target.getDuration());
             setPlayerReady(true);
+            onPlayerReady?.();
           },
           onStateChange: (event: { data: number; target: any }) => {
             if (!mounted) return;
@@ -201,36 +206,96 @@ export function YouTubePlayer({
     };
   }, [videoId]); // Only depend on videoId
 
+  // Centralized command executor
   useEffect(() => {
-    // Ensure player is fully ready before executing commands
-    if (seekToTime === undefined) return;
-    if (!playerRef.current?.seekTo) return;
-    if (!playerReady) return;
+    if (!playbackCommand || !playerRef.current || !playerReady) return;
 
-    // Prevent seeking to the same position repeatedly
-    if (lastSeekTimeRef.current === seekToTime) return;
+    const executeCommand = () => {
+      switch (playbackCommand.type) {
+        case 'SEEK':
+          if (playbackCommand.time !== undefined) {
+            playerRef.current.seekTo(playbackCommand.time, true);
+            playerRef.current.playVideo();
+          }
+          break;
 
-    lastSeekTimeRef.current = seekToTime;
-    isSeekingRef.current = true;
+        case 'PLAY_TOPIC':
+          if (playbackCommand.topic) {
+            const topic = playbackCommand.topic;
+            onTopicSelect?.(topic);
+            if (topic.segments.length > 0) {
+              playerRef.current.seekTo(topic.segments[0].start, true);
+              if (playbackCommand.autoPlay) {
+                playerRef.current.playVideo();
+              }
+            }
+          }
+          break;
 
-    playerRef.current.seekTo(seekToTime, true);
+        case 'PLAY_SEGMENT':
+          if (playbackCommand.segment) {
+            playerRef.current.seekTo(playbackCommand.segment.start, true);
+            playerRef.current.playVideo();
+          }
+          break;
 
-    // Auto-play after seeking (for timestamp clicks)
-    if (playerRef.current?.playVideo) {
-      playerRef.current.playVideo();
-    }
+        case 'PLAY_CITATIONS':
+          if (playbackCommand.citations && playbackCommand.citations.length > 0) {
+            // Create citation reel topic
+            const citationReel: Topic = {
+              id: `citation-reel-${Date.now()}`,
+              title: "Cited Clips",
+              description: "Playing all clips cited in the AI response",
+              duration: playbackCommand.citations.reduce((total, c) => total + (c.end - c.start), 0),
+              segments: playbackCommand.citations.map(c => ({
+                start: c.start,
+                end: c.end,
+                text: c.text,
+                startSegmentIdx: c.startSegmentIdx,
+                endSegmentIdx: c.endSegmentIdx,
+                startCharOffset: c.startCharOffset,
+                endCharOffset: c.endCharOffset,
+              })),
+              isCitationReel: true,
+              autoPlay: true,
+            };
+            onTopicSelect?.(citationReel);
+            playerRef.current.seekTo(playbackCommand.citations[0].start, true);
+            if (playbackCommand.autoPlay) {
+              playerRef.current.playVideo();
+            }
+          }
+          break;
 
-    // Delay time update to avoid feedback loop
-    setTimeout(() => {
-      if (playerRef.current?.getCurrentTime) {
-        const time = playerRef.current.getCurrentTime();
-        setCurrentTime(time);
-        onTimeUpdate?.(time);
+        case 'PLAY_ALL':
+          if (topics.length > 0) {
+            setIsPlayingAll?.(true);
+            setPlayAllIndex?.(0);
+            onTopicSelect?.(topics[0]);
+            playerRef.current.seekTo(topics[0].segments[0].start, true);
+            if (playbackCommand.autoPlay) {
+              playerRef.current.playVideo();
+            }
+          }
+          break;
+
+        case 'PLAY':
+          playerRef.current.playVideo();
+          break;
+
+        case 'PAUSE':
+          playerRef.current.pauseVideo();
+          break;
       }
-      isSeekingRef.current = false;
-      lastSeekTimeRef.current = undefined;
-    }, 200);
-  }, [seekToTime, onTimeUpdate, playerReady]);
+
+      // Clear command after execution
+      onCommandExecuted?.();
+    };
+
+    // Execute with small delay to ensure player stability
+    const timeoutId = setTimeout(executeCommand, 50);
+    return () => clearTimeout(timeoutId);
+  }, [playbackCommand, playerReady, topics, onCommandExecuted, onTopicSelect, setIsPlayingAll, setPlayAllIndex]);
 
   // Reset segment index when topic changes and auto-play if needed
   useEffect(() => {
