@@ -139,14 +139,6 @@ export function VideoProgressBar({
             })}
           </div>
 
-          {/* Play All icon indicator on hover */}
-          {isHoveringBar && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
-              <div className="bg-background/90 backdrop-blur-sm rounded-full p-2 shadow-lg animate-in fade-in zoom-in duration-200">
-                <PlayCircle className="h-6 w-6 text-primary" />
-              </div>
-            </div>
-          )}
 
           {/* Current time indicator */}
           <div
@@ -160,8 +152,7 @@ export function VideoProgressBar({
         </div>
           </TooltipTrigger>
           <TooltipContent>
-            <p className="flex items-center gap-1">
-              <PlayCircle className="h-3 w-3" />
+            <p>
               {isPlayingAll ? 'Stop playing highlights' : 'Play all highlights'}
             </p>
           </TooltipContent>
