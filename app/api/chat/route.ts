@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { TranscriptSegment, Topic, ChatMessage, Citation } from '@/lib/types';
 import { buildTranscriptIndex, findTextInTranscript } from '@/lib/quote-matcher';
 import { TIMESTAMP_REGEX, parseTimestamp } from '@/lib/timestamp-utils';
@@ -8,8 +7,7 @@ import { RateLimiter, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limiter'
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { withSecurity } from '@/lib/security-middleware';
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+import { generateWithFallback } from '@/lib/gemini-client';
 
 function formatTranscriptForContext(segments: TranscriptSegment[]): string {
   return segments.map(s => {
@@ -163,60 +161,39 @@ ${transcriptContext}
 
 ${message}`;
 
-    const maxOutputTokens = 65536; // gemini-2.5-flash-lite supports 65536 tokens
-
-    const aiModel = genAI.getGenerativeModel({ 
-      model: 'gemini-2.5-flash-lite',
-      generationConfig: {
-        responseMimeType: "application/json",
-        temperature: 0.6,
-        maxOutputTokens: Math.min(1024, maxOutputTokens),
-      }
-    });
+    const maxOutputTokens = 65536;
 
     let response = '';
-    let retryCount = 0;
-    const maxRetries = 2;
-    
-    while (retryCount <= maxRetries) {
-      try {
-        const result = await aiModel.generateContent(prompt);
-        response = result.response?.text() || '';
-        
-        // Debug: Log the raw response from Gemini
-        console.log('=== GEMINI RAW RESPONSE ===');
-        console.log('Response length:', response.length);
-        console.log('Raw response:', response);
-        console.log('=== END RAW RESPONSE ===');
-        
-        if (response) {
-          break; // Success, exit retry loop
+
+    try {
+      response = await generateWithFallback(prompt, {
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 0.6,
+          maxOutputTokens: Math.min(1024, maxOutputTokens),
         }
-      } catch (error) {
-        
-        if (retryCount === maxRetries) {
-          // Final attempt failed
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          if (errorMessage.includes('429') || errorMessage.includes('quota')) {
-            return NextResponse.json({ 
-              content: "The AI service is currently at capacity. Please wait a moment and try again.",
-              citations: [],
-            });
-          }
-          return NextResponse.json({ 
-            content: "I apologize, but I'm having trouble processing your request right now. Please try again in a moment.",
-            citations: [],
-          });
-        }
-        
-        // Wait before retrying (exponential backoff)
-        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
-        retryCount++;
+      });
+
+      console.log('=== GEMINI RAW RESPONSE ===');
+      console.log('Response length:', response.length);
+      console.log('Raw response:', response);
+      console.log('=== END RAW RESPONSE ===');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (errorMessage.includes('429') || errorMessage.includes('quota')) {
+        return NextResponse.json({
+          content: "The AI service is currently at capacity. Please wait a moment and try again.",
+          citations: [],
+        });
       }
+      return NextResponse.json({
+        content: "I apologize, but I'm having trouble processing your request right now. Please try again in a moment.",
+        citations: [],
+      });
     }
-    
+
     if (!response) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         content: "I couldn't generate a response. Please try rephrasing your question.",
         citations: [],
       });

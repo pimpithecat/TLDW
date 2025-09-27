@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { TranscriptSegment } from '@/lib/types';
 import { isValidLanguage } from '@/lib/language-utils';
 import { withSecurity } from '@/lib/security-middleware';
 import { RATE_LIMITS } from '@/lib/rate-limiter';
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+import { generateWithFallback } from '@/lib/gemini-client';
 
 function combineTranscript(segments: TranscriptSegment[]): string {
   return segments.map(s => s.text).join(' ');
@@ -114,46 +112,17 @@ Highlight the 1-3 most intriguing and memorable and surprising stories/anecdotes
 
 
 
-    // Generate summary using Gemini with fallback to lighter model
-    let result;
-    let summaryContent: string | undefined;
+    let summaryContent: string;
 
     try {
-      // Try with primary model first
-      const geminiModel = genAI.getGenerativeModel({
-        model: 'gemini-2.5-flash',
+      summaryContent = await generateWithFallback(prompt, {
         generationConfig: {
           temperature: 0.7
         }
       });
-
-      result = await geminiModel.generateContent(prompt);
-      summaryContent = result.response.text();
-      console.log('Summary generated using gemini-2.5-flash');
-    } catch (error: any) {
-      // Check if it's a 503 overloaded error
-      const is503Error = error?.status === 503 ||
-                         error?.message?.includes('503') ||
-                         error?.message?.includes('overloaded');
-
-      if (is503Error) {
-        console.log('Primary model overloaded, falling back to gemini-2.5-flash-lite');
-
-        // Fallback to lighter model
-        const geminiModelLite = genAI.getGenerativeModel({
-          model: 'gemini-2.5-flash-lite',
-          generationConfig: {
-            temperature: 0.7
-          }
-        });
-
-        result = await geminiModelLite.generateContent(prompt);
-        summaryContent = result.response.text();
-        console.log('Summary generated using gemini-2.5-flash-lite (fallback)');
-      } else {
-        // Re-throw if it's not a 503 error
-        throw error;
-      }
+    } catch (error) {
+      console.error('Error generating summary:', error);
+      throw new Error('No response from AI model');
     }
 
     if (!summaryContent) {

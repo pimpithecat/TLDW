@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { TranscriptSegment } from '@/lib/types';
 import { withSecurity, SECURITY_PRESETS } from '@/lib/security-middleware';
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+import { generateWithFallback } from '@/lib/gemini-client';
 
 async function handler(request: NextRequest) {
   try {
@@ -62,42 +60,11 @@ Write the overview in 3-4 sentences:`;
     let preview: string | undefined;
 
     try {
-      // Try the faster Flash Lite model first
-      const modelLite = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
-      const result = await modelLite.generateContent(prompt);
-      preview = result.response.text().trim();
-
-      if (!preview) {
-        throw new Error('Empty response from AI');
-      }
-
-      console.log('Preview generated using gemini-2.5-flash-lite');
+      preview = await generateWithFallback(prompt);
+      preview = preview.trim();
     } catch (aiError: any) {
-      console.error('Flash Lite model error:', aiError);
-
-      // Check if it's a 503 overloaded error
-      const is503Error = aiError?.status === 503 ||
-                         aiError?.message?.includes('503') ||
-                         aiError?.message?.includes('overloaded');
-
-      if (is503Error) {
-        console.log('Flash Lite model overloaded, falling back to gemini-2.5-flash');
-
-        try {
-          // Fallback to the more reliable Flash model
-          const modelFlash = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-          const result = await modelFlash.generateContent(prompt);
-          preview = result.response.text().trim();
-
-          if (!preview) {
-            throw new Error('Empty response from fallback model');
-          }
-
-          console.log('Preview generated using gemini-2.5-flash (fallback)');
-        } catch (fallbackError) {
-          console.error('Fallback model also failed:', fallbackError);
-        }
-      }
+      console.error('AI model error:', aiError);
+      preview = undefined;
     }
 
     if (preview) {

@@ -1,4 +1,3 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { TranscriptSegment, Topic } from '@/lib/types';
 import {
   normalizeWhitespace,
@@ -6,6 +5,7 @@ import {
   findTextInTranscript,
   TranscriptIndex
 } from '@/lib/quote-matcher';
+import { generateWithFallback } from '@/lib/gemini-client';
 
 interface ParsedTopic {
   title: string;
@@ -14,8 +14,6 @@ interface ParsedTopic {
     text: string;
   };
 }
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 function combineTranscript(segments: TranscriptSegment[]): string {
   return segments.map(s => s.text).join(' ');
@@ -227,16 +225,13 @@ export async function generateTopicsFromTranscript(
   ${transcriptWithTimestamps}
   `;
 
-  const geminiModel = genAI.getGenerativeModel({
-    model: model,
+  const response = await generateWithFallback(prompt, {
+    preferredModel: model,
     generationConfig: {
       responseMimeType: "application/json",
       temperature: 0.7,
     }
   });
-
-  const result = await geminiModel.generateContent(prompt);
-  const response = result.response.text();
 
   if (!response) {
     throw new Error('No response from Gemini');

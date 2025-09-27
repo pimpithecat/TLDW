@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { TranscriptSegment, Topic } from '@/lib/types';
 import { withSecurity } from '@/lib/security-middleware';
 import { RATE_LIMITS } from '@/lib/rate-limiter';
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+import { generateWithFallback } from '@/lib/gemini-client';
 
 function formatTranscriptForContext(segments: TranscriptSegment[]): string {
   return segments.map(s => {
@@ -72,39 +70,18 @@ Return ONLY a JSON array of 3 strings (no markdown, no extra text), e.g.:
     let response = '';
 
     try {
-      // Try with primary model first
-      const aiModel = genAI.getGenerativeModel({ 
-        model: 'gemini-2.5-flash',
+      response = await generateWithFallback(prompt, {
         generationConfig: {
           temperature: 0.7,
           responseMimeType: "application/json",
         }
       });
-      
-      const result = await aiModel.generateContent(prompt);
-      response = result.response.text();
     } catch (error: any) {
-      // Fallback to lighter model on any error
-
-      try {
-        // Fallback to lighter model
-        const aiModelLite = genAI.getGenerativeModel({ 
-          model: 'gemini-2.5-flash-lite',
-          generationConfig: {
-            temperature: 0.7,
-            responseMimeType: "application/json",
-          }
-        });
-
-        const result = await aiModelLite.generateContent(prompt);
-        response = result.response.text();
-      } catch (fallbackError: any) {
-        // Fallback error - continue to default questions
-      }
+      response = '';
     }
-    
+
     if (!response) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         questions: [
           "What contrarian or surprising insights challenge conventional thinking?",
           "What specific examples or case studies illustrate the key concepts?",
