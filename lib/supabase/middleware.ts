@@ -27,8 +27,29 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // Refresh the auth token
-  await supabase.auth.getUser()
+  try {
+    const { error } = await supabase.auth.getUser()
+
+    if (error) {
+      console.warn('Auth token refresh failed:', error.message)
+
+      if (error.message?.includes('refresh_token_not_found') ||
+          error.message?.includes('Invalid Refresh Token')) {
+        const authCookies = request.cookies.getAll().filter(
+          cookie => cookie.name.startsWith('sb-') &&
+                   (cookie.name.includes('auth-token') || cookie.name.includes('refresh-token'))
+        )
+
+        authCookies.forEach(cookie => {
+          supabaseResponse.cookies.delete(cookie.name)
+        })
+
+        console.log('Cleared invalid auth cookies')
+      }
+    }
+  } catch (error) {
+    console.error('Unexpected error in auth middleware:', error)
+  }
 
   return supabaseResponse
 }
