@@ -32,9 +32,7 @@ async function handler(req: NextRequest) {
       videoInfo,
       transcript,
       model,
-      forceRegenerate,
-      summary,
-      suggestedQuestions
+      forceRegenerate
     } = validatedData;
 
     const supabase = await createClient();
@@ -108,39 +106,9 @@ async function handler(req: NextRequest) {
       );
     }
 
-    // Use transactional RPC function to save video and link to user atomically
-    const { data: result, error: saveError } = await supabase
-      .rpc('upsert_video_analysis_with_user_link', {
-        p_youtube_id: videoId,
-        p_title: videoInfo.title,
-        p_author: videoInfo.author,
-        p_duration: videoInfo.duration,
-        p_thumbnail_url: videoInfo.thumbnail,
-        p_transcript: transcript,
-        p_topics: topics,
-        p_summary: summary || null,  // Ensure null instead of undefined
-        p_suggested_questions: suggestedQuestions || null,  // Ensure null instead of undefined
-        p_model_used: model,
-        p_user_id: user?.id || null
-      })
-      .single();
-
-    if (saveError) {
-      console.error('Error saving video analysis:', saveError);
-      // Return error response - do not return topics if save failed
-      return NextResponse.json(
-        {
-          error: 'Failed to save video analysis. Please try again.',
-          details: saveError.message
-        },
-        { status: 500 }
-      );
-    }
-
     return NextResponse.json({
       topics,
-      cached: false,
-      saved: true
+      cached: false
     });
 
   } catch (error) {

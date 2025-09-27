@@ -627,77 +627,90 @@ export default function Home() {
       setProcessingStartTime(Date.now());
 
       // Process topics result
-      let generatedTopics;
-      let topicsData;
+      let generatedTopics = null;
       if (topicsResult.status === 'fulfilled') {
         const topicsRes = topicsResult.value;
 
         if (!topicsRes.ok) {
           const errorData = await topicsRes.json().catch(() => ({ error: "Unknown error" }));
-
-          // Check if this is specifically a save error
-          if (errorData.error && errorData.error.includes('Failed to save')) {
-            toast.error('Unable to save video analysis. Please try again.');
-            throw new Error(errorData.error);
-          }
-
           throw new Error(errorData.error || "Failed to generate topics");
         }
 
-        topicsData = await topicsRes.json();
+        const topicsData = await topicsRes.json();
         generatedTopics = topicsData.topics;
-        setTopics(generatedTopics);
       } else {
-        // Topics generation failed - throw to trigger catch block
         throw topicsResult.reason;
       }
 
       // Process summary result from parallel execution
-      // Note: We only reach this code for NEW videos (cached videos exit early at line 476)
-      // Therefore, both requests are guaranteed to be needed - no waste
-
-      // Rate limit is handled server-side now
-      // Refresh rate limit info after successful generation
-      checkRateLimit();
-
-      // Process the summary result from parallel execution
+      let generatedSummary = null;
+      let summaryGenerationError = null;
       if (summaryResult.status === 'fulfilled') {
         const summaryRes = summaryResult.value;
 
         if (summaryRes.ok) {
-          const { summaryContent: generatedSummary } = await summaryRes.json();
-          setSummaryContent(generatedSummary);
-          setIsGeneratingSummary(false);
-
-          // Update the video analysis with the summary
-          backgroundOperation(
-            'update-summary',
-            async () => {
-              await fetch("/api/update-video-analysis", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  videoId: extractedVideoId,
-                  summary: generatedSummary
-                }),
-              });
-            }
-          );
+          const summaryData = await summaryRes.json();
+          generatedSummary = summaryData.summaryContent;
         } else {
           const errorData = await summaryRes.json().catch(() => ({ error: "Unknown error" }));
-          setSummaryError(errorData.error || "Failed to generate summary. Please try again.");
-          setIsGeneratingSummary(false);
+          summaryGenerationError = errorData.error || "Failed to generate summary. Please try again.";
         }
       } else {
-        // Summary generation failed
         const error = summaryResult.reason;
         if (error && error.name === 'AbortError') {
-          setSummaryError("Summary generation timed out. The video might be too long.");
+          summaryGenerationError = "Summary generation timed out. The video might be too long.";
         } else {
-          setSummaryError(error?.message || "Failed to generate summary. Please try again.");
+          summaryGenerationError = error?.message || "Failed to generate summary. Please try again.";
         }
+      }
+
+      // Synchronous batch state update - all at once
+      setTopics(generatedTopics);
+      if (generatedSummary) {
+        setSummaryContent(generatedSummary);
+        setShowSummaryTab(true);
+        setIsGeneratingSummary(false);
+      } else if (summaryGenerationError) {
+        setSummaryError(summaryGenerationError);
+        setShowSummaryTab(true);
         setIsGeneratingSummary(false);
       }
+
+      // Rate limit is handled server-side now
+      checkRateLimit();
+
+      // Save complete analysis to database in background
+      backgroundOperation(
+        'save-complete-analysis',
+        async () => {
+          const response = await fetch("/api/save-analysis", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              videoId: extractedVideoId,
+              videoInfo: fetchedVideoInfo || {
+                title: `YouTube Video ${extractedVideoId}`,
+                author: 'Unknown',
+                duration: 0,
+                thumbnail: ''
+              },
+              transcript: fetchedTranscript,
+              topics: generatedTopics,
+              summary: generatedSummary,
+              model: 'gemini-2.5-flash'
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+            throw new Error(errorData.error || "Failed to save analysis");
+          }
+        },
+        (error) => {
+          console.error('Failed to save analysis to database:', error);
+          toast.error('Unable to save video analysis. Your results are still visible.');
+        }
+      );
 
       // Generate suggested questions
       backgroundOperation(
@@ -721,7 +734,7 @@ export default function Home() {
             await backgroundOperation(
               'update-questions',
               async () => {
-                await fetch("/api/update-video-analysis", {
+                const updateRes = await fetch("/api/update-video-analysis", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
@@ -729,6 +742,10 @@ export default function Home() {
                     suggestedQuestions: questions
                   }),
                 });
+
+                if (!updateRes.ok && updateRes.status !== 404) {
+                  throw new Error('Failed to update suggested questions');
+                }
               }
             );
             return questions;
@@ -747,7 +764,6 @@ export default function Home() {
       setLoadingStage(null);
       setGenerationStartTime(null);
       setProcessingStartTime(null);
-      setIsGeneratingSummary(false);
     }
   };
 
