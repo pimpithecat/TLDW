@@ -575,9 +575,10 @@ export default function Home() {
       // Initiate parallel API requests for topics and summary
       setLoadingStage('generating');
       setGenerationStartTime(Date.now());
-      
-      // Create abort controller for topics request
+
+      // Create abort controllers for both requests
       const topicsController = abortManager.current.createController('topics', 60000);
+      const summaryController = abortManager.current.createController('summary', 60000);
 
       // Start topics generation using cached video-analysis endpoint
       const topicsPromise = fetch("/api/video-analysis", {
@@ -597,157 +598,156 @@ export default function Home() {
         throw new Error("Network error: Unable to generate topics. Please check your connection.");
       });
 
-      // Wait for topics to complete first (prioritize highlight reels)
-      const topicsRes = await topicsPromise;
-      // AbortManager handles timeout cleanup automatically
+      // Start summary generation in parallel (will be ignored if cached)
+      const summaryPromise = fetch("/api/generate-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transcript: fetchedTranscript,
+          videoInfo: fetchedVideoInfo,
+          videoId: extractedVideoId,
+          language: summaryLanguage
+        }),
+        signal: summaryController.signal,
+      });
 
-      // Check topics response
-      if (!topicsRes.ok) {
-        const errorData = await topicsRes.json().catch(() => ({ error: "Unknown error" }));
+      // Show summary tab and loading state immediately (optimistic UI)
+      setShowSummaryTab(true);
+      setIsGeneratingSummary(true);
 
-        // Check if this is specifically a save error
-        if (errorData.error && errorData.error.includes('Failed to save')) {
-          toast.error('Unable to save video analysis. Please try again.');
-          throw new Error(errorData.error);
-        }
+      // Wait for both to complete using Promise.allSettled
+      const [topicsResult, summaryResult] = await Promise.allSettled([
+        topicsPromise,
+        summaryPromise
+      ]);
 
-        throw new Error(errorData.error || "Failed to generate topics");
-      }
-      
       // Move to processing stage
       setLoadingStage('processing');
       setGenerationStartTime(null);
       setProcessingStartTime(Date.now());
-      
-      const topicsData = await topicsRes.json();
-      const generatedTopics = topicsData.topics;
-      setTopics(generatedTopics);
 
-      // If data is cached, use the cached summary and suggested questions
-      if (topicsData.cached) {
-        // Use cached summary if available
-        if (topicsData.summary) {
-          setSummaryContent(topicsData.summary);
-          setShowSummaryTab(true);
+      // Process topics result
+      let generatedTopics;
+      let topicsData;
+      if (topicsResult.status === 'fulfilled') {
+        const topicsRes = topicsResult.value;
+
+        if (!topicsRes.ok) {
+          const errorData = await topicsRes.json().catch(() => ({ error: "Unknown error" }));
+
+          // Check if this is specifically a save error
+          if (errorData.error && errorData.error.includes('Failed to save')) {
+            toast.error('Unable to save video analysis. Please try again.');
+            throw new Error(errorData.error);
+          }
+
+          throw new Error(errorData.error || "Failed to generate topics");
+        }
+
+        topicsData = await topicsRes.json();
+        generatedTopics = topicsData.topics;
+        setTopics(generatedTopics);
+      } else {
+        // Topics generation failed - throw to trigger catch block
+        throw topicsResult.reason;
+      }
+
+      // Process summary result from parallel execution
+      // Note: We only reach this code for NEW videos (cached videos exit early at line 476)
+      // Therefore, both requests are guaranteed to be needed - no waste
+
+      // Rate limit is handled server-side now
+      // Refresh rate limit info after successful generation
+      checkRateLimit();
+
+      // Process the summary result from parallel execution
+      if (summaryResult.status === 'fulfilled') {
+        const summaryRes = summaryResult.value;
+
+        if (summaryRes.ok) {
+          const { summaryContent: generatedSummary } = await summaryRes.json();
+          setSummaryContent(generatedSummary);
+          setIsGeneratingSummary(false);
+
+          // Update the video analysis with the summary
+          backgroundOperation(
+            'update-summary',
+            async () => {
+              await fetch("/api/update-video-analysis", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  videoId: extractedVideoId,
+                  summary: generatedSummary
+                }),
+              });
+            }
+          );
+        } else {
+          const errorData = await summaryRes.json().catch(() => ({ error: "Unknown error" }));
+          setSummaryError(errorData.error || "Failed to generate summary. Please try again.");
           setIsGeneratingSummary(false);
         }
-
-        // Use cached suggested questions if available
-        if (topicsData.suggestedQuestions) {
-          setCachedSuggestedQuestions(topicsData.suggestedQuestions);
-        }
       } else {
-        // Rate limit is handled server-side now
-        // Refresh rate limit info after successful generation
-        checkRateLimit();
+        // Summary generation failed
+        const error = summaryResult.reason;
+        if (error && error.name === 'AbortError') {
+          setSummaryError("Summary generation timed out. The video might be too long.");
+        } else {
+          setSummaryError(error?.message || "Failed to generate summary. Please try again.");
+        }
+        setIsGeneratingSummary(false);
+      }
 
-        // Generate new summary
-        setShowSummaryTab(true);
-        setIsGeneratingSummary(true);
+      // Generate suggested questions
+      backgroundOperation(
+        'generate-questions',
+        async () => {
+          const res = await fetch("/api/suggested-questions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              transcript: fetchedTranscript,
+              topics: generatedTopics,
+              videoTitle: fetchedVideoInfo?.title
+            }),
+          });
 
-        const summaryController = abortManager.current.createController('summary', 60000);
+          if (res.ok) {
+            const { questions } = await res.json();
+            setCachedSuggestedQuestions(questions);
 
-        const summaryPromise = fetch("/api/generate-summary", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            transcript: fetchedTranscript,
-            videoInfo: fetchedVideoInfo,
-            videoId: extractedVideoId,
-            language: summaryLanguage
-          }),
-          signal: summaryController.signal,
-        });
-
-        // Handle summary generation in the background
-        backgroundOperation(
-          'generate-summary',
-          async () => {
-            const summaryRes = await summaryPromise;
-
-            if (!summaryRes.ok) {
-              const errorData = await summaryRes.json().catch(() => ({ error: "Unknown error" }));
-              throw new Error(errorData.error || "Failed to generate summary");
-            }
-
-            const { summaryContent: generatedSummary } = await summaryRes.json();
-            setSummaryContent(generatedSummary);
-
-            // Update the video analysis with the summary
+            // Update video analysis with suggested questions
             await backgroundOperation(
-              'update-summary',
+              'update-questions',
               async () => {
                 await fetch("/api/update-video-analysis", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
                     videoId: extractedVideoId,
-                    summary: generatedSummary
+                    suggestedQuestions: questions
                   }),
                 });
               }
             );
-            return generatedSummary;
-          },
-          (error) => {
-            if (error.name === 'AbortError') {
-              setSummaryError("Summary generation timed out. The video might be too long.");
-            } else {
-              setSummaryError(error.message || "Failed to generate summary. Please try again.");
-            }
+            return questions;
           }
-        ).finally(() => {
-          setIsGeneratingSummary(false);
-        });
-
-        // Generate suggested questions
-        backgroundOperation(
-          'generate-questions',
-          async () => {
-            const res = await fetch("/api/suggested-questions", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                transcript: fetchedTranscript,
-                topics: generatedTopics,
-                videoTitle: fetchedVideoInfo?.title
-              }),
-            });
-
-            if (res.ok) {
-              const { questions } = await res.json();
-              setCachedSuggestedQuestions(questions);
-
-              // Update video analysis with suggested questions
-              await backgroundOperation(
-                'update-questions',
-                async () => {
-                  await fetch("/api/update-video-analysis", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      videoId: extractedVideoId,
-                      suggestedQuestions: questions
-                    }),
-                  });
-                }
-              );
-              return questions;
-            }
-            return null;
-          },
-          (error) => {
-            console.error("Failed to generate suggested questions:", error);
-          }
-        );
-      }
+          return null;
+        },
+        (error) => {
+          console.error("Failed to generate suggested questions:", error);
+        }
+      );
       
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setPageState('IDLE');
+      setLoadingStage(null);
       setGenerationStartTime(null);
       setProcessingStartTime(null);
+      setIsGeneratingSummary(false);
     }
   };
 
