@@ -6,6 +6,7 @@ import {
   TranscriptIndex
 } from '@/lib/quote-matcher';
 import { generateWithFallback } from '@/lib/gemini-client';
+import { topicGenerationSchema } from '@/lib/schemas';
 
 interface ParsedTopic {
   title: string;
@@ -207,19 +208,7 @@ export async function generateTopicsFromTranscript(
   - **Value Over Quantity:** If you can only identify 3-4 high-quality, distinct themes, deliver that number. Do not force generic themes to meet the count of 5.
   - **Passage Completeness Check:** Before finalizing, verify each passage contains a COMPLETE thought that can stand alone. If it references something not included, extend the timestamp range.
 
-  ## Output Format
-  You must return a JSON array with this EXACT structure:
-  [
-   {
-     "title": "Complete sentence or question",
-     "quote": {
-       "timestamp": "[MM:SS-MM:SS]",
-       "text": "EXACT verbatim text from transcript - must be a perfect character-by-character match"
-     }
-   }
-  ]
-
-  IMPORTANT: The "text" field MUST contain the exact text as it appears in the transcript. Do not clean up, correct, or modify the text in any way.
+  IMPORTANT: The "text" field in quotes MUST contain the exact text as it appears in the transcript. Do not clean up, correct, or modify the text in any way.
 
   ## Video Transcript (with timestamps)
   ${transcriptWithTimestamps}
@@ -228,9 +217,9 @@ export async function generateTopicsFromTranscript(
   const response = await generateWithFallback(prompt, {
     preferredModel: model,
     generationConfig: {
-      responseMimeType: "application/json",
       temperature: 0.7,
-    }
+    },
+    zodSchema: topicGenerationSchema
   });
 
   if (!response) {
@@ -241,42 +230,20 @@ export async function generateTopicsFromTranscript(
   try {
     parsedResponse = JSON.parse(response);
   } catch (parseError) {
-    // Try to extract JSON array from the response
-    const jsonMatch = response.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      try {
-        parsedResponse = JSON.parse(jsonMatch[0]);
-      } catch (e) {
-        // Create a fallback response
-        parsedResponse = [{
-          title: "Full Video",
-          quote: {
-            timestamp: "[00:00-00:30]",
-            text: fullText.substring(0, 200)
-          }
-        }];
+    parsedResponse = [{
+      title: "Full Video",
+      quote: {
+        timestamp: "[00:00-00:30]",
+        text: fullText.substring(0, 200)
       }
-    } else {
-      // Create a fallback response
-      parsedResponse = [{
-        title: "Full Video",
-        quote: {
-          timestamp: "[00:00-00:30]",
-          text: fullText.substring(0, 200)
-        }
-      }];
-    }
+    }];
   }
 
-  // Handle different possible response structures
-  let topicsArray = parsedResponse;
-  if (parsedResponse.topics && Array.isArray(parsedResponse.topics)) {
-    topicsArray = parsedResponse.topics;
-  } else if (parsedResponse.themes && Array.isArray(parsedResponse.themes)) {
-    topicsArray = parsedResponse.themes;
-  } else if (!Array.isArray(parsedResponse)) {
-    throw new Error('Invalid response format from Gemini - not an array');
+  if (!Array.isArray(parsedResponse)) {
+    throw new Error('Invalid response format from Gemini - expected array');
   }
+
+  let topicsArray = parsedResponse;
 
   // If we got an empty array, create a basic structure
   if (topicsArray.length === 0) {
@@ -334,7 +301,7 @@ export async function generateTopicsFromTranscript(
       title: topic.title,
       duration: 0,
       segments: [],
-      quote: topic.quote || null
+      quote: topic.quote || undefined
     }));
 
   // Sort topics chronologically by their first segment's start time

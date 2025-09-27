@@ -3,6 +3,7 @@ import { TranscriptSegment, Topic } from '@/lib/types';
 import { withSecurity } from '@/lib/security-middleware';
 import { RATE_LIMITS } from '@/lib/rate-limiter';
 import { generateWithFallback } from '@/lib/gemini-client';
+import { suggestedQuestionsSchema } from '@/lib/schemas';
 
 function formatTranscriptForContext(segments: TranscriptSegment[]): string {
   return segments.map(s => {
@@ -63,9 +64,7 @@ Generate EXACTLY 3 questions that:
 - Is it outside the covered highlight-reel themes (including close paraphrases)?
 - Is it specific, single-focus, and less than 15 words?
 
-## Output Format
-Return ONLY a JSON array of 3 strings (no markdown, no extra text), e.g.:
-["Question 1?", "Question 2?", "Question 3?"]`;
+`;
 
     let response = '';
 
@@ -73,8 +72,8 @@ Return ONLY a JSON array of 3 strings (no markdown, no extra text), e.g.:
       response = await generateWithFallback(prompt, {
         generationConfig: {
           temperature: 0.7,
-          responseMimeType: "application/json",
-        }
+        },
+        zodSchema: suggestedQuestionsSchema
       });
     } catch (error: any) {
       response = '';
@@ -92,36 +91,14 @@ Return ONLY a JSON array of 3 strings (no markdown, no extra text), e.g.:
 
     let questions: string[] = [];
     try {
-      // First try direct JSON parse
       questions = JSON.parse(response);
       if (!Array.isArray(questions)) {
         throw new Error('Response is not an array');
       }
     } catch (parseError) {
-      
-      // Try to extract JSON array from the response
-      const jsonMatch = response.match(/\[[\s\S]*?\]/);
-      if (jsonMatch) {
-        try {
-          questions = JSON.parse(jsonMatch[0]);
-        } catch (extractError) {
-          // Try to extract questions from a numbered list or line-separated format
-          const lines = response.split('\n').filter(line => line.trim());
-          questions = lines
-            .map(line => line.replace(/^\d+\.\s*/, '').replace(/^[-*]\s*/, '').replace(/^["']|["']$/g, '').trim())
-            .filter(q => q.length > 0 && q.length < 100)
-            .slice(0, 3);
-          
-          if (questions.length === 0) {
-            throw new Error('Could not extract any questions from response');
-          }
-        }
-      } else {
-        throw new Error('No JSON array found in response');
-      }
+      questions = [];
     }
-    
-    // Validate and clean questions
+
     questions = questions
       .filter(q => typeof q === 'string' && q.trim().length > 0)
       .map(q => q.trim())

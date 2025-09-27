@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { withSecurity } from '@/lib/security-middleware';
 import { generateWithFallback } from '@/lib/gemini-client';
+import { chatResponseSchema } from '@/lib/schemas';
 
 function formatTranscriptForContext(segments: TranscriptSegment[]): string {
   return segments.map(s => {
@@ -89,21 +90,6 @@ async function handler(request: NextRequest) {
 
 1.  **Grounding:** Base your answer 100% on the provided transcript. Do not use any external knowledge.
 2.  **Handle Missing Information:** If the transcript does not contain the information to answer the question, your \`answer\` must state that the information is not available in the transcript, and the \`quotes\` array should be empty.
-3.  **Strict JSON Output:** Your entire response MUST be a single, raw JSON object. Do not include any explanatory text, markdown formatting blocks, or any other characters before or after the JSON object.
-
-## Required JSON Output Structure
-
-Your output must be a single JSON object with the following schema:
-
-\`\`\`json
-{
-  "answer": "A markdown-formatted string that directly answers the user's question, supported by citations.",
-  "quotes": [
-    { "text": "A verbatim quote from the transcript." },
-    { "text": "Another verbatim quote from the transcript." }
-  ]
-}
-\`\`\`
 
 ## Detailed Instructions
 
@@ -168,10 +154,10 @@ ${message}`;
     try {
       response = await generateWithFallback(prompt, {
         generationConfig: {
-          responseMimeType: "application/json",
           temperature: 0.6,
           maxOutputTokens: Math.min(1024, maxOutputTokens),
-        }
+        },
+        zodSchema: chatResponseSchema
       });
 
       console.log('=== GEMINI RAW RESPONSE ===');
@@ -199,7 +185,6 @@ ${message}`;
       });
     }
 
-    // Parse the JSON response
     let parsedResponse;
     try {
       console.log('=== PARSING JSON RESPONSE ===');
@@ -212,7 +197,7 @@ ${message}`;
       console.log('Error:', e);
       console.log('Response that failed to parse:', response);
       console.log('=== END PARSING ERROR ===');
-      return NextResponse.json({ 
+      return NextResponse.json({
         content: "I couldn't generate a valid response. Please try again.",
         citations: [],
       });

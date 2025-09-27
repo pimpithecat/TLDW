@@ -1,4 +1,5 @@
-import { GoogleGenerativeAI, GenerationConfig } from '@google/generative-ai';
+import { GoogleGenerativeAI, GenerationConfig, SchemaType } from '@google/generative-ai';
+import { z } from 'zod';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
@@ -14,6 +15,7 @@ interface GeminiModelConfig {
   generationConfig?: GenerationConfig;
   preferredModel?: string;
   timeoutMs?: number;
+  zodSchema?: z.ZodType<any>;
 }
 
 function isValidModel(model: string): model is ValidModel {
@@ -45,6 +47,59 @@ function getErrorType(error: any): string {
   return 'unknown error';
 }
 
+function convertToGeminiSchema(jsonSchema: any): any {
+  if (jsonSchema.anyOf || jsonSchema.oneOf) {
+    const schemas = jsonSchema.anyOf || jsonSchema.oneOf;
+    const nonNullSchemas = schemas.filter((s: any) => s.type !== 'null');
+
+    if (nonNullSchemas.length === 1) {
+      const converted = convertToGeminiSchema(nonNullSchemas[0]);
+      converted.nullable = true;
+      return converted;
+    }
+
+    if (nonNullSchemas.length > 0) {
+      return convertToGeminiSchema(nonNullSchemas[0]);
+    }
+  }
+
+  if (jsonSchema.type === 'object') {
+    const properties: Record<string, any> = {};
+    const required: string[] = jsonSchema.required || [];
+
+    for (const [key, value] of Object.entries(jsonSchema.properties || {})) {
+      properties[key] = convertToGeminiSchema(value);
+    }
+
+    return {
+      type: SchemaType.OBJECT,
+      properties,
+      required
+    };
+  }
+
+  if (jsonSchema.type === 'array') {
+    return {
+      type: SchemaType.ARRAY,
+      items: jsonSchema.items ? convertToGeminiSchema(jsonSchema.items) : { type: SchemaType.STRING }
+    };
+  }
+
+  if (jsonSchema.type === 'string') {
+    return { type: SchemaType.STRING };
+  }
+
+  if (jsonSchema.type === 'number' || jsonSchema.type === 'integer') {
+    return { type: SchemaType.NUMBER };
+  }
+
+  if (jsonSchema.type === 'boolean') {
+    return { type: SchemaType.BOOLEAN };
+  }
+
+  return { type: SchemaType.STRING };
+}
+
 export async function generateWithFallback(
   prompt: string,
   config: GeminiModelConfig = {}
@@ -64,9 +119,27 @@ export async function generateWithFallback(
     attemptedModels.push(modelName);
 
     try {
+      let generationConfig = config.generationConfig;
+
+      if (config.zodSchema) {
+        try {
+          const jsonSchema = z.toJSONSchema(config.zodSchema);
+          const geminiSchema = convertToGeminiSchema(jsonSchema);
+          generationConfig = {
+            ...generationConfig,
+            responseMimeType: "application/json",
+            responseSchema: geminiSchema
+          };
+          console.log(`Using structured output with schema for ${modelName}`);
+        } catch (schemaError) {
+          console.error(`Failed to convert Zod schema to Gemini schema:`, schemaError);
+          throw new Error(`Schema conversion failed: ${schemaError instanceof Error ? schemaError.message : 'Unknown error'}`);
+        }
+      }
+
       const model = genAI.getGenerativeModel({
         model: modelName,
-        generationConfig: config.generationConfig
+        generationConfig
       });
 
       const generatePromise = model.generateContent(prompt);
