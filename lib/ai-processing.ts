@@ -175,44 +175,44 @@ export async function generateTopicsFromTranscript(
   const fullText = combineTranscript(transcript);
   const transcriptWithTimestamps = formatTranscriptWithTimestamps(transcript);
 
-  const prompt = `## Role and Goal
-  You are an expert content strategist. Your goal is to analyze the provided video transcript and description to create 5 distinct "highlight reels." The final output should allow a busy, intelligent viewer to absorb the video's most valuable insights in minutes.
-
-  ## Target Audience
-  Your audience is forward-thinking and curious. They have a short attention span and are looking for contrarian insights, actionable mental models, and bold predictions, not generic advice.
-
-  ## Your Task
-
-  ### Step 1: Identify 5 Core Themes
-  Analyze the entire transcript to identify 5 key themes that are most valuable and thought-provoking.
-
-  **Theme/Title Criteria:**
-  - **Insightful:** It must challenge a common assumption or reframe a known concept.
-  - **Specific:** Avoid vague titles.
-  - **Format:** Must be a complete sentence or a question.
-  - **Concise:** Maximum of 10 words.
-  - **Synthesized:** The theme should connect ideas from different parts of the talk, not just one section.
-
-  ### Step 2: Select Supporting Passage
-  For each theme, select the **single, most representative passage** from the transcript that powerfully illustrates the core idea.
-
-  **Passage Selection Criteria:**
-  - **Direct Quotes Only:** Use complete, unedited sentences from the transcript. Do **not** summarize, paraphrase, or use ellipses (...).
-  - **Self-Contained:** The passage must be fully understandable on its own. If the speaker references something earlier, extend the passage backward to include that context.
-  - **High-Signal:** Choose the passage that contains memorable stories, bold predictions, data points, specific examples, or contrarian thinking. Avoid generic statements.
-  - **No Fluff:** While the passage should be complete, avoid including unrelated tangents or off-topic rambling.
-  - **Most Impactful:** Choose the single quote that best encapsulates the entire theme on its own. It should be the most concise, high-signal example.
-
-  ## Quality Control
-  - **Distinct Themes:** Each highlight reel's title must represent a clearly distinct theme. While themes can be related, their core ideas should be unique.
-  - **Value Over Quantity:** If you can only identify 3-4 high-quality, distinct themes, deliver that number. Do not force generic themes to meet the count of 5.
-  - **Passage Completeness Check:** Before finalizing, verify each passage contains a COMPLETE thought that can stand alone. If it references something not included, extend the timestamp range.
-
-  IMPORTANT: The "text" field in quotes MUST contain the exact text as it appears in the transcript. Do not clean up, correct, or modify the text in any way.
-
-  ## Video Transcript (with timestamps)
-  ${transcriptWithTimestamps}
-  `;
+  const prompt = `<task>
+<role>You are an expert content strategist.</role>
+<goal>Analyze the provided video transcript and description to create up to five distinct highlight reels that let a busy, intelligent viewer absorb the video's most valuable insights in minutes.</goal>
+<audience>The audience is forward-thinking and curious. They have a short attention span and expect contrarian insights, actionable mental models, and bold predictions rather than generic advice.</audience>
+<instructions>
+  <step name="IdentifyThemes">
+    <description>Analyze the entire transcript to surface up to five high-value, thought-provoking themes.</description>
+    <themeCriteria>
+      <criterion name="Insightful">Challenge a common assumption or reframe a known concept.</criterion>
+      <criterion name="Specific">Avoid vague or catch-all wording.</criterion>
+      <criterion name="Format">Write each title as a complete sentence or question.</criterion>
+      <criterion name="LengthLimit">Keep titles to a maximum of 10 words.</criterion>
+      <criterion name="Synthesized">Connect ideas that span multiple moments in the talk.</criterion>
+    </themeCriteria>
+  </step>
+  <step name="SelectPassage">
+    <description>For each theme, pick the single most representative passage that powerfully illustrates the core idea.</description>
+    <passageCriteria>
+      <criterion name="DirectQuotes">Return verbatim transcript sentences only—no summaries, paraphrasing, or ellipses.</criterion>
+      <criterion name="SelfContained">Ensure the passage stands alone. If earlier context is required, expand the selection to include it.</criterion>
+      <criterion name="HighSignal">Prefer memorable stories, bold predictions, data points, specific examples, or contrarian thinking.</criterion>
+      <criterion name="NoFluff">Exclude unrelated tangents or filler.</criterion>
+      <criterion name="Duration" targetSeconds="60">Choose a contiguous passage around 60 seconds long (aim for 45-75 seconds) so the highlight provides full context.</criterion>
+      <criterion name="MostImpactful">Select the single quote that best encapsulates the entire theme by itself.</criterion>
+    </passageCriteria>
+  </step>
+</instructions>
+<qualityControl>
+  <distinctThemes>Each highlight reel title must represent a clearly distinct idea.</distinctThemes>
+  <valueOverQuantity>If only three or four themes meet the quality bar, return that smaller number rather than adding generic options.</valueOverQuantity>
+  <completenessCheck>Verify each passage contains a complete thought that can stand alone; extend the timestamp range if necessary.</completenessCheck>
+</qualityControl>
+<outputFormat>Respond with strict JSON that matches this schema: [{"title":"string","quote":{"timestamp":"[MM:SS-MM:SS]","text":"exact quoted text"}}]. Do not include XML, markdown, or commentary outside the JSON.</outputFormat>
+<quoteRequirements>The "text" field must match the transcript exactly with original wording.</quoteRequirements>
+<transcript><![CDATA[
+${transcriptWithTimestamps}
+]]></transcript>
+</task>`;
 
   const response = await generateWithFallback(prompt, {
     preferredModel: model,
