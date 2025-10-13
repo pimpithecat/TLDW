@@ -97,7 +97,9 @@ async function handler(req: NextRequest) {
     // Generate new topics using shared function
     let topics;
     try {
-      topics = await generateTopicsFromTranscript(transcript, model);
+      topics = await generateTopicsFromTranscript(transcript, model, {
+        videoInfo
+      });
     } catch (error) {
       console.error('Error generating topics:', error);
       return NextResponse.json(

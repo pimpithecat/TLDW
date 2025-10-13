@@ -120,6 +120,7 @@ export async function generateWithFallback(
 
     try {
       let generationConfig = config.generationConfig;
+      const promptLength = prompt.length;
 
       if (config.zodSchema) {
         try {
@@ -142,6 +143,7 @@ export async function generateWithFallback(
         generationConfig
       });
 
+      const requestStart = Date.now();
       const generatePromise = model.generateContent(prompt);
 
       const result = config.timeoutMs
@@ -153,9 +155,19 @@ export async function generateWithFallback(
           ])
         : await generatePromise;
 
-      const response = (result as any).response.text();
+      const latencyMs = Date.now() - requestStart;
+      const geminiResponse = (result as any).response;
+      const response = geminiResponse.text();
 
       if (response) {
+        const usage = geminiResponse?.usageMetadata || {};
+        const promptTokens = usage.promptTokenCount ?? 'n/a';
+        const candidateTokens = usage.candidatesTokenCount ?? usage.outputTokenCount ?? 'n/a';
+        const totalTokens = usage.totalTokenCount ?? 'n/a';
+        console.log(
+          `[Gemini][${modelName}] latency=${latencyMs}ms promptChars=${promptLength} ` +
+          `promptTokens=${promptTokens} responseTokens=${candidateTokens} totalTokens=${totalTokens}`
+        );
         console.log(`Content generated using ${modelName}`);
         return response;
       }
