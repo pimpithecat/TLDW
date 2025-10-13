@@ -51,20 +51,42 @@ npm start            # Start production server
 - **Multi-strategy Matching**: Falls back from exact → normalized → fuzzy matching
 - **Segment Mapping**: Maps text matches back to precise segment boundaries with character offsets
 
-#### Authentication & Account System
+#### AI Processing with Gemini (`lib/gemini-client.ts`)
+- **Model Cascade**: Automatically falls back through `gemini-2.5-flash-lite` → `gemini-2.5-flash` → `gemini-2.5-pro`
+- **Structured Output**: Converts Zod schemas to Gemini's schema format for type-safe responses
+- **Retry Logic**: Detects overload/rate limit errors (503, 429) and tries next model
+- **Timeout Handling**: Optional timeout support with graceful error handling
+
+#### Authentication & Security
 - **Supabase Auth**: User authentication with email/password and OAuth providers
 - **Rate Limiting**: Different limits for anonymous (3 videos/30 min) vs authenticated users
 - **Video Linking**: Post-authentication linking of anonymous analyses to user accounts
 - **Favorites System**: Users can favorite and manage their analyzed videos
+- **CSRF Protection**: Token-based CSRF validation for state-changing operations (`lib/csrf-protection.ts`)
+- **Security Middleware**: Centralized security wrapper for API routes (`lib/security-middleware.ts`)
+  - Rate limiting, auth checks, body size limits, security headers
+  - Presets: `PUBLIC`, `AUTHENTICATED`, `STRICT`
+- **Audit Logging**: Tracks security events, rate limits, and unauthorized access (`lib/audit-logger.ts`)
+- **Input Sanitization**: DOMPurify-based sanitization for user input (`lib/sanitizer.ts`)
 
-#### Timestamp Utilities (`lib/timestamp-utils.ts`)
-- **Parsing**: Handles MM:SS and HH:MM:SS formats with validation
-- **Extraction**: Finds all timestamps in text with context-aware regex
-- **Formatting**: Converts seconds to human-readable timestamp format
+#### Async Operation Management (`lib/promise-utils.ts`)
+- **AbortManager**: Centralized abort controller management with automatic cleanup and timeouts
+- **backgroundOperation**: Non-blocking operations that log errors without disrupting UI
+- Prevents memory leaks from abandoned requests during navigation/unmount
 
 ### Component Architecture
 - **State Management**: React hooks in `app/page.tsx` orchestrate the entire flow
+  - Page states: `IDLE`, `ANALYZING_NEW`, `LOADING_CACHED`
+  - Loading stages: `fetching`, `understanding`, `generating`, `processing`
+  - Centralized playback control via `PlaybackCommand` system
+  - AbortManager cleanup on unmount to prevent memory leaks
+- **Playback System**: Centralized command pattern for video control
+  - Commands: `SEEK`, `PLAY_TOPIC`, `PLAY_SEGMENT`, `PLAY_ALL`, `PLAY_CITATIONS`, `PAUSE`
+  - Playback context tracks segment boundaries for auto-pause/advance
+  - "Play All" mode chains topics sequentially with automatic transitions
 - **Loading States**: Multi-stage loading indicators with progress tracking
+  - Shows elapsed time for generation and processing stages
+  - Preview generation happens in parallel (non-blocking)
 - **YouTube Player**: Custom wrapper supporting auto-play of highlight segments
 - **Transcript Viewer**: Synchronized highlighting with video playback
 - **AI Chat**: Maintains conversation history with citation highlighting
@@ -76,9 +98,29 @@ npm start            # Start production server
 ### TypeScript Types (`lib/types.ts`)
 - `TranscriptSegment`: Individual transcript segment with timing
 - `Topic`: Highlight reel with segments, quotes, and keywords
-- `VideoInfo`: Video metadata (title, author, thumbnail, duration)
-- `Citation`: Timestamped reference with context
+  - Includes character offsets (`startCharOffset`, `endCharOffset`) for precise highlighting
+  - Optional `isCitationReel` flag for citation playback mode
+- `VideoInfo`: Video metadata (title, author, thumbnail, duration, description, tags)
+- `Citation`: Timestamped reference with precise segment and character offsets
 - `ChatMessage`: Chat history with role and citations
+- `PlaybackCommand`: Centralized playback control commands
+
+### Parallel Processing Patterns
+The application uses aggressive parallel processing to minimize latency:
+
+1. **Initial Load**:
+   - Transcript fetch + Video metadata fetch (parallel)
+   - Quick preview generation (non-blocking background)
+
+2. **Analysis Generation**:
+   - Topics generation + Summary generation (parallel using `Promise.allSettled`)
+   - Suggested questions generation (background after topics complete)
+   - Database save operations (background)
+
+3. **Cached Videos**:
+   - Load all data from cache instantly
+   - Generate missing summary in background if needed
+   - Update database with new content in background
 
 ### Utility Functions (`lib/utils.ts`)
 - `extractVideoId()`: Parses YouTube URLs to extract video ID
@@ -89,10 +131,38 @@ npm start            # Start production server
 - `cn()`: Tailwind CSS class merging utility
 
 ### Database Integration
-- **Supabase Client**: Browser and server clients for data operations
-- **Tables**: video_analyses, user_favorites, rate_limit_logs
-- **Caching**: Analyzed videos cached to reduce API calls
+- **Supabase Client**: Browser and server clients for data operations (`lib/supabase/client.ts`, `lib/supabase/server.ts`)
+- **Tables**:
+  - `video_analyses`: Stores complete video analysis (topics, summary, transcript, suggested questions)
+  - `user_favorites`: User's favorited videos
+  - `rate_limit_logs`: Tracks API usage for rate limiting
+- **Caching Strategy**:
+  - Check cache before processing (`/api/check-video-cache`)
+  - Load cached data instantly, generate missing pieces in background
+  - Anonymous user videos can be linked to account post-auth
 - **User Data**: Persistent storage of user-specific analysis history
+
+### Development Patterns
+
+#### Error Handling
+- Use `backgroundOperation` for non-critical operations (saving to DB, generating suggestions)
+- Display user-friendly error messages, log technical details
+- Graceful degradation: If summary generation fails, show error but keep topics visible
+
+#### State Updates
+- Batch related state updates together to minimize re-renders
+- Use `useCallback` for memoized setters passed to child components
+- Clear playback state when switching between modes (topics, citations, play all)
+
+#### Request Lifecycle
+- Create AbortControllers via `AbortManager` for all API requests
+- Set appropriate timeouts (10s for metadata, 30s for transcripts, 60s for AI generation)
+- Clean up controllers on component unmount or new request
+
+#### Authentication Flow
+1. Store `pendingVideoId` in sessionStorage before showing auth modal
+2. After auth, check for pending video and link it to user account
+3. Retry linking with exponential backoff if video not yet in database
 
 ### Environment Variables
 Required in `.env.local`:
