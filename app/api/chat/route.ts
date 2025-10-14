@@ -84,68 +84,45 @@ async function handler(request: NextRequest) {
       `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
     ).join('\n\n') || '';
 
-    const prompt = `You are an expert AI assistant. Your objective is to provide concise, factual answers to a user's question based **exclusively** on a provided video transcript. You will adhere strictly to the rules and output format outlined below.
-
-## Guiding Principles
-
-1.  **Grounding:** Base your answer 100% on the provided transcript. Do not use any external knowledge.
-2.  **Handle Missing Information:** If the transcript does not contain the information to answer the question, your \`answer\` must state that the information is not available in the transcript, and the \`quotes\` array should be empty.
-
-## Detailed Instructions
-
-### 1. \`answer\` Field Construction
-
-  - Synthesize a direct and concise answer to the user's question.
-  - Integrate numbered citation placeholders (e.g., \`[1]\`, \`[2]\`) into the answer text.
-  - Each citation must correspond to the quote in the \`quotes\` array at the same index (e.g., \`[1]\` maps to the first quote, \`[2]\` to the second).
-  - Ensure each citation is placed directly after the information it supports.
-
-### 2. \`quotes\` Array Construction
-
-  - Select quotes that directly support the claims made in your \`answer\`.
-  - **Verbatim:** The \`text\` for each quote MUST be an EXACT, character-for-character copy of a passage from the transcript.
-  - **Relevant:** Each quote must directly support the part of the answer where its citation is placed.
-  - **Contextually Complete:** Quotes must be complete sentences and make sense on their own. Avoid partial sentences or quotes that are unintelligible without the surrounding context (e.g., a sentence that starts with "And that's why...").
-  - **No Alterations:** Do not "clean up" or alter the transcript text in any way, even to fix typos or grammatical errors. Extract it exactly as it is.
-
-## Example of a Perfect Output
-
-\`\`\`json
-{
-  "answer": "AI Fund focuses on concrete ideas because they can be quickly validated or falsified [1]. This is paired with rapid engineering, which utilizes AI coding assistants to increase speed and reduce costs [2].",
-  "quotes": [
-    { "text": "We focus on concrete ideas, things that can be built quickly so that we can quickly validate or falsify them." },
-    { "text": "We use a lot of AI coding assistants to really dramatically increase the speed of engineering and reduce the cost." }
-  ]
-}
-\`\`\`
-
-## Final Review Checklist
-
-Before generating your response, perform these checks:
-
-  - Is my entire output a single JSON object with no extra text?
-  - Does my \`answer\` directly address the user's question?
-  - Does every statement in my \`answer\` that requires proof have a citation \`[#]\`?
-  - Does the number of citation placeholders match the total number of quotes in the \`quotes\` array?
-  - Is every quote in the \`quotes\` array an exact, verbatim copy from the transcript?
-  - Are all quotes complete, self-contained sentences?
-
-## Context
-
-Video Topics:
-${topicsContext}
-
-Previous Conversation:
-${chatHistoryContext}
-
-## Full Video Transcript
-
+    const prompt = `<task>
+<role>You are an expert AI assistant who must answer using only the provided video transcript.</role>
+<context>
+<videoTopics>
+${topicsContext || 'None provided'}
+</videoTopics>
+<conversationHistory><![CDATA[
+${chatHistoryContext || 'No prior conversation'}
+]]></conversationHistory>
+</context>
+<goal>Deliver a concise, factual answer that is fully supported by transcript evidence.</goal>
+<instructions>
+  <step name="Grounding">
+    <item>Use the transcript as the sole source of truth.</item>
+    <item>If the answer is missing, explicitly state that it is not in the transcript and return an empty quotes array.</item>
+  </step>
+  <step name="AnswerFormatting">
+    <item>Respond in complete sentences, weaving in numbered citation markers like [1] immediately after the supported statement.</item>
+    <item>The number of citation markers must match the number of quotes you provide.</item>
+  </step>
+  <step name="QuoteSelection">
+    <item>Include only verbatim, character-for-character passages from the transcript.</item>
+    <item>Select complete sentences that stand on their own and directly justify the cited claim.</item>
+    <item>Avoid redundant or overlapping quotes.</item>
+  </step>
+</instructions>
+<validationChecklist>
+  <item>Does every factual statement in the answer have a matching citation?</item>
+  <item>Are all quotes exact matches from the transcript with no edits?</item>
+  <item>If information is absent, did you say so and leave quotes empty?</item>
+</validationChecklist>
+<outputFormat>Return strict JSON object: {"answer":"string","quotes":[{"text":"string"}]}. No extra commentary.</outputFormat>
+<transcript><![CDATA[
 ${transcriptContext}
-
-## User Question
-
-${message}`;
+]]></transcript>
+<userQuestion><![CDATA[
+${message}
+]]></userQuestion>
+</task>`;
 
     const maxOutputTokens = 65536;
 
@@ -189,7 +166,8 @@ ${message}`;
     try {
       console.log('=== PARSING JSON RESPONSE ===');
       console.log('Response to parse:', response);
-      parsedResponse = JSON.parse(response);
+      const parsedJson = JSON.parse(response);
+      parsedResponse = chatResponseSchema.parse(parsedJson);
       console.log('Parsed response:', JSON.stringify(parsedResponse, null, 2));
       console.log('=== END PARSING ===');
     } catch (e) {

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+const timestampPattern = /^\d{2}:\d{2}(?::\d{2})?$/;
+
 export const topicQuoteSchema = z.object({
   timestamp: z.string(),
   text: z.string()
@@ -21,4 +23,16 @@ export const chatQuoteSchema = z.object({
 export const chatResponseSchema = z.object({
   answer: z.string(),
   quotes: z.array(chatQuoteSchema)
+});
+
+export const summaryTakeawaySchema = z.object({
+  label: z.string().min(1),
+  insight: z.string().min(1),
+  timestamps: z.array(z.string().regex(timestampPattern)).min(1).max(2)
+});
+
+export const summaryTakeawaysSchema = z.array(summaryTakeawaySchema).min(4).max(6);
+
+export const quickPreviewSchema = z.object({
+  overview: z.string().min(1)
 });
