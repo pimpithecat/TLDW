@@ -33,13 +33,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#fcfcfc] text-[#787878]`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white text-[#787878]`}
       >
         <AuthProvider>
           <div className="min-h-screen flex flex-col">
-            <header className="h-[70px] flex items-center justify-end px-8">
-              <div className="flex-1" aria-hidden="true" />
-              <Link href="/" className="sr-only">TLDW</Link>
+            <header className="fixed top-0 right-0 z-50 p-6">
               <UserMenu />
             </header>
             <main className="flex-1">

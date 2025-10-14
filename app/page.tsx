@@ -24,7 +24,7 @@ interface PlaybackContext {
 type PageState = 'IDLE' | 'ANALYZING_NEW' | 'LOADING_CACHED';
 import { extractVideoId } from "@/lib/utils";
 import { useElapsedTimer } from "@/lib/hooks/use-elapsed-timer";
-import { Loader2, Video } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { AuthModal } from "@/components/auth-modal";
 import { useAuth } from "@/contexts/auth-context";
@@ -974,19 +974,25 @@ export default function Home() {
   }, [videoId, topics]); // Re-run when video or topics change
 
   return (
-    <div className="min-h-screen">
-      <div className="mx-auto flex max-w-[734px] flex-col items-center gap-10 px-6 pb-16 pt-[120px] text-center">
+    <div className="min-h-screen bg-white">
+      <div className="mx-auto flex max-w-[734px] flex-col items-center gap-10 px-6 pb-16 pt-[150px] text-center">
         <header className="flex flex-col items-center gap-5">
           <div className="flex items-center gap-3">
-            <Video className="h-[34px] w-[34px] text-[#787878]" strokeWidth={1.8} />
+            <Image 
+              src="/Video_Play.svg" 
+              alt="Video play icon" 
+              width={34} 
+              height={34}
+              className="h-[34px] w-[34px]"
+            />
             <h1 className="text-[24px] font-bold tracking-tight text-[#787878]">TLDW</h1>
           </div>
           <p className="text-[16px] leading-[17px] text-[#787878]">
-            Too Long; Didn’t Watch - Learn from long videos 10x faster
+            Too Long; Didn't Watch - Learn from long videos 10x faster
           </p>
         </header>
 
-        <div className="flex w-full flex-col items-center gap-6">
+        <div className="flex w-full flex-col items-center gap-10">
           <UrlInput onSubmit={processVideo} isLoading={pageState === 'ANALYZING_NEW'} />
 
           {pageState === 'IDLE' && !videoId && (

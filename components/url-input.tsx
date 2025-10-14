@@ -40,12 +40,12 @@ export function UrlInput({ onSubmit, isLoading = false }: UrlInputProps) {
       <div className="flex flex-col gap-2">
         <Card
           className={cn(
-            "relative rounded-[24px] border border-[#f0f1f1] bg-white px-6 py-5 shadow-[2px_11px_40.4px_rgba(0,0,0,0.06)] transition-shadow",
+            "relative flex flex-col items-start gap-[10px] self-stretch rounded-[24px] border border-[#f0f1f1] bg-white p-6 shadow-[2px_11px_40.4px_rgba(0,0,0,0.06)] transition-shadow",
             isFocused && "shadow-[2px_11px_40.4px_rgba(0,0,0,0.1)]",
             error && "ring-2 ring-destructive"
           )}
         >
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex w-full items-center justify-between gap-4">
             <div className="flex flex-1 items-center gap-3">
               <Link className="h-6 w-6 text-[#989999]" strokeWidth={1.8} />
               <input
@@ -63,7 +63,7 @@ export function UrlInput({ onSubmit, isLoading = false }: UrlInputProps) {
               type="submit"
               disabled={isLoading || !url.trim()}
               size="icon"
-              className="h-8 w-8 shrink-0 rounded-full bg-black text-white hover:bg-black/90"
+              className="h-8 w-8 shrink-0 rounded-full bg-[#B3B4B4] text-white hover:bg-[#9d9e9e] disabled:bg-[#B3B4B4] disabled:text-white disabled:opacity-100"
             >
               {isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
