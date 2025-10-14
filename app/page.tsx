@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { UrlInput } from "@/components/url-input";
 import { RightColumnTabs, type RightColumnTabsHandle } from "@/components/right-column-tabs";
 import { YouTubePlayer } from "@/components/youtube-player";
+import { ThemeSelector } from "@/components/theme-selector";
 import { LoadingContext } from "@/components/loading-context";
 import { LoadingTips } from "@/components/loading-tips";
 import { VideoSkeleton } from "@/components/video-skeleton";
@@ -40,6 +41,12 @@ export default function Home() {
   const [videoPreview, setVideoPreview] = useState<string>("");
   const [transcript, setTranscript] = useState<TranscriptSegment[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
+  const [baseTopics, setBaseTopics] = useState<Topic[]>([]);
+  const [themes, setThemes] = useState<string[]>([]);
+  const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
+  const [themeTopicsMap, setThemeTopicsMap] = useState<Record<string, Topic[]>>({});
+  const [isLoadingThemeTopics, setIsLoadingThemeTopics] = useState(false);
+  const [themeError, setThemeError] = useState<string | null>(null);
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
 
@@ -346,7 +353,13 @@ export default function Home() {
 
     setError("");
     setTopics([]);
+    setBaseTopics([]);
     setTranscript([]);
+    setThemes([]);
+    setSelectedTheme(null);
+    setThemeTopicsMap({});
+    setThemeError(null);
+    setIsLoadingThemeTopics(false);
     setSelectedTopic(null);
     setCitationHighlight(null);
     setVideoInfo(null);
@@ -398,6 +411,7 @@ export default function Home() {
           setTranscript(cacheData.transcript);
           setVideoInfo(cacheData.videoInfo);
           setTopics(cacheData.topics);
+          setBaseTopics(cacheData.topics);
 
           // Set cached takeaways and questions
           if (cacheData.summary) {
@@ -419,6 +433,36 @@ export default function Home() {
           setPageState('IDLE');
           setLoadingStage(null);
           setProcessingStartTime(null);
+
+          backgroundOperation(
+            'load-cached-themes',
+            async () => {
+              const response = await fetch("/api/video-analysis", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  videoId: extractedVideoId,
+                  videoInfo: cacheData.videoInfo,
+                  transcript: cacheData.transcript,
+                  model: 'gemini-2.5-flash'
+                }),
+              });
+
+              if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+                throw new Error(errorData.error || "Failed to generate themes");
+              }
+
+              const data = await response.json();
+              if (Array.isArray(data.themes)) {
+                setThemes(data.themes);
+              }
+              return data.themes;
+            },
+            (error) => {
+              console.error("Failed to generate themes for cached video:", error);
+            }
+          );
 
           // Auto-start takeaways generation if not available
           if (!cacheData.summary) {
@@ -623,7 +667,8 @@ export default function Home() {
       setProcessingStartTime(Date.now());
 
       // Process topics result
-      let generatedTopics = null;
+      let generatedTopics: Topic[] = [];
+      let generatedThemes: string[] = [];
       if (topicsResult.status === 'fulfilled') {
         const topicsRes = topicsResult.value;
 
@@ -634,6 +679,7 @@ export default function Home() {
 
         const topicsData = await topicsRes.json();
         generatedTopics = topicsData.topics;
+        generatedThemes = Array.isArray(topicsData.themes) ? topicsData.themes : [];
       } else {
         throw topicsResult.reason;
       }
@@ -662,6 +708,8 @@ export default function Home() {
 
       // Synchronous batch state update - all at once
       setTopics(generatedTopics);
+      setBaseTopics(generatedTopics);
+      setThemes(generatedThemes);
       if (generatedTakeaways) {
         setTakeawaysContent(generatedTakeaways);
         setShowTakeawaysTab(true);
@@ -941,6 +989,101 @@ export default function Home() {
     }
   }, [isPlayingAll, requestPlayAll]);
 
+  const handleThemeSelect = useCallback(async (themeLabel: string | null) => {
+    if (!videoId) return;
+
+    const resetToDefault = () => {
+      setSelectedTheme(null);
+      setThemeError(null);
+      setTopics(baseTopics);
+      setSelectedTopic(null);
+      setIsPlayingAll(false);
+      setPlayAllIndex(0);
+    };
+
+    if (!themeLabel) {
+      resetToDefault();
+      return;
+    }
+
+    if (selectedTheme === themeLabel) {
+      resetToDefault();
+      return;
+    }
+
+    setSelectedTheme(themeLabel);
+    setThemeError(null);
+    setIsLoadingThemeTopics(true);
+    setSelectedTopic(null);
+    setIsPlayingAll(false);
+    setPlayAllIndex(0);
+
+    let themedTopics = themeTopicsMap[themeLabel];
+
+    if (!themedTopics) {
+      const controller = abortManager.current.createController('theme-topics', 60000);
+      try {
+        const response = await fetch("/api/video-analysis", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            videoId,
+            videoInfo,
+            transcript,
+            model: 'gemini-2.5-flash',
+            theme: themeLabel
+          }),
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+          throw new Error(errorData.error || "Failed to generate themed topics");
+        }
+
+        const data = await response.json();
+        themedTopics = Array.isArray(data.topics) ? data.topics : [];
+        setThemeTopicsMap(prev => ({
+          ...prev,
+          [themeLabel]: themedTopics || []
+        }));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to generate themed topics";
+        console.error("Theme-specific generation failed:", error);
+        setThemeError(message);
+        resetToDefault();
+        abortManager.current.cleanup('theme-topics');
+        setIsLoadingThemeTopics(false);
+        return;
+      } finally {
+        abortManager.current.cleanup('theme-topics');
+      }
+    }
+
+    themedTopics = themedTopics || [];
+    setTopics(themedTopics);
+
+    if (themedTopics.length > 0) {
+      setSelectedTopic(themedTopics[0]);
+      setThemeError(null);
+    } else {
+      setThemeError("No highlights available for this theme yet.");
+      setSelectedTopic(null);
+    }
+
+    setIsLoadingThemeTopics(false);
+  }, [
+    videoId,
+    videoInfo,
+    transcript,
+    selectedTheme,
+    baseTopics,
+    themeTopicsMap,
+    abortManager,
+    setIsPlayingAll,
+    setPlayAllIndex
+  ]);
+
   // Dynamically adjust right column height to match video container
   useEffect(() => {
     const adjustRightColumnHeight = () => {
@@ -1044,6 +1187,17 @@ export default function Home() {
                     setPlayAllIndex={memoizedSetPlayAllIndex}
                     setIsPlayingAll={memoizedSetIsPlayingAll}
                   />
+                  {(themes.length > 0 || selectedTheme || isLoadingThemeTopics) && (
+                    <div className="mt-4">
+                      <ThemeSelector
+                        themes={themes.slice(0, 3)}
+                        selectedTheme={selectedTheme}
+                        onSelect={handleThemeSelect}
+                        isLoading={isLoadingThemeTopics}
+                        error={themeError}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 

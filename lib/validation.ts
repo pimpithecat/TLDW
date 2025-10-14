@@ -103,6 +103,7 @@ export const videoAnalysisRequestSchema = z.object({
   transcript: transcriptSchema,
   model: modelSchema.default('gemini-2.5-flash'),
   forceRegenerate: z.boolean().default(false),
+  theme: z.string().min(1).max(80).optional(),
   summary: z.any().nullable().optional(),
   suggestedQuestions: z.any().nullable().optional()
 });

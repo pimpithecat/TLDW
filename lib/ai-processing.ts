@@ -23,6 +23,7 @@ interface GenerateTopicsOptions {
   chunkOverlapSeconds?: number;
   fastModel?: string;
   maxTopics?: number;
+  theme?: string;
 }
 
 interface TranscriptChunk {
@@ -177,11 +178,15 @@ function formatVideoInfoForPrompt(videoInfo?: Partial<VideoInfo>): string {
 function buildChunkPrompt(
   chunk: TranscriptChunk,
   maxCandidates: number,
-  videoInfo?: Partial<VideoInfo>
+  videoInfo?: Partial<VideoInfo>,
+  theme?: string
 ): string {
   const transcript = formatTranscriptWithTimestamps(chunk.segments);
   const chunkWindow = `[${formatTime(chunk.start)}-${formatTime(chunk.end)}]`;
   const videoInfoBlock = formatVideoInfoForPrompt(videoInfo);
+  const themeInstruction = theme
+    ? `  <item>Focus exclusively on material that clearly expresses the theme "${theme}". Skip anything unrelated.</item>\n`
+    : '';
 
   return `<task>
 <role>You are an expert content strategist reviewing a portion of a video transcript.</role>
@@ -196,7 +201,7 @@ Chunk window: ${chunkWindow}
   <item>Quote text must match the transcript exactly—no paraphrasing, ellipses, or stitching from multiple places.</item>
   <item>Use absolute timestamps in [MM:SS-MM:SS] format that match the transcript lines.</item>
   <item>Focus on contrarian insights, vivid stories, or data-backed arguments that could stand alone.</item>
-</instructions>
+${themeInstruction}</instructions>
 <outputFormat>Return strict JSON with at most ${maxCandidates} entries matching this schema: [{"title":"string","quote":{"timestamp":"[MM:SS-MM:SS]","text":"exact transcript text"}}]</outputFormat>
 <transcriptChunk><![CDATA[
 ${transcript}
@@ -207,9 +212,13 @@ ${transcript}
 function buildReducePrompt(
   candidates: CandidateTopic[],
   maxTopics: number,
-  videoInfo?: Partial<VideoInfo>
+  videoInfo?: Partial<VideoInfo>,
+  theme?: string
 ): string {
   const videoInfoBlock = formatVideoInfoForPrompt(videoInfo);
+  const themeContext = theme
+    ? `<item>Maintain a cohesive focus on the theme "${theme}" while selecting the lineup.</item>\n  `
+    : '';
   const candidateBlock = candidates.map((candidate, idx) => {
     const timestamp = candidate.quote?.timestamp ?? '[??:??-??:??]';
     const quoteText = candidate.quote?.text ?? '';
@@ -229,7 +238,7 @@ You have ${candidates.length} candidate quotes extracted from the transcript.
 </context>
 <goal>Select up to ${maxTopics} highlights that maximize diversity, insight, and narrative punch while reusing the provided quotes.</goal>
 <instructions>
-  <item>Review the candidates and choose the strongest, most distinct ideas across the entire video.</item>
+  ${themeContext}<item>Review the candidates and choose the strongest, most distinct ideas across the entire video.</item>
   <item>If two candidates overlap, keep the better one.</item>
   <item>You may rewrite titles for clarity, but you must keep the quote text and timestamp as provided.</item>
   <item>Respond with strict JSON: [{"candidateIndex":number,"title":"string"}]. Indices are 1-based and reference the numbered candidates below.</item>
@@ -252,12 +261,13 @@ function createReduceSelectionSchema(limit: number) {
 function buildFallbackTopics(
   transcript: TranscriptSegment[],
   maxTopics: number,
-  fullText: string
+  fullText: string,
+  theme?: string
 ): ParsedTopic[] {
   if (transcript.length === 0) {
     if (!fullText) return [];
     return [{
-      title: 'Full Video',
+      title: theme ? `${theme} overview` : 'Full Video',
       quote: {
         timestamp: '[00:00-00:30]',
         text: fullText.substring(0, 200)
@@ -281,7 +291,7 @@ function buildFallbackTopics(
     const endTime = endSegment.start + endSegment.duration;
 
     fallbackTopics.push({
-      title: `Part ${i + 1}`,
+      title: theme ? `${theme} — part ${i + 1}` : `Part ${i + 1}`,
       quote: {
         timestamp: `[${formatTime(startTime)}-${formatTime(endTime)}]`,
         text: chunkSegments.map(s => s.text).join(' ').substring(0, 200) + '...'
@@ -291,7 +301,7 @@ function buildFallbackTopics(
 
   if (fallbackTopics.length === 0 && fullText) {
     fallbackTopics.push({
-      title: 'Full Video',
+      title: theme ? `${theme} spotlight` : 'Full Video',
       quote: {
         timestamp: '[00:00-00:30]',
         text: fullText.substring(0, 200)
@@ -306,8 +316,15 @@ async function runSinglePassTopicGeneration(
   transcript: TranscriptSegment[],
   transcriptWithTimestamps: string,
   fullText: string,
-  model: string
+  model: string,
+  theme?: string
 ): Promise<ParsedTopic[]> {
+  const themeGuidance = theme
+    ? `<themeAlignment>
+  <criterion name="ThemeRelevance">Every highlight must directly reinforce the theme "${theme}". Discard compelling ideas if they are off-theme.</criterion>
+</themeAlignment>`
+    : '';
+
   const prompt = `<task>
 <role>You are an expert content strategist.</role>
 <goal>Analyze the provided video transcript and description to create up to five distinct highlight reels that let a busy, intelligent viewer absorb the video's most valuable insights in minutes.</goal>
@@ -340,6 +357,7 @@ async function runSinglePassTopicGeneration(
   <valueOverQuantity>If only three or four themes meet the quality bar, return that smaller number rather than adding generic options.</valueOverQuantity>
   <completenessCheck>Verify each passage contains a complete thought that can stand alone; extend the timestamp range if necessary.</completenessCheck>
 </qualityControl>
+${themeGuidance}
 <outputFormat>Respond with strict JSON that matches this schema: [{"title":"string","quote":{"timestamp":"[MM:SS-MM:SS]","text":"exact quoted text"}}]. Do not include XML, markdown, or commentary outside the JSON.</outputFormat>
 <quoteRequirements>The "text" field must match the transcript exactly with original wording.</quoteRequirements>
 <transcript><![CDATA[
@@ -547,7 +565,8 @@ export async function generateTopicsFromTranscript(
     chunkDurationSeconds = DEFAULT_CHUNK_DURATION_SECONDS,
     chunkOverlapSeconds = DEFAULT_CHUNK_OVERLAP_SECONDS,
     fastModel = 'gemini-2.5-flash-lite',
-    maxTopics = 5
+    maxTopics = 5,
+    theme
   } = options;
 
   const requestedTopics = Math.max(1, Math.min(maxTopics, 5));
@@ -562,7 +581,7 @@ export async function generateTopicsFromTranscript(
       const chunks = chunkTranscript(transcript, chunkDurationSeconds, chunkOverlapSeconds);
       const chunkResults = await Promise.all(
         chunks.map(async (chunk) => {
-          const chunkPrompt = buildChunkPrompt(chunk, CHUNK_MAX_CANDIDATES, videoInfo);
+          const chunkPrompt = buildChunkPrompt(chunk, CHUNK_MAX_CANDIDATES, videoInfo, theme);
 
           try {
             const response = await generateWithFallback(chunkPrompt, {
@@ -613,7 +632,7 @@ export async function generateTopicsFromTranscript(
     candidateTopics = dedupeCandidates(candidateTopics);
 
     const reduceCandidates = candidateTopics;
-    const reducePrompt = buildReducePrompt(reduceCandidates, requestedTopics, videoInfo);
+    const reducePrompt = buildReducePrompt(reduceCandidates, requestedTopics, videoInfo, theme);
     const selectionSchema = createReduceSelectionSchema(
       Math.min(requestedTopics, reduceCandidates.length)
     );
@@ -678,13 +697,14 @@ export async function generateTopicsFromTranscript(
       transcript,
       transcriptWithTimestamps,
       fullText,
-      fastModel
+      fastModel,
+      theme
     );
     topicsArray = singlePassTopics;
   }
 
   if (topicsArray.length === 0) {
-    topicsArray = buildFallbackTopics(transcript, requestedTopics, fullText);
+    topicsArray = buildFallbackTopics(transcript, requestedTopics, fullText, theme);
   }
 
   topicsArray = topicsArray
@@ -729,4 +749,93 @@ export async function generateTopicsFromTranscript(
   });
 
   return topics;
+}
+
+function sanitizeThemeList(themes: string[]): string[] {
+  const unique = new Set<string>();
+  const cleaned: string[] = [];
+
+  for (const theme of themes) {
+    const trimmed = theme.trim();
+    if (!trimmed) continue;
+    const normalized = trimmed.toLowerCase();
+    if (unique.has(normalized)) continue;
+    unique.add(normalized);
+    cleaned.push(trimmed);
+  }
+
+  return cleaned;
+}
+
+export async function generateThemesFromTranscript(
+  transcript: TranscriptSegment[],
+  videoInfo?: Partial<VideoInfo>,
+  model: string = 'gemini-2.5-flash-lite'
+): Promise<string[]> {
+  if (!transcript || transcript.length === 0) {
+    return [];
+  }
+
+  const transcriptWithTimestamps = formatTranscriptWithTimestamps(transcript);
+  const videoInfoBlock = formatVideoInfoForPrompt(videoInfo);
+
+  const prompt = `## Persona
+You are an expert content analyst and a specialist in semantic keyword extraction. Your goal is to distill complex information into its most essential conceptual components for easy discovery.
+
+## Objective
+Analyze the provided video transcript to identify and extract its core concepts. Generate a list of 5-10 keywords or key phrases that precisely capture the main topics discussed. These keywords will be used to help potential viewers quickly understand the video's specific focus and determine its relevance to their interests.
+
+## Strict Constraints
+1.  **Quantity:** Provide between 5 and 10 keywords/phrases.
+2.  **Length:** Each keyword/phrase must be strictly between 1 and 5 words.
+3.  **Format:** Output must be a simple, unnumbered bulleted list. Do not add any introductory or concluding sentences.
+
+## Guiding Principles
+* **Specificity over Generality:** Keywords must be specific, tangible concepts.
+* **Focus on 'What', not 'About':** The keywords should be the *concepts themselves*, not descriptions *about* the concepts.
+* **Identify Nouns and Noun Phrases:** Prioritize key terms, techniques, arguments, or recurring ideas that form the backbone of the content.
+
+## Examples of Good vs. Bad Keywords
+* **Good:** \`Student motivation\` (Specific, concise concept)
+* **Good:** \`Onboarding flow optimization\` (Specific, concise concept)
+* **Bad:** \`Future of education\` (Too vague and generic)
+* **Bad:** \`Selection effects and scalability issues in private education\` (Too long; violates the 5-word limit)
+
+## Task
+Now, apply these rules to the following video transcript.
+
+${videoInfoBlock ? `${videoInfoBlock}\n\n` : ''}${transcriptWithTimestamps}`;
+
+  try {
+    const response = await generateWithFallback(prompt, {
+      preferredModel: model,
+      generationConfig: { temperature: 0.3 }
+    });
+
+    if (!response) {
+      return [];
+    }
+
+    const lines = response
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => !!line);
+
+    const bulletLines = lines.length > 0 && lines.some(line => /^[-*•]/.test(line))
+      ? lines.filter(line => /^[-*•]/.test(line))
+      : lines;
+
+    const themes = bulletLines
+      .map(line => line.replace(/^[-*•]\s*/, '').trim())
+      .filter(Boolean)
+      .filter(line => {
+        const wordCount = line.split(/\s+/).length;
+        return wordCount >= 1 && wordCount <= 5;
+      });
+
+    return sanitizeThemeList(themes).slice(0, 10);
+  } catch (error) {
+    console.error('Theme generation failed:', error);
+    return [];
+  }
 }

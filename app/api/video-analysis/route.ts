@@ -4,7 +4,7 @@ import { videoAnalysisRequestSchema, formatValidationError } from '@/lib/validat
 import { RateLimiter, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limiter';
 import { z } from 'zod';
 import { withSecurity, SECURITY_PRESETS } from '@/lib/security-middleware';
-import { generateTopicsFromTranscript } from '@/lib/ai-processing';
+import { generateTopicsFromTranscript, generateThemesFromTranscript } from '@/lib/ai-processing';
 
 async function handler(req: NextRequest) {
   try {
@@ -32,8 +32,30 @@ async function handler(req: NextRequest) {
       videoInfo,
       transcript,
       model,
-      forceRegenerate
+      forceRegenerate,
+      theme
     } = validatedData;
+
+    if (theme) {
+      try {
+        const themedTopics = await generateTopicsFromTranscript(transcript, model, {
+          videoInfo,
+          theme
+        });
+
+        return NextResponse.json({
+          topics: themedTopics,
+          theme,
+          cached: false
+        });
+      } catch (error) {
+        console.error('Error generating theme-specific topics:', error);
+        return NextResponse.json(
+          { error: 'Failed to generate themed topics. Please try again.' },
+          { status: 500 }
+        );
+      }
+    }
 
     const supabase = await createClient();
 
@@ -66,6 +88,13 @@ async function handler(req: NextRequest) {
           });
         }
 
+        let themes: string[] = [];
+        try {
+          themes = await generateThemesFromTranscript(transcript, videoInfo);
+        } catch (error) {
+          console.error('Error generating themes for cached video:', error);
+        }
+
         return NextResponse.json({
           topics: cachedVideo.topics,
           transcript: cachedVideo.transcript,
@@ -77,6 +106,7 @@ async function handler(req: NextRequest) {
           },
           summary: cachedVideo.summary,
           suggestedQuestions: cachedVideo.suggested_questions,
+          themes,
           cached: true,
           cacheDate: cachedVideo.created_at
         });
@@ -108,8 +138,16 @@ async function handler(req: NextRequest) {
       );
     }
 
+    let themes: string[] = [];
+    try {
+      themes = await generateThemesFromTranscript(transcript, videoInfo);
+    } catch (error) {
+      console.error('Error generating themes:', error);
+    }
+
     return NextResponse.json({
       topics,
+      themes,
       cached: false
     });
 
