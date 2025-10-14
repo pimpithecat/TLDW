@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { UrlInput } from "@/components/url-input";
 import { RightColumnTabs, type RightColumnTabsHandle } from "@/components/right-column-tabs";
 import { YouTubePlayer } from "@/components/youtube-player";
-import { LanguageSelector, type Language } from "@/components/language-selector";
 import { LoadingContext } from "@/components/loading-context";
 import { LoadingTips } from "@/components/loading-tips";
 import { VideoSkeleton } from "@/components/video-skeleton";
@@ -49,7 +48,6 @@ export default function Home() {
   const [isPlayerReady, setIsPlayerReady] = useState(false);
   const [playbackContext, setPlaybackContext] = useState<PlaybackContext | null>(null);
   const [transcriptHeight, setTranscriptHeight] = useState<string>("auto");
-  const [summaryLanguage, setSummaryLanguage] = useState<Language>('English');
   const [citationHighlight, setCitationHighlight] = useState<Citation | null>(null);
   const [generationStartTime, setGenerationStartTime] = useState<number | null>(null);
   const [processingStartTime, setProcessingStartTime] = useState<number | null>(null);
@@ -433,12 +431,11 @@ export default function Home() {
                 const summaryRes = await fetch("/api/generate-summary", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    transcript: cacheData.transcript,
-                    videoInfo: cacheData.videoInfo,
-                    videoId: extractedVideoId,
-                    language: summaryLanguage
-                  }),
+                body: JSON.stringify({
+                  transcript: cacheData.transcript,
+                  videoInfo: cacheData.videoInfo,
+                  videoId: extractedVideoId
+                }),
                 });
 
                 if (summaryRes.ok) {
@@ -605,8 +602,7 @@ export default function Home() {
         body: JSON.stringify({
           transcript: fetchedTranscript,
           videoInfo: fetchedVideoInfo,
-          videoId: extractedVideoId,
-          language: summaryLanguage
+          videoId: extractedVideoId
         }),
         signal: summaryController.signal,
       });
@@ -991,16 +987,6 @@ export default function Home() {
 
         <div className="flex flex-col items-center gap-4 mb-8">
           <UrlInput onSubmit={processVideo} isLoading={pageState === 'ANALYZING_NEW'} />
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Language:</span>
-              <LanguageSelector
-                value={summaryLanguage}
-                onChange={setSummaryLanguage}
-                disabled={pageState !== 'IDLE'}
-              />
-            </div>
-          </div>
         </div>
 
         {error && (

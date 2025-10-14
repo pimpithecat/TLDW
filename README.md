@@ -8,7 +8,7 @@ TLDW transforms long YouTube videos into topic-driven learning experiences. Usin
 
   - **🤖 AI-Generated Highlight Reels**: Identifies key themes across the entire video, creating concise, playable segments that capture the most important insights scattered throughout the content.
   - **💬 Interactive AI Chat**: Ask specific questions about the video content and get answers grounded in the transcript, complete with timestamped citations that jump directly to the source.
-  - **📝 Multi-Language Summaries**: Get a comprehensive, structured summary of the video—including key takeaways, smart chapters, and memorable quotes—in one of several supported languages.
+  - **📝 Detailed Summaries**: Get a comprehensive, structured summary of the video—including key takeaways, smart chapters, and memorable quotes—delivered in clear English.
   - **▶️ Synchronized Transcript & Player**: Read the full transcript with parts highlighted as the video plays. Click any sentence to jump to that moment in the video.
   - **📊 Visual Timeline Navigation**: A dynamic progress bar visualizes where highlight reel segments are located, allowing for quick, non-linear navigation.
   - **❓ Suggested Questions**: Kickstart your exploration with dynamically generated questions based on the video's content.

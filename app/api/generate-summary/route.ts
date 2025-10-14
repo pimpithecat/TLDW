@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { TranscriptSegment } from '@/lib/types';
-import { isValidLanguage } from '@/lib/language-utils';
 import { withSecurity } from '@/lib/security-middleware';
 import { RATE_LIMITS } from '@/lib/rate-limiter';
 import { generateWithFallback } from '@/lib/gemini-client';
@@ -25,15 +24,7 @@ function cleanMarkdownFormatting(content: string): string {
 
 async function handler(request: NextRequest) {
   try {
-    const { transcript, videoInfo, language = 'English' } = await request.json();
-    
-    // Validate language parameter
-    if (!isValidLanguage(language)) {
-      return NextResponse.json(
-        { error: `Invalid language specified. Supported languages: ${['English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Dutch', 'Russian', 'Japanese', 'Korean', 'Chinese (Simplified)', 'Chinese (Traditional)', 'Arabic', 'Hindi'].join(', ')}` },
-        { status: 400 }
-      );
-    }
+    const { transcript, videoInfo } = await request.json();
 
     if (!transcript || !Array.isArray(transcript)) {
       return NextResponse.json(
@@ -73,12 +64,6 @@ ${fullTranscript}
 
 **Output Requirements:**
 
-**Language Requirement:**
-- Your entire output MUST be written in ${language}.
-- All section titles, descriptions, and content must be in ${language}.
-- Do not mix languages. Everything including headers like "Video Notes", "Context", "Key takeaways" etc. must be translated to ${language}.
-- Maintain the same markdown structure but translate all text to ${language}.
-
 ## Key takeaways
 Highlight the key lessons that the viewer can learn from the video in 3-5 bullet points, each followed by the timestamps where those insights appeared. Make sure the insights are high-value, non-cliched, and actionable. Avoid generic statements.
 
@@ -99,6 +84,7 @@ Highlight the 1-3 most intriguing and memorable and surprising stories/anecdotes
 **Style and Limitations:**
 
 * Your primary goal is conciseness. Get straight to the point and avoid filler words or overly descriptive sentences.
+* Write the entire summary in English so it is easy to read.
 * Note that the transcript might include transcription errors; you should deduce the correct spellings from the context and output the correct versions
 * Never over-summarize!
 * Include timestamps in MM:SS or HH:MM:SS format (e.g., 05:32 or 1:45:30) for important moments. Timestamps should appear at the end of each point, acting as a citation.
