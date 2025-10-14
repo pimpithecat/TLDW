@@ -26,52 +26,45 @@ async function handler(request: NextRequest) {
     }
 
     const fullTranscript = formatTranscriptForContext(transcript);
-    const topicsContext = topics?.map((t: Topic) => 
-      `- ${t.title}: ${t.description}`
-    ).join('\n') || 'No topics available';
+    const topicsContext = Array.isArray(topics) && topics.length > 0
+      ? topics.map((t: Topic) => {
+          const suffix = t.description ? `: ${t.description}` : '';
+          return `${t.title}${suffix}`;
+        }).join('\n')
+      : 'None provided';
 
-    
-    const prompt = `You are an expert assistant that generates thoughtful QUESTIONS about a video using ONLY its transcript. Every question MUST be answerable from explicit statements in the transcript—no outside knowledge, inference, or speculation.
-
-## Inputs
-- Video Title: "${videoTitle || 'Untitled Video'}"
-- Highlight Reels Already Covered (avoid these themes): ${topicsContext}
-- Full Transcript: ${fullTranscript}
-
-## Grounding Rule (Most Important)
-- Use the transcript above as the sole source of truth.
-- Do not ask about anything that is not clearly and explicitly stated in the transcript.
-- Before keeping a question, verify you can point to the exact sentence(s) that answer it.
-
-## Instructions
-Generate EXACTLY 3 questions that:
-1) Are fully answerable from the transcript.
-2) Do NOT overlap with the highlight-reel themes (avoid synonyms and paraphrases of those themes).
-3) Focus on:
-   - Specific facts, examples, or data mentioned.
-   - Explanations or reasoning the speaker provides.
-   - Connections made between ideas explicitly discussed.
-   - Concrete advice, steps, or practices actually stated.
-   - Context/background that the speaker explicitly explains.
-4) Are precise, grounded, and non-hypothetical.
-5) Are concise: less than 15 words each.
-6) Complement (not duplicate) the highlight-reel insights.
-7) Prefer “what/why/how” over yes/no; avoid multi-part or vague questions.
-8) Use the transcript's predominant language.
-
-## Validation Checklist (apply to each question)
-- Is the answer explicitly in the transcript (with quotable sentence[s])?
-- Is it outside the covered highlight-reel themes (including close paraphrases)?
-- Is it specific, single-focus, and less than 15 words?
-
-`;
+    const prompt = `<task>
+<role>You craft grounded follow-up questions for viewers after watching a video.</role>
+<context>
+<videoTitle>${videoTitle || 'Untitled Video'}</videoTitle>
+<coveredHighlights>
+${topicsContext}
+</coveredHighlights>
+</context>
+<goal>Generate exactly three fresh, non-overlapping questions that deepen understanding of the transcript.</goal>
+<instructions>
+  <item>Every question must be fully answerable using the transcript alone.</item>
+  <item>Avoid any theme that overlaps the provided highlight reels.</item>
+  <item>Keep each question under 15 words and written in the transcript's primary language.</item>
+  <item>Prefer "what", "how", or "why" framing over yes/no or multi-part prompts.</item>
+  <item>Focus on concrete facts, reasoning, examples, or explanations explicitly stated in the transcript.</item>
+</instructions>
+<validationChecklist>
+  <item>If you cannot point to the exact supporting sentences, discard the question.</item>
+  <item>Ensure the three questions cover distinct ideas.</item>
+</validationChecklist>
+<outputFormat>Return strict JSON with exactly three strings: ["question 1","question 2","question 3"]. No additional text.</outputFormat>
+<transcript><![CDATA[
+${fullTranscript}
+]]></transcript>
+</task>`;
 
     let response = '';
 
     try {
       response = await generateWithFallback(prompt, {
         generationConfig: {
-          temperature: 0.7,
+          temperature: 0.6,
         },
         zodSchema: suggestedQuestionsSchema
       });
@@ -91,10 +84,8 @@ Generate EXACTLY 3 questions that:
 
     let questions: string[] = [];
     try {
-      questions = JSON.parse(response);
-      if (!Array.isArray(questions)) {
-        throw new Error('Response is not an array');
-      }
+      const parsed = JSON.parse(response);
+      questions = suggestedQuestionsSchema.parse(parsed);
     } catch (parseError) {
       questions = [];
     }
