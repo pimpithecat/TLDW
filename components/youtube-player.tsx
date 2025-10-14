@@ -51,7 +51,6 @@ export function YouTubePlayer({
   const [currentTime, setCurrentTime] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
   const [playerReady, setPlayerReady] = useState(false);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isSeekingRef = useRef(false);
   const lastSeekTimeRef = useRef<number | undefined>(undefined);
@@ -193,12 +192,6 @@ export function YouTubePlayer({
         }
         playerRef.current = null;
       }
-
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-
       if (timeUpdateIntervalRef.current) {
         clearInterval(timeUpdateIntervalRef.current);
         timeUpdateIntervalRef.current = null;
@@ -300,12 +293,6 @@ export function YouTubePlayer({
   // Reset segment index when topic changes and auto-play if needed
   useEffect(() => {
     setCitationReelSegmentIndex(0);
-    // Clear any existing interval
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    
     // Auto-play if the topic has the autoPlay flag
     if (selectedTopic?.autoPlay && playerRef.current) {
       // Small delay to ensure player is ready
@@ -338,13 +325,10 @@ export function YouTubePlayer({
     }, 100);
   }, [isPlayingAll, playAllIndex, playerReady]);
 
-  // Monitor playback to handle segment transitions and pausing
+  // Monitor playback to handle citation reel transitions
   useEffect(() => {
     if (!selectedTopic || !isPlaying || !playerRef.current) return;
-    
-    // Don't set up monitoring if playTopic/playSegments interval is already running
-    if (intervalRef.current) return;
-    
+
     // Don't set up monitoring during play-all mode (handled by time update logic)
     if (isPlayingAll) return;
     
@@ -386,42 +370,11 @@ export function YouTubePlayer({
       return () => {
         clearInterval(monitoringInterval);
       };
-    } else {
-      // Handle regular topics with single segment
-      const segment = selectedTopic.segments[0];
-      if (!segment) return;
-      
-      // Set up monitoring interval to pause at segment end
-      const monitoringInterval = setInterval(() => {
-        if (!playerRef.current?.getCurrentTime) return;
-        
-        const currentTime = playerRef.current.getCurrentTime();
-        
-        // Check if we're playing within the selected segment and approaching the end
-        if (currentTime >= segment.start && currentTime >= segment.end) {
-          // Pause the video
-          playerRef.current.pauseVideo();
-          
-          // Clear the monitoring interval
-          clearInterval(monitoringInterval);
-        }
-      }, 100); // Check every 100ms
-      
-      // Clean up on unmount or when dependencies change
-      return () => {
-        clearInterval(monitoringInterval);
-      };
     }
   }, [selectedTopic, isPlaying, isPlayingAll, citationReelSegmentIndex]);
 
   const playTopic = (topic: Topic) => {
     if (!playerRef.current || !topic || topic.segments.length === 0) return;
-    
-    // Clear any existing interval
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
     
     // If clicking a topic manually, exit play all mode
     if (isPlayingAll) {
@@ -432,25 +385,6 @@ export function YouTubePlayer({
     const segment = topic.segments[0];
     playerRef.current.seekTo(segment.start, true);
     playerRef.current.playVideo();
-    
-    // Set up monitoring to pause at segment end
-    intervalRef.current = setInterval(() => {
-      if (playerRef.current?.getCurrentTime) {
-        const currentTime = playerRef.current.getCurrentTime();
-        
-        // Check if we've reached or passed the segment end
-        if (currentTime >= segment.end) {
-          // Clear the monitoring interval
-          if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-          }
-          
-          // Only pause if not in play all mode
-          playerRef.current.pauseVideo();
-        }
-      }
-    }, 100); // Check every 100ms
   };
 
 

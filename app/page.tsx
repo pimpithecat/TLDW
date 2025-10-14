@@ -68,11 +68,11 @@ export default function Home() {
     setIsPlayingAll(value);
   }, []);
   
-  // Summary generation state
-  const [summaryContent, setSummaryContent] = useState<string | null>(null);
-  const [isGeneratingSummary, setIsGeneratingSummary] = useState<boolean>(false);
-  const [summaryError, setSummaryError] = useState<string>("");
-  const [showSummaryTab, setShowSummaryTab] = useState<boolean>(false);
+  // Takeaways generation state
+  const [takeawaysContent, setTakeawaysContent] = useState<string | null>(null);
+  const [isGeneratingTakeaways, setIsGeneratingTakeaways] = useState<boolean>(false);
+  const [takeawaysError, setTakeawaysError] = useState<string>("");
+  const [showTakeawaysTab, setShowTakeawaysTab] = useState<boolean>(false);
 
   // Cached suggested questions
   const [cachedSuggestedQuestions, setCachedSuggestedQuestions] = useState<string[] | null>(null);
@@ -352,10 +352,10 @@ export default function Home() {
     setVideoInfo(null);
     setVideoPreview("");
 
-    // Reset summary-related states
-    setSummaryContent(null);
-    setSummaryError("");
-    setShowSummaryTab(false);
+    // Reset takeaways-related states
+    setTakeawaysContent(null);
+    setTakeawaysError("");
+    setShowTakeawaysTab(false);
 
     // Reset cached suggested questions
     setCachedSuggestedQuestions(null);
@@ -399,11 +399,11 @@ export default function Home() {
           setVideoInfo(cacheData.videoInfo);
           setTopics(cacheData.topics);
 
-          // Set cached summary and questions
+          // Set cached takeaways and questions
           if (cacheData.summary) {
-            setSummaryContent(cacheData.summary);
-            setShowSummaryTab(true);
-            setIsGeneratingSummary(false);
+            setTakeawaysContent(cacheData.summary);
+            setShowTakeawaysTab(true);
+            setIsGeneratingTakeaways(false);
           }
           if (cacheData.suggestedQuestions) {
             setCachedSuggestedQuestions(cacheData.suggestedQuestions);
@@ -420,13 +420,13 @@ export default function Home() {
           setLoadingStage(null);
           setProcessingStartTime(null);
 
-          // Auto-start summary generation if not available
+          // Auto-start takeaways generation if not available
           if (!cacheData.summary) {
-            setShowSummaryTab(true);
-            setIsGeneratingSummary(true);
+            setShowTakeawaysTab(true);
+            setIsGeneratingTakeaways(true);
 
             backgroundOperation(
-              'generate-cached-summary',
+              'generate-cached-takeaways',
               async () => {
                 const summaryRes = await fetch("/api/generate-summary", {
                   method: "POST",
@@ -439,34 +439,34 @@ export default function Home() {
                 });
 
                 if (summaryRes.ok) {
-                  const { summaryContent: generatedSummary } = await summaryRes.json();
-                  setSummaryContent(generatedSummary);
+                  const { summaryContent: generatedTakeaways } = await summaryRes.json();
+                  setTakeawaysContent(generatedTakeaways);
 
-                  // Update the video analysis with the summary
+                  // Update the video analysis with the takeaways
                   await backgroundOperation(
-                    'update-cached-summary',
+                    'update-cached-takeaways',
                     async () => {
                       await fetch("/api/update-video-analysis", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                           videoId: extractedVideoId,
-                          summary: generatedSummary
+                          summary: generatedTakeaways
                         }),
                       });
                     }
                   );
-                  return generatedSummary;
+                  return generatedTakeaways;
                 } else {
                   const errorData = await summaryRes.json().catch(() => ({ error: "Unknown error" }));
-                  throw new Error(errorData.error || "Failed to generate summary");
+                  throw new Error(errorData.error || "Failed to generate takeaways");
                 }
               },
               (error) => {
-                setSummaryError(error.message || "Failed to generate summary. Please try again.");
+                setTakeawaysError(error.message || "Failed to generate takeaways. Please try again.");
               }
             ).finally(() => {
-              setIsGeneratingSummary(false);
+              setIsGeneratingTakeaways(false);
             });
           }
 
@@ -569,13 +569,13 @@ export default function Home() {
           console.error('Error generating quick preview:', error);
         });
       
-      // Initiate parallel API requests for topics and summary
+      // Initiate parallel API requests for topics and takeaways
       setLoadingStage('generating');
       setGenerationStartTime(Date.now());
 
       // Create abort controllers for both requests
       const topicsController = abortManager.current.createController('topics', 60000);
-      const summaryController = abortManager.current.createController('summary', 60000);
+      const takeawaysController = abortManager.current.createController('takeaways', 60000);
 
       // Start topics generation using cached video-analysis endpoint
       const topicsPromise = fetch("/api/video-analysis", {
@@ -595,8 +595,8 @@ export default function Home() {
         throw new Error("Network error: Unable to generate topics. Please check your connection.");
       });
 
-      // Start summary generation in parallel (will be ignored if cached)
-      const summaryPromise = fetch("/api/generate-summary", {
+      // Start takeaways generation in parallel (will be ignored if cached)
+      const takeawaysPromise = fetch("/api/generate-summary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -604,17 +604,17 @@ export default function Home() {
           videoInfo: fetchedVideoInfo,
           videoId: extractedVideoId
         }),
-        signal: summaryController.signal,
+        signal: takeawaysController.signal,
       });
 
-      // Show summary tab and loading state immediately (optimistic UI)
-      setShowSummaryTab(true);
-      setIsGeneratingSummary(true);
+      // Show takeaways tab and loading state immediately (optimistic UI)
+      setShowTakeawaysTab(true);
+      setIsGeneratingTakeaways(true);
 
       // Wait for both to complete using Promise.allSettled
-      const [topicsResult, summaryResult] = await Promise.allSettled([
+      const [topicsResult, takeawaysResult] = await Promise.allSettled([
         topicsPromise,
-        summaryPromise
+        takeawaysPromise
       ]);
 
       // Move to processing stage
@@ -638,38 +638,38 @@ export default function Home() {
         throw topicsResult.reason;
       }
 
-      // Process summary result from parallel execution
-      let generatedSummary = null;
-      let summaryGenerationError = null;
-      if (summaryResult.status === 'fulfilled') {
-        const summaryRes = summaryResult.value;
+      // Process takeaways result from parallel execution
+      let generatedTakeaways = null;
+      let takeawaysGenerationError = null;
+      if (takeawaysResult.status === 'fulfilled') {
+        const summaryRes = takeawaysResult.value;
 
         if (summaryRes.ok) {
           const summaryData = await summaryRes.json();
-          generatedSummary = summaryData.summaryContent;
+          generatedTakeaways = summaryData.summaryContent;
         } else {
           const errorData = await summaryRes.json().catch(() => ({ error: "Unknown error" }));
-          summaryGenerationError = errorData.error || "Failed to generate summary. Please try again.";
+          takeawaysGenerationError = errorData.error || "Failed to generate takeaways. Please try again.";
         }
       } else {
-        const error = summaryResult.reason;
+        const error = takeawaysResult.reason;
         if (error && error.name === 'AbortError') {
-          summaryGenerationError = "Summary generation timed out. The video might be too long.";
+          takeawaysGenerationError = "Takeaways generation timed out. The video might be too long.";
         } else {
-          summaryGenerationError = error?.message || "Failed to generate summary. Please try again.";
+          takeawaysGenerationError = error?.message || "Failed to generate takeaways. Please try again.";
         }
       }
 
       // Synchronous batch state update - all at once
       setTopics(generatedTopics);
-      if (generatedSummary) {
-        setSummaryContent(generatedSummary);
-        setShowSummaryTab(true);
-        setIsGeneratingSummary(false);
-      } else if (summaryGenerationError) {
-        setSummaryError(summaryGenerationError);
-        setShowSummaryTab(true);
-        setIsGeneratingSummary(false);
+      if (generatedTakeaways) {
+        setTakeawaysContent(generatedTakeaways);
+        setShowTakeawaysTab(true);
+        setIsGeneratingTakeaways(false);
+      } else if (takeawaysGenerationError) {
+        setTakeawaysError(takeawaysGenerationError);
+        setShowTakeawaysTab(true);
+        setIsGeneratingTakeaways(false);
       }
 
       // Rate limit is handled server-side now
@@ -692,7 +692,7 @@ export default function Home() {
               },
               transcript: fetchedTranscript,
               topics: generatedTopics,
-              summary: generatedSummary,
+              summary: generatedTakeaways,
               model: 'gemini-2.5-flash'
             }),
           });
@@ -807,7 +807,7 @@ export default function Home() {
     requestSeek(seconds);
   };
 
-  const handleSummaryTimestampClick = (seconds: number) => {
+  const handleTakeawayTimestampClick = (seconds: number) => {
     // Reset Play All mode when clicking any timestamp
     setIsPlayingAll(false);
     setPlayAllIndex(0);
@@ -1059,7 +1059,7 @@ export default function Home() {
                     transcript={transcript}
                     selectedTopic={selectedTopic}
                     onTimestampClick={handleTimestampClick}
-                    onSummaryTimestampClick={handleSummaryTimestampClick}
+                    onTakeawayTimestampClick={handleTakeawayTimestampClick}
                     currentTime={currentTime}
                     topics={topics}
                     citationHighlight={citationHighlight}
@@ -1067,10 +1067,10 @@ export default function Home() {
                     videoTitle={videoInfo?.title}
                     onCitationClick={handleCitationClick}
                     onPlayAllCitations={handlePlayAllCitations}
-                    summaryContent={summaryContent}
-                    isGeneratingSummary={isGeneratingSummary}
-                    summaryError={summaryError}
-                    showSummaryTab={showSummaryTab}
+                    takeawaysContent={takeawaysContent}
+                    isGeneratingTakeaways={isGeneratingTakeaways}
+                    takeawaysError={takeawaysError}
+                    showTakeawaysTab={showTakeawaysTab}
                     cachedSuggestedQuestions={cachedSuggestedQuestions}
                   />
                 </div>

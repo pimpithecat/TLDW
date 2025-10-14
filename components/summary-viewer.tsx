@@ -1,6 +1,6 @@
 "use client";
 
-import React, { ReactNode, useRef, useCallback, useState, useMemo } from 'react';
+import React, { ReactNode, useRef, useCallback, useState, useMemo, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -11,6 +11,7 @@ import { TimestampButton } from "./timestamp-button";
 interface SummaryViewerProps {
   content: string;
   onTimestampClick?: (seconds: number) => void;
+  collapsibleSections?: boolean;
 }
 
 interface Section {
@@ -20,7 +21,7 @@ interface Section {
   level: number;
 }
 
-export function SummaryViewer({ content, onTimestampClick }: SummaryViewerProps) {
+export function SummaryViewer({ content, onTimestampClick, collapsibleSections = true }: SummaryViewerProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const scrollPositionRef = useRef<number>(0);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
@@ -84,13 +85,14 @@ export function SummaryViewer({ content, onTimestampClick }: SummaryViewerProps)
   }, [content]);
   
   // Initialize collapsed state for all sections (default to collapsed except intro)
-  useState(() => {
+  useEffect(() => {
+    if (!collapsibleSections) return;
     const initial: Record<string, boolean> = {};
     sections.forEach(section => {
       initial[section.id] = section.id !== 'intro';
     });
     setCollapsedSections(initial);
-  });
+  }, [sections, collapsibleSections]);
   
   // Get the actual scroll viewport element
   const getScrollViewport = useCallback(() => {
@@ -129,11 +131,12 @@ export function SummaryViewer({ content, onTimestampClick }: SummaryViewerProps)
   
   // Toggle section collapse state
   const toggleSection = useCallback((sectionId: string) => {
+    if (!collapsibleSections) return;
     setCollapsedSections(prev => ({
       ...prev,
       [sectionId]: !prev[sectionId]
     }));
-  }, []);
+  }, [collapsibleSections]);
   
   // Process text to make timestamps clickable
   const processTextWithTimestamps = (text: string | ReactNode): ReactNode => {
@@ -340,6 +343,21 @@ export function SummaryViewer({ content, onTimestampClick }: SummaryViewerProps)
     ),
   };
   
+  if (!collapsibleSections) {
+    return (
+      <div ref={scrollAreaRef} className="space-y-3">
+        <article className="prose prose-sm dark:prose-invert max-w-none">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={markdownComponents}
+          >
+            {content}
+          </ReactMarkdown>
+        </article>
+      </div>
+    );
+  }
+
   return (
     <div ref={scrollAreaRef} className="h-full w-full">
       <ScrollArea className="h-full w-full">

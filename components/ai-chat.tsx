@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, ReactNode } from "react";
 import { ChatMessage, TranscriptSegment, Topic, Citation } from "@/lib/types";
 import { ChatMessageComponent } from "./chat-message";
 import { SuggestedQuestions } from "./suggested-questions";
@@ -20,9 +20,10 @@ interface AIChatProps {
   onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean, citationText?: string) => void;
   onPlayAllCitations?: (citations: Citation[]) => void;
   cachedSuggestedQuestions?: string[] | null;
+  pinnedContent?: ReactNode;
 }
 
-export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClick, onTimestampClick, onPlayAllCitations, cachedSuggestedQuestions }: AIChatProps) {
+export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClick, onTimestampClick, onPlayAllCitations, cachedSuggestedQuestions, pinnedContent }: AIChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -195,6 +196,11 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
       <div className="w-full h-full flex flex-col">
         <ScrollArea className="flex-1 p-3" ref={scrollRef}>
           <div className="space-y-4">
+            {pinnedContent && (
+              <div className="space-y-3">
+                {pinnedContent}
+              </div>
+            )}
             {messages.map((message) => (
               <ChatMessageComponent
                 key={message.id}

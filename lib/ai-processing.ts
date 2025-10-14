@@ -157,13 +157,8 @@ function dedupeCandidates(candidates: CandidateTopic[]): CandidateTopic[] {
     result.push(candidate);
   }
 
-  return result.sort((a, b) => {
-    const aRange = parseTimestampRange(a.quote?.timestamp);
-    const bRange = parseTimestampRange(b.quote?.timestamp);
-    const aStart = aRange?.start ?? a.chunkStart;
-    const bStart = bRange?.start ?? b.chunkStart;
-    return aStart - bStart;
-  });
+  // Preserve the original chunk traversal order instead of resorting candidates by time.
+  return result;
 }
 
 function formatVideoInfoForPrompt(videoInfo?: Partial<VideoInfo>): string {

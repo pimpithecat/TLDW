@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useImperativeHandle, forwardRef } from "react";
+import { useState, useEffect, useImperativeHandle, forwardRef, useMemo } from "react";
 import { TranscriptViewer } from "@/components/transcript-viewer";
 import { AIChat } from "@/components/ai-chat";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { FileText, MessageSquare, FileEdit, Loader2 } from "lucide-react";
+import { FileText, Sparkles, Loader2 } from "lucide-react";
 import { TranscriptSegment, Topic, Citation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { SummaryViewer } from "@/components/summary-viewer";
@@ -15,7 +15,7 @@ interface RightColumnTabsProps {
   transcript: TranscriptSegment[];
   selectedTopic: Topic | null;
   onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean, citationText?: string, isWithinHighlightReel?: boolean, isWithinCitationHighlight?: boolean) => void;
-  onSummaryTimestampClick?: (seconds: number) => void;
+  onTakeawayTimestampClick?: (seconds: number) => void;
   currentTime?: number;
   topics?: Topic[];
   citationHighlight?: Citation | null;
@@ -23,23 +23,23 @@ interface RightColumnTabsProps {
   videoTitle?: string;
   onCitationClick: (citation: Citation) => void;
   onPlayAllCitations?: (citations: Citation[]) => void;
-  summaryContent?: string | null;
-  isGeneratingSummary?: boolean;
-  summaryError?: string;
-  showSummaryTab?: boolean;
+  takeawaysContent?: string | null;
+  isGeneratingTakeaways?: boolean;
+  takeawaysError?: string;
+  showTakeawaysTab?: boolean;
   cachedSuggestedQuestions?: string[] | null;
 }
 
 export interface RightColumnTabsHandle {
   switchToTranscript: () => void;
-  switchToSummary?: () => void;
+  switchToTakeaways?: () => void;
 }
 
 export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabsProps>(({
   transcript,
   selectedTopic,
   onTimestampClick,
-  onSummaryTimestampClick,
+  onTakeawayTimestampClick,
   currentTime,
   topics,
   citationHighlight,
@@ -47,63 +47,103 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   videoTitle,
   onCitationClick,
   onPlayAllCitations,
-  summaryContent,
-  isGeneratingSummary,
-  summaryError,
-  showSummaryTab,
+  takeawaysContent,
+  isGeneratingTakeaways,
+  takeawaysError,
+  showTakeawaysTab,
   cachedSuggestedQuestions,
 }, ref) => {
-  const [activeTab, setActiveTab] = useState<"transcript" | "chat" | "summary">("summary");
+  const [activeTab, setActiveTab] = useState<"transcript" | "takeaways">(showTakeawaysTab ? "takeaways" : "transcript");
+  const [hasShownTakeaways, setHasShownTakeaways] = useState<boolean>(!!showTakeawaysTab);
 
   // Expose methods to parent to switch tabs
   useImperativeHandle(ref, () => ({
     switchToTranscript: () => {
       setActiveTab("transcript");
     },
-    switchToSummary: () => {
-      if (showSummaryTab) {
-        setActiveTab("summary");
+    switchToTakeaways: () => {
+      if (showTakeawaysTab) {
+        setActiveTab("takeaways");
       }
     }
   }));
 
+  useEffect(() => {
+    if (showTakeawaysTab && !hasShownTakeaways) {
+      setActiveTab("takeaways");
+      setHasShownTakeaways(true);
+    }
+    if (!showTakeawaysTab && activeTab === "takeaways") {
+      setActiveTab("transcript");
+    }
+  }, [showTakeawaysTab, hasShownTakeaways, activeTab]);
+
+  const takeawaysSection = useMemo(() => {
+    if (!showTakeawaysTab) {
+      return null;
+    }
+
+    const handleTimestamp = onTakeawayTimestampClick || onTimestampClick;
+
+    if (isGeneratingTakeaways) {
+      return (
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-2/3" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-11/12" />
+          <Skeleton className="h-4 w-4/5" />
+        </div>
+      );
+    }
+
+    if (takeawaysError) {
+      return (
+        <p className="text-sm text-destructive">
+          {takeawaysError}
+        </p>
+      );
+    }
+
+    if (takeawaysContent) {
+      return (
+        <SummaryViewer
+          content={takeawaysContent}
+          onTimestampClick={handleTimestamp}
+          collapsibleSections={false}
+        />
+      );
+    }
+
+    return (
+      <p className="text-sm text-muted-foreground">
+        Takeaways will appear here once ready.
+      </p>
+    );
+  }, [showTakeawaysTab, isGeneratingTakeaways, takeawaysError, takeawaysContent, onTakeawayTimestampClick, onTimestampClick]);
+
   return (
     <Card className="h-full flex flex-col overflow-hidden p-0 gap-0">
       <div className="flex items-center gap-1 p-1.5 border-b">
-        {showSummaryTab && (
+        {showTakeawaysTab && (
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setActiveTab("summary")}
+            onClick={() => setActiveTab("takeaways")}
             className={cn(
               "flex-1 justify-center gap-2",
-              activeTab === "summary" 
+              activeTab === "takeaways" 
                 ? "bg-accent text-accent-foreground" 
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
-            {isGeneratingSummary ? (
+            {isGeneratingTakeaways ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <FileEdit className="h-4 w-4" />
+              <Sparkles className="h-4 w-4" />
             )}
-            Summary
+            Takeaways
           </Button>
         )}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setActiveTab("chat")}
-          className={cn(
-            "flex-1 justify-center gap-2",
-            activeTab === "chat" 
-              ? "bg-accent text-accent-foreground" 
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <MessageSquare className="h-4 w-4" />
-          AI Chat
-        </Button>
         <Button
           variant="ghost"
           size="sm"
@@ -132,7 +172,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
             citationHighlight={citationHighlight}
           />
         </div>
-        <div className={cn("absolute inset-0", activeTab !== "chat" && "hidden")}>
+        <div className={cn("absolute inset-0", (activeTab !== "takeaways" || !showTakeawaysTab) && "hidden")}>
           <AIChat
             transcript={transcript}
             topics={topics || []}
@@ -142,30 +182,8 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
             onTimestampClick={onTimestampClick}
             onPlayAllCitations={onPlayAllCitations}
             cachedSuggestedQuestions={cachedSuggestedQuestions}
+            pinnedContent={takeawaysSection}
           />
-        </div>
-        <div className={cn("absolute inset-0", activeTab !== "summary" && "hidden")}>
-          {isGeneratingSummary ? (
-            <div className="p-6 space-y-4">
-              <Skeleton className="h-8 w-3/4" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-5/6" />
-              <Skeleton className="h-6 w-2/3 mt-4" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-4/5" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-6 w-1/2 mt-4" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-3/4" />
-            </div>
-          ) : summaryError ? (
-            <div className="p-6 space-y-4">
-              <p className="text-destructive">{summaryError}</p>
-            </div>
-          ) : summaryContent ? (
-            <SummaryViewer content={summaryContent} onTimestampClick={onSummaryTimestampClick || onTimestampClick} />
-          ) : null}
         </div>
       </div>
     </Card>
