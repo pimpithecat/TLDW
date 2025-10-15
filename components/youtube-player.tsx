@@ -1,13 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Play } from "lucide-react";
 import { Topic, TranscriptSegment, PlaybackCommand, Citation } from "@/lib/types";
-import { formatDuration, getTopicHSLColor } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { formatDuration } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { VideoProgressBar } from "@/components/video-progress-bar";
 
 interface YouTubePlayerProps {
@@ -26,6 +22,8 @@ interface YouTubePlayerProps {
   onTogglePlayAll?: () => void;
   setPlayAllIndex?: (index: number | ((prev: number) => number)) => void;
   setIsPlayingAll?: (playing: boolean) => void;
+  renderControls?: boolean;
+  onDurationChange?: (duration: number) => void;
 }
 
 export function YouTubePlayer({
@@ -44,6 +42,8 @@ export function YouTubePlayer({
   onTogglePlayAll,
   setPlayAllIndex,
   setIsPlayingAll,
+  renderControls = true,
+  onDurationChange,
 }: YouTubePlayerProps) {
   const playerRef = useRef<any>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -72,6 +72,10 @@ export function YouTubePlayer({
   }, [topics]);
 
   useEffect(() => {
+    setVideoDuration(0);
+    setCurrentTime(0);
+    onDurationChange?.(0);
+
     if (!videoId) return;
 
     let mounted = true;
@@ -93,7 +97,9 @@ export function YouTubePlayer({
           onReady: (event: { target: any }) => {
             if (!mounted) return;
             playerRef.current = player;
-            setVideoDuration(event.target.getDuration());
+            const duration = event.target.getDuration();
+            setVideoDuration(duration);
+            onDurationChange?.(duration);
             setPlayerReady(true);
             onPlayerReady?.();
           },
@@ -197,7 +203,7 @@ export function YouTubePlayer({
         timeUpdateIntervalRef.current = null;
       }
     };
-  }, [videoId]); // Only depend on videoId
+  }, [videoId, onDurationChange]); // Only depend on videoId
 
   // Centralized command executor
   useEffect(() => {
@@ -405,39 +411,38 @@ export function YouTubePlayer({
           />
         </div>
       
-        {/* Custom control overlay */}
-        <div className="p-3 bg-background border-t flex-shrink-0">
-          {/* Video progress bar */}
-          {videoDuration > 0 && (
-            <VideoProgressBar
-              videoDuration={videoDuration}
-              currentTime={currentTime}
-              topics={topics}
-              selectedTopic={selectedTopic}
-              onSeek={handleSeek}
-              onTopicSelect={onTopicSelect}
-              onPlayTopic={playTopic}
-              transcript={transcript}
-              onPlayAllTopics={onTogglePlayAll}
-              isPlayingAll={isPlayingAll}
-              playAllIndex={playAllIndex}
-            />
-          )}
+        {renderControls && (
+          <div className="p-3 bg-background border-t flex-shrink-0">
+            {videoDuration > 0 && (
+              <VideoProgressBar
+                videoDuration={videoDuration}
+                currentTime={currentTime}
+                topics={topics}
+                selectedTopic={selectedTopic}
+                onSeek={handleSeek}
+                onTopicSelect={onTopicSelect}
+                onPlayTopic={playTopic}
+                transcript={transcript}
+                onPlayAllTopics={onTogglePlayAll}
+                isPlayingAll={isPlayingAll}
+                playAllIndex={playAllIndex}
+              />
+            )}
 
-          {/* Playback controls */}
-          <div className="mt-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="ml-3 flex items-center gap-2">
-                <span className="text-sm font-mono text-muted-foreground">
-                  {formatDuration(currentTime)} / {formatDuration(videoDuration)}
-                </span>
+            <div className="mt-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="ml-3 flex items-center gap-2">
+                  <span className="text-sm font-mono text-muted-foreground">
+                    {formatDuration(currentTime)} / {formatDuration(videoDuration)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
               </div>
             </div>
-
-            <div className="flex items-center gap-2">
-            </div>
           </div>
-        </div>
+        )}
       </Card>
     </div>
   );

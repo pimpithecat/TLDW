@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
@@ -22,80 +21,46 @@ export function ThemeSelector({
 }: ThemeSelectorProps) {
   const displayThemes = themes.slice(0, 3);
   const hasThemes = displayThemes.length > 0;
+  const isOverallSelected = selectedTheme === null;
 
-  const handleThemeClick = (theme: string) => {
-    if (selectedTheme === theme) {
-      onSelect(null);
-    } else {
-      onSelect(theme);
-    }
-  };
+  const buttonClasses = (isActive: boolean) =>
+    cn(
+      "rounded-full px-3 py-1 text-sm transition-colors",
+      isActive
+        ? "bg-primary text-primary-foreground shadow-sm"
+        : "bg-muted/40 text-muted-foreground hover:text-foreground hover:bg-muted/60"
+    );
 
   return (
-    <Card className="border bg-background/80 backdrop-blur-sm p-3 shadow-none">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Explore by theme
-        </span>
-        {isLoading && (
-          <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />
-        )}
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {hasThemes ? (
-          displayThemes.map((theme) => (
-            <Button
-              key={theme}
-              variant={selectedTheme === theme ? "default" : "outline"}
-              size="sm"
-              className={cn(
-                "rounded-full px-3 py-1 text-sm transition-all",
-                selectedTheme === theme
-                  ? "shadow-sm"
-                  : "bg-muted/40 hover:bg-muted"
-              )}
-              onClick={() => handleThemeClick(theme)}
-            >
-              {theme}
-            </Button>
-          ))
-        ) : (
-          !isLoading && (
-            <span className="text-sm text-muted-foreground">
-              Themes will appear here shortly.
-            </span>
-          )
-        )}
-      </div>
-
-      {(selectedTheme || error) && (
-        <div className="mt-3 space-y-1">
-          {selectedTheme && (
-            <p className="text-xs text-muted-foreground">
-              Showing highlights for{" "}
-              <span className="font-medium text-foreground">{selectedTheme}</span>
-            </p>
-          )}
-          {error && (
-            <p className="text-xs text-destructive">
-              {error}
-            </p>
-          )}
-        </div>
-      )}
-
-      {selectedTheme && (
+    <div className="flex flex-col items-center gap-2">
+      <div className="flex flex-wrap items-center justify-center gap-2">
         <Button
           type="button"
-          variant="ghost"
           size="sm"
-          className="mt-3 h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+          className={buttonClasses(isOverallSelected)}
           onClick={() => onSelect(null)}
         >
-          Clear theme
+          Overall highlights
         </Button>
+        {hasThemes && displayThemes.map((theme) => (
+          <Button
+            key={theme}
+            type="button"
+            size="sm"
+            className={buttonClasses(selectedTheme === theme)}
+            onClick={() => onSelect(selectedTheme === theme ? null : theme)}
+          >
+            {theme}
+          </Button>
+        ))}
+        {isLoading && (
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
+        )}
+      </div>
+
+      {error && (
+        <p className="text-xs text-destructive text-center">{error}</p>
       )}
-    </Card>
+    </div>
   );
 }

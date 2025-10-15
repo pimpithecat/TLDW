@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { UrlInput } from "@/components/url-input";
 import { RightColumnTabs, type RightColumnTabsHandle } from "@/components/right-column-tabs";
 import { YouTubePlayer } from "@/components/youtube-player";
+import { HighlightsPanel } from "@/components/highlights-panel";
 import { ThemeSelector } from "@/components/theme-selector";
 import { LoadingContext } from "@/components/loading-context";
 import { LoadingTips } from "@/components/loading-tips";
@@ -49,6 +50,7 @@ export default function Home() {
   const [themeError, setThemeError] = useState<string | null>(null);
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
 
   // Centralized playback control state
   const [playbackCommand, setPlaybackCommand] = useState<PlaybackCommand | null>(null);
@@ -361,6 +363,8 @@ export default function Home() {
     setThemeError(null);
     setIsLoadingThemeTopics(false);
     setSelectedTopic(null);
+    setCurrentTime(0);
+    setVideoDuration(0);
     setCitationHighlight(null);
     setVideoInfo(null);
     setVideoPreview("");
@@ -1170,7 +1174,7 @@ export default function Home() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
               {/* Left Column - Video (2/3 width) */}
               <div className="lg:col-span-2">
-                <div className="sticky top-4" id="video-container">
+                <div className="sticky top-4 space-y-4" id="video-container">
                   <YouTubePlayer
                     videoId={videoId}
                     selectedTopic={selectedTopic}
@@ -1186,11 +1190,13 @@ export default function Home() {
                     onTogglePlayAll={handleTogglePlayAll}
                     setPlayAllIndex={memoizedSetPlayAllIndex}
                     setIsPlayingAll={memoizedSetIsPlayingAll}
+                    renderControls={false}
+                    onDurationChange={setVideoDuration}
                   />
-                  {(themes.length > 0 || selectedTheme || isLoadingThemeTopics) && (
-                    <div className="mt-4">
+                  {(themes.length > 0 || isLoadingThemeTopics || themeError) && (
+                    <div className="flex justify-center">
                       <ThemeSelector
-                        themes={themes.slice(0, 3)}
+                        themes={themes}
                         selectedTheme={selectedTheme}
                         onSelect={handleThemeSelect}
                         isLoading={isLoadingThemeTopics}
@@ -1198,6 +1204,18 @@ export default function Home() {
                       />
                     </div>
                   )}
+                  <HighlightsPanel
+                    topics={topics}
+                    selectedTopic={selectedTopic}
+                    onTopicSelect={(topic) => handleTopicSelect(topic)}
+                    onSeek={requestSeek}
+                    onPlayAll={handleTogglePlayAll}
+                    isPlayingAll={isPlayingAll}
+                    playAllIndex={playAllIndex}
+                    currentTime={currentTime}
+                    videoDuration={videoDuration}
+                    transcript={transcript}
+                  />
                 </div>
               </div>
 
