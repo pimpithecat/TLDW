@@ -1349,6 +1349,7 @@ export default function AnalyzePage() {
                   topics={topics}
                   selectedTopic={selectedTopic}
                   onTopicSelect={(topic) => handleTopicSelect(topic)}
+                  onPlayTopic={requestPlayTopic}
                   onSeek={requestSeek}
                   onPlayAll={handleTogglePlayAll}
                   isPlayingAll={isPlayingAll}

@@ -423,9 +423,6 @@ export function YouTubePlayer({
                 onTopicSelect={onTopicSelect}
                 onPlayTopic={playTopic}
                 transcript={transcript}
-                onPlayAllTopics={onTogglePlayAll}
-                isPlayingAll={isPlayingAll}
-                playAllIndex={playAllIndex}
               />
             )}
 

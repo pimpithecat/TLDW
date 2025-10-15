@@ -21,9 +21,6 @@ interface VideoProgressBarProps {
   onTopicSelect?: (topic: Topic, fromPlayAll?: boolean) => void;
   onPlayTopic?: (topic: Topic) => void;
   transcript?: TranscriptSegment[];
-  onPlayAllTopics?: () => void;
-  isPlayingAll?: boolean;
-  playAllIndex?: number;
 }
 
 export function VideoProgressBar({
@@ -35,17 +32,27 @@ export function VideoProgressBar({
   onTopicSelect,
   onPlayTopic,
   transcript,
-  onPlayAllTopics,
-  isPlayingAll = false,
-  playAllIndex = 0,
 }: VideoProgressBarProps) {
   const progressBarRef = useRef<HTMLDivElement>(null);
   const hasDuration = videoDuration > 0;
 
-  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    // Clicking the bar starts Play All mode
+  const handleBackgroundClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Clicking empty space seeks to that position
+    if (!progressBarRef.current) return;
+    
+    const rect = progressBarRef.current.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const percentage = clickX / rect.width;
+    const clickTime = percentage * videoDuration;
+    
+    onSeek(clickTime);
+  };
+
+  const handleTopicClick = (e: React.MouseEvent<HTMLDivElement>, topic: Topic) => {
+    // Clicking a topic auto-plays it
     e.stopPropagation();
-    onPlayAllTopics?.();
+    onTopicSelect?.(topic);
+    onPlayTopic?.(topic);
   };
 
   // Calculate topic density heatmap
@@ -87,20 +94,31 @@ export function VideoProgressBar({
       )
     : [];
 
+  const getSegmentStyles = (segment: Topic['segments'][number]) => {
+    const startPercentage = (segment.start / videoDuration) * 100;
+    const widthPercentage = ((segment.end - segment.start) / videoDuration) * 100;
+    const minWidth = 1; // Ensure tiny segments are still clickable
+
+    return {
+      left: `${startPercentage}%`,
+      width: `${Math.max(widthPercentage, minWidth)}%`,
+    };
+  };
+
   return (
     <TooltipProvider>
       <div className="relative w-full space-y-2">
-        {/* Main progress bar - Click to Play All */}
+        {/* Main progress bar - Click to navigate */}
         {hasDuration && (
           <Tooltip>
             <TooltipTrigger asChild>
               <div
                 ref={progressBarRef}
                 className="relative h-12 bg-muted rounded-lg overflow-hidden cursor-pointer group transition-all hover:ring-2 hover:ring-primary/50"
-                onClick={handleClick}
+                onClick={handleBackgroundClick}
               >
                 {/* Heatmap background */}
-                <div className="absolute inset-0 flex">
+                <div className="absolute inset-0 flex pointer-events-none">
                   {density.map((d, i) => (
                     <div
                       key={i}
@@ -113,27 +131,25 @@ export function VideoProgressBar({
                 </div>
 
                 {/* Topic segments */}
-                <div className="absolute inset-0">
+                <div className="absolute inset-0 z-20">
                   {allSegments.map(({ key, topic, topicIndex, segment }) => {
-                    const startPercentage = (segment.start / videoDuration) * 100;
-                    const widthPercentage =
-                      ((segment.end - segment.start) / videoDuration) * 100;
                     const isSelected = selectedTopic?.id === topic.id;
+                    const { left, width } = getSegmentStyles(segment);
 
                     return (
                       <div
                         key={key}
                         className={cn(
-                          "absolute top-2 h-8 rounded-md transition-all",
-                          isSelected && "z-10 ring-2 ring-white"
+                          "absolute top-2 h-8 rounded-md transition-all cursor-pointer hover:opacity-100 hover:scale-105",
+                          isSelected && "z-30 ring-2 ring-white"
                         )}
                         style={{
-                          left: `${startPercentage}%`,
-                          width: `${widthPercentage}%`,
+                          left,
+                          width,
                           backgroundColor: `hsl(${getTopicHSLColor(topicIndex)})`,
                           opacity: isSelected ? 1 : 0.7,
-                          pointerEvents: 'none',
                         }}
+                        onClick={(e) => handleTopicClick(e, topic)}
                       />
                     );
                   })}
@@ -141,7 +157,7 @@ export function VideoProgressBar({
 
                 {/* Current time indicator */}
                 <div
-                  className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-20 pointer-events-none transition-all"
+                  className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 pointer-events-none transition-all"
                   style={{
                     left: `${(currentTime / videoDuration) * 100}%`,
                   }}
@@ -151,9 +167,7 @@ export function VideoProgressBar({
               </div>
             </TooltipTrigger>
             <TooltipContent>
-              <p>
-                {isPlayingAll ? 'Stop playing highlights' : 'Play all highlights'}
-              </p>
+              <p>Click topics to play, empty space to seek</p>
             </TooltipContent>
           </Tooltip>
         )}
@@ -163,21 +177,16 @@ export function VideoProgressBar({
           <div className="space-y-2">
             {topics.map((topic, index) => {
               const isSelected = selectedTopic?.id === topic.id;
-              const isCurrentlyPlaying = isPlayingAll && index === playAllIndex;
             
               return (
-                <div key={topic.id} className={cn(
-                  "relative",
-                  isCurrentlyPlaying && "animate-pulse"
-                )}>
-                  <TopicCard
-                    topic={topic}
-                    isSelected={isSelected || isCurrentlyPlaying}
-                    onClick={() => onTopicSelect?.(topic)}
-                    topicIndex={index}
-                    onPlayTopic={() => onPlayTopic?.(topic)}
-                  />
-                </div>
+                <TopicCard
+                  key={topic.id}
+                  topic={topic}
+                  isSelected={isSelected}
+                  onClick={() => onTopicSelect?.(topic)}
+                  topicIndex={index}
+                  onPlayTopic={() => onPlayTopic?.(topic)}
+                />
               );
             })}
           </div>

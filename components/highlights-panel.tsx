@@ -2,8 +2,10 @@
 
 import { Topic, TranscriptSegment } from "@/lib/types";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { VideoProgressBar } from "@/components/video-progress-bar";
 import { formatDuration } from "@/lib/utils";
+import { Play, Pause } from "lucide-react";
 
 interface HighlightsPanelProps {
   topics: Topic[];
@@ -44,9 +46,6 @@ export function HighlightsPanel({
           onTopicSelect={(topic) => onTopicSelect(topic)}
           onPlayTopic={onPlayTopic}
           transcript={transcript}
-          onPlayAllTopics={onPlayAll}
-          isPlayingAll={isPlayingAll}
-          playAllIndex={playAllIndex}
         />
 
         <div className="mt-3 flex items-center justify-between">
@@ -55,7 +54,26 @@ export function HighlightsPanel({
               {formatDuration(currentTime)} / {formatDuration(videoDuration)}
             </span>
           </div>
-          <div className="flex items-center gap-1.5" />
+          <div className="flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant={isPlayingAll ? "secondary" : "default"}
+              onClick={onPlayAll}
+              className="h-7 text-xs"
+            >
+              {isPlayingAll ? (
+                <>
+                  <Pause className="h-3 w-3 mr-1" />
+                  Stop
+                </>
+              ) : (
+                <>
+                  <Play className="h-3 w-3 mr-1" />
+                  Play All
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
     </Card>
