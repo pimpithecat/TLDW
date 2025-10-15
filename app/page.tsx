@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { Suspense, useCallback, useEffect } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { UrlInput } from "@/components/url-input";
@@ -9,6 +9,14 @@ import { extractVideoId } from "@/lib/utils";
 import { toast } from "sonner";
 
 export default function Home() {
+  return (
+    <Suspense fallback={null}>
+      <HomeContent />
+    </Suspense>
+  );
+}
+
+function HomeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -104,4 +112,3 @@ export default function Home() {
     </div>
   );
 }
-
