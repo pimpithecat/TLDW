@@ -194,10 +194,10 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
   return (
     <TooltipProvider delayDuration={0} skipDelayDuration={0} disableHoverableContent={false}>
       <div className="w-full h-full flex flex-col">
-        <ScrollArea className="flex-1 p-3" ref={scrollRef}>
-          <div className="space-y-4">
+        <ScrollArea className="flex-1 p-2.5" ref={scrollRef}>
+          <div className="space-y-3.5">
             {pinnedContent && (
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {pinnedContent}
               </div>
             )}
@@ -210,14 +210,14 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
                 onPlayAllCitations={onPlayAllCitations}
               />
             ))}
-            
+
             {isLoading && (
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center">
-                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+              <div className="flex gap-2.5">
+                <div className="flex-shrink-0 w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
                 </div>
-                <Card className="p-4 bg-neutral-100/50 rounded-2xl">
-                  <p className="text-sm text-muted-foreground">Thinking...</p>
+                <Card className="p-3 bg-neutral-100/50 rounded-xl">
+                  <p className="text-xs text-muted-foreground">Thinking...</p>
                 </Card>
               </div>
             )}
@@ -225,13 +225,13 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
         </ScrollArea>
 
         {suggestedQuestions.length > 0 && (
-          <div className="px-3 py-2 border-t">
-            <div className="space-y-2">
+          <div className="px-2.5 py-1.5 border-t">
+            <div className="space-y-1.5">
               <button
                 onClick={() => setShowSuggestions(!showSuggestions)}
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full"
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
               >
-                {showSuggestions ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+                {showSuggestions ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
                 <span className="font-medium">Suggested questions</span>
               </button>
               {showSuggestions && (
@@ -246,14 +246,14 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
           </div>
         )}
 
-        <div className="p-3 border-t">
-          <div className="flex gap-2">
+        <div className="p-2.5 border-t">
+          <div className="flex gap-1.5">
             <Textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask about the video..."
-              className="resize-none rounded-2xl"
+              className="resize-none rounded-xl text-xs"
               rows={2}
               disabled={isLoading}
             />
@@ -261,12 +261,12 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
               onClick={() => sendMessage()}
               disabled={!input.trim() || isLoading}
               size="icon"
-              className="self-end rounded-full"
+              className="self-end rounded-full h-8 w-8"
             >
               {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
-                <Send className="w-4 h-4" />
+                <Send className="w-3.5 h-3.5" />
               )}
             </Button>
           </div>

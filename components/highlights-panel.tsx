@@ -34,7 +34,7 @@ export function HighlightsPanel({
 }: HighlightsPanelProps) {
   return (
     <Card className="overflow-hidden p-0">
-      <div className="p-3 bg-background rounded-b-3xl flex-shrink-0">
+      <div className="p-2.5 bg-background rounded-b-3xl flex-shrink-0">
         {videoDuration > 0 && (
           <VideoProgressBar
             videoDuration={videoDuration}
@@ -51,13 +51,13 @@ export function HighlightsPanel({
           />
         )}
 
-        <div className="mt-4 flex items-center justify-between">
-          <div className="ml-3 flex items-center gap-2">
-            <span className="text-sm font-mono text-muted-foreground">
+        <div className="mt-3 flex items-center justify-between">
+          <div className="ml-2.5 flex items-center gap-1.5">
+            <span className="text-xs font-mono text-muted-foreground">
               {formatDuration(currentTime)} / {formatDuration(videoDuration)}
             </span>
           </div>
-          <div className="flex items-center gap-2" />
+          <div className="flex items-center gap-1.5" />
         </div>
       </div>
     </Card>

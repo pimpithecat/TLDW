@@ -64,20 +64,20 @@ export function VideoHeader({
   };
 
   return (
-    <Card className="p-4 mb-6">
-      <div className="flex items-start justify-between gap-4">
+    <Card className="p-3 mb-5">
+      <div className="flex items-start justify-between gap-3.5">
         <div className="flex-1 min-w-0">
-          <h2 className="text-lg font-semibold line-clamp-2 mb-2">
+          <h2 className="text-base font-semibold line-clamp-2 mb-1.5">
             {videoInfo.title}
           </h2>
 
-          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-3.5 text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
-              <User className="w-4 h-4" />
+              <User className="w-3.5 h-3.5" />
               <span>{videoInfo.author}</span>
             </div>
             <div className="flex items-center gap-1">
-              <Clock className="w-4 h-4" />
+              <Clock className="w-3.5 h-3.5" />
               <span>{videoInfo.duration ? formatDuration(videoInfo.duration) : 'N/A'}</span>
             </div>
           </div>
@@ -92,13 +92,13 @@ export function VideoHeader({
             className="flex-shrink-0"
           >
             {isUpdating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Star
-                className={`h-4 w-4 ${favoriteStatus ? 'fill-current' : ''}`}
+                className={`h-3.5 w-3.5 ${favoriteStatus ? 'fill-current' : ''}`}
               />
             )}
-            <span className="ml-2">
+            <span className="ml-1.5">
               {favoriteStatus ? 'Favorited' : 'Favorite'}
             </span>
           </Button>

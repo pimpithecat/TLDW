@@ -119,31 +119,32 @@ export function VideoGrid({ videos }: VideoGridProps) {
 
   return (
     <>
-      <div className="flex gap-4 mb-6">
+      <div className="flex gap-3.5 mb-5">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-muted-foreground h-3.5 w-3.5" />
           <Input
             type="text"
             placeholder="Search your videos..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
+            className="pl-9 text-xs"
           />
         </div>
         <Button
           variant={showFavorites ? "default" : "outline"}
           onClick={() => setShowFavorites(!showFavorites)}
+          className="text-xs"
         >
-          <Star className={`h-4 w-4 ${showFavorites ? 'fill-current' : ''}`} />
-          <span className="ml-2">Favorites</span>
+          <Star className={`h-3.5 w-3.5 ${showFavorites ? 'fill-current' : ''}`} />
+          <span className="ml-1.5">Favorites</span>
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {filteredVideos.map((userVideo) => (
           <Link
             key={userVideo.id}
-            href={`/?v=${userVideo.video.youtube_id}&cached=true`}
+            href={`/analyze/${userVideo.video.youtube_id}?cached=true`}
             className="group cursor-pointer"
           >
             <div className="rounded-lg overflow-hidden border bg-card hover:shadow-lg transition-shadow duration-200">
@@ -157,11 +158,11 @@ export function VideoGrid({ videos }: VideoGridProps) {
                   />
                 )}
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-                  <div className="bg-white/90 rounded-full p-3">
-                    <Play className="h-8 w-8 text-black fill-black" />
+                  <div className="bg-white/90 rounded-full p-2.5">
+                    <Play className="h-7 w-7 text-black fill-black" />
                   </div>
                 </div>
-                <div className="absolute bottom-2 right-2 bg-black/80 text-white px-2 py-1 rounded text-xs">
+                <div className="absolute bottom-1.5 right-1.5 bg-black/80 text-white px-1.5 py-0.5 rounded text-[11px]">
                   {formatDuration(userVideo.video.duration)}
                 </div>
                 {user && (
@@ -170,14 +171,14 @@ export function VideoGrid({ videos }: VideoGridProps) {
                     size="icon"
                     onClick={(e) => handleToggleFavorite(e, userVideo.id, userVideo.video.youtube_id)}
                     disabled={updatingFavorites.has(userVideo.id)}
-                    className="absolute top-2 right-2 h-8 w-8 bg-black/60 hover:bg-black/80 border-0 transition-all"
+                    className="absolute top-1.5 right-1.5 h-7 w-7 bg-black/60 hover:bg-black/80 border-0 transition-all"
                     aria-label={favoriteStatuses[userVideo.id] ? 'Remove from favorites' : 'Add to favorites'}
                   >
                     {updatingFavorites.has(userVideo.id) ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-white" />
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-white" />
                     ) : (
                       <Star
-                        className={`h-4 w-4 transition-all ${
+                        className={`h-3.5 w-3.5 transition-all ${
                           favoriteStatuses[userVideo.id]
                             ? 'text-yellow-400 fill-yellow-400'
                             : 'text-white hover:text-yellow-400'
@@ -188,18 +189,18 @@ export function VideoGrid({ videos }: VideoGridProps) {
                 )}
               </div>
 
-              <div className="p-4">
-                <h3 className="font-semibold line-clamp-2 mb-2 group-hover:text-primary transition-colors">
+              <div className="p-3.5">
+                <h3 className="text-sm font-semibold line-clamp-2 mb-1.5 group-hover:text-primary transition-colors">
                   {userVideo.video.title}
                 </h3>
 
-                <p className="text-sm text-muted-foreground mb-3 line-clamp-1">
+                <p className="text-xs text-muted-foreground mb-2.5 line-clamp-1">
                   {userVideo.video.author}
                 </p>
 
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                   <div className="flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
+                    <Calendar className="h-2.5 w-2.5" />
                     <span>{formatDate(userVideo.accessed_at)}</span>
                   </div>
 
@@ -218,8 +219,8 @@ export function VideoGrid({ videos }: VideoGridProps) {
       </div>
 
       {filteredVideos.length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">
+        <div className="text-center py-11">
+          <p className="text-xs text-muted-foreground">
             {searchQuery
               ? `No videos found matching "${searchQuery}"`
               : showFavorites
