@@ -219,7 +219,7 @@ export function AuthModal({ open, onOpenChange, onSuccess, trigger = 'manual', c
               <Button
                 onClick={handleSignIn}
                 disabled={loading || !email || !password}
-                className="w-full"
+                className="inline-flex h-8 p-2 justify-center items-center shrink-0 w-full"
               >
                 {loading ? (
                   <>
@@ -244,7 +244,7 @@ export function AuthModal({ open, onOpenChange, onSuccess, trigger = 'manual', c
                 onClick={handleGoogleSignIn}
                 disabled={loading}
                 variant="outline"
-                className="w-full"
+                className="inline-flex h-8 p-2 justify-center items-center shrink-0 w-full"
               >
                 <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
                   <path
@@ -304,7 +304,7 @@ export function AuthModal({ open, onOpenChange, onSuccess, trigger = 'manual', c
               <Button
                 onClick={handleSignUp}
                 disabled={loading || !email || !password || password.length < 6}
-                className="w-full"
+                className="inline-flex h-8 p-2 justify-center items-center shrink-0 w-full"
               >
                 {loading ? (
                   <>
@@ -329,7 +329,7 @@ export function AuthModal({ open, onOpenChange, onSuccess, trigger = 'manual', c
                 onClick={handleGoogleSignIn}
                 disabled={loading}
                 variant="outline"
-                className="w-full"
+                className="inline-flex h-8 p-2 justify-center items-center shrink-0 w-full"
               >
                 <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
                   <path
