@@ -82,29 +82,26 @@ function HomeContent() {
         <div className="flex w-full flex-col items-center gap-9">
           <UrlInput onSubmit={handleSubmit} />
 
-          <Card className="relative flex w-[425px] max-w-full flex-col gap-2.5 overflow-hidden rounded-[22px] border border-[#f0f1f1] bg-white p-5 text-left shadow-[2px_11px_40.4px_rgba(0,0,0,0.06)]">
+          <Card className="relative flex w-[425px] max-w-full flex-col gap-2.5 overflow-hidden rounded-[22px] border border-[#f0f1f1] bg-white p-6 text-left shadow-[2px_11px_40.4px_rgba(0,0,0,0.06)]">
             <div className="relative z-10 flex flex-col gap-2.5">
               <h3 className="text-[14px] font-medium leading-[15px] text-[#5c5c5c]">
                 Jump to top insights immediately
               </h3>
-              <p className="text-[14px] leading-[1.2] text-[#8d8d8d]">
+              <p className="max-w-[60%] text-[14px] leading-[1.2] text-[#8d8d8d]">
                 Paste a link, and we'll generate highlight reels for you. Consume a 1-hour video in 5 minutes.
               </p>
             </div>
-            <div className="pointer-events-none absolute right-[-25px] top-[-36px] h-[170px] w-[170px]">
-              <div className="absolute inset-0 overflow-hidden rounded-full border border-white/40 shadow-[0_18px_45px_rgba(37,29,53,0.2)]">
+            <div className="pointer-events-none absolute right-[10px] top-[-00px] h-[110px] w-[110px]">
+              <div className="absolute inset-0 overflow-hidden rounded-full opacity-100 [mask-image:radial-gradient(circle,black_30%,transparent_65%)]">
                 <Image
                   src="/gradient_person.jpg"
                   alt="Gradient silhouette illustration"
                   fill
-                  sizes="170px"
+                  sizes="100px"
                   className="object-cover"
                   priority
                 />
-                <div className="pointer-events-none absolute inset-0 rounded-full border border-white/60" />
-                <div className="pointer-events-none absolute inset-4 rounded-full border border-white/40" />
               </div>
-              <div className="absolute inset-0 rounded-full bg-white/50 blur-[38px] opacity-70" />
             </div>
           </Card>
         </div>

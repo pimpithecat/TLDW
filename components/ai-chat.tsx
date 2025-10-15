@@ -193,7 +193,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
   return (
     <TooltipProvider delayDuration={0} skipDelayDuration={0} disableHoverableContent={false}>
       <div className="w-full h-full flex flex-col">
-        <ScrollArea className="flex-1 p-6" ref={scrollRef}>
+        <ScrollArea className="flex-1 px-6" ref={scrollRef}>
           <div className="space-y-3.5">
             {pinnedContent && (
               <div className="space-y-2.5">

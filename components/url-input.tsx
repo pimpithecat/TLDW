@@ -40,7 +40,7 @@ export function UrlInput({ onSubmit, isLoading = false }: UrlInputProps) {
       <div className="flex flex-col gap-2">
         <Card
           className={cn(
-            "relative flex flex-col items-start gap-[9px] self-stretch rounded-[22px] border border-[#f0f1f1] bg-white p-5 shadow-[2px_11px_40.4px_rgba(0,0,0,0.06)] transition-shadow",
+            "relative flex flex-col items-start gap-[9px] self-stretch rounded-[22px] border border-[#f0f1f1] bg-white p-6 shadow-[2px_11px_40.4px_rgba(0,0,0,0.06)] transition-shadow",
             isFocused && "shadow-[2px_11px_40.4px_rgba(0,0,0,0.1)]",
             error && "ring-2 ring-destructive"
           )}
