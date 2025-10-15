@@ -213,12 +213,14 @@ function buildReducePrompt(
   candidates: CandidateTopic[],
   maxTopics: number,
   videoInfo?: Partial<VideoInfo>,
-  theme?: string
+  minTopics: number = 0,
+  segmentLabel?: string
 ): string {
   const videoInfoBlock = formatVideoInfoForPrompt(videoInfo);
-  const themeContext = theme
-    ? `<item>Maintain a cohesive focus on the theme "${theme}" while selecting the lineup.</item>\n  `
-    : '';
+  const segmentContext = segmentLabel ? `Focus: ${segmentLabel} of the video.` : '';
+  const selectionGuidance = minTopics > 0
+    ? `Select between ${minTopics} and ${maxTopics} highlights when possible. If fewer than ${minTopics} candidates meet the quality bar, return the strongest available options.`
+    : `Select up to ${maxTopics} highlights that maximize diversity, insight, and narrative punch while reusing the provided quotes.`;
   const candidateBlock = candidates.map((candidate, idx) => {
     const timestamp = candidate.quote?.timestamp ?? '[??:??-??:??]';
     const quoteText = candidate.quote?.text ?? '';
@@ -235,10 +237,12 @@ Quote text: ${quoteText}`;
 <context>
 ${videoInfoBlock}
 You have ${candidates.length} candidate quotes extracted from the transcript.
+${segmentContext}
 </context>
-<goal>Select up to ${maxTopics} highlights that maximize diversity, insight, and narrative punch while reusing the provided quotes.</goal>
+<goal>Choose the strongest highlights for this segment of the video.</goal>
 <instructions>
-  ${themeContext}<item>Review the candidates and choose the strongest, most distinct ideas across the entire video.</item>
+  <item>${selectionGuidance}</item>
+  <item>Review the candidates and choose the strongest, most distinct ideas within this segment.</item>
   <item>If two candidates overlap, keep the better one.</item>
   <item>You may rewrite titles for clarity, but you must keep the quote text and timestamp as provided.</item>
   <item>Respond with strict JSON: [{"candidateIndex":number,"title":"string"}]. Indices are 1-based and reference the numbered candidates below.</item>
@@ -258,6 +262,90 @@ function createReduceSelectionSchema(limit: number) {
   ).max(limit);
 }
 
+async function reduceCandidateSubset(
+  candidates: CandidateTopic[],
+  options: {
+    minTopics: number;
+    maxTopics: number;
+    fastModel: string;
+    videoInfo?: Partial<VideoInfo>;
+    segmentLabel?: string;
+  }
+): Promise<ParsedTopic[]> {
+  if (!candidates || candidates.length === 0) {
+    return [];
+  }
+
+  const constrainedMax = Math.min(options.maxTopics, candidates.length);
+  if (constrainedMax <= 0) {
+    return [];
+  }
+
+  const constrainedMin = Math.min(options.minTopics, constrainedMax);
+  const reducePrompt = buildReducePrompt(
+    candidates,
+    constrainedMax,
+    options.videoInfo,
+    constrainedMin,
+    options.segmentLabel
+  );
+
+  const selectionSchema = createReduceSelectionSchema(constrainedMax);
+  let reduceSelections: Array<{ candidateIndex: number; title: string }> = [];
+
+  try {
+    const reduceResponse = await generateWithFallback(reducePrompt, {
+      preferredModel: options.fastModel,
+      generationConfig: { temperature: 0.4 },
+      zodSchema: selectionSchema
+    });
+
+    if (reduceResponse) {
+      try {
+        reduceSelections = JSON.parse(reduceResponse);
+      } catch (error) {
+        console.warn('Failed to parse reduce response:', error);
+      }
+    }
+  } catch (error) {
+    console.error(`Error reducing candidate topics (${options.segmentLabel || 'segment'}):`, error);
+  }
+
+  const usedIndices = new Set<number>();
+  const reducedTopics: ParsedTopic[] = [];
+
+  if (Array.isArray(reduceSelections)) {
+    for (const selection of reduceSelections) {
+      if (!selection) continue;
+      const candidateIdx = selection.candidateIndex - 1;
+      if (candidateIdx < 0 || candidateIdx >= candidates.length) continue;
+      if (usedIndices.has(candidateIdx)) continue;
+
+      const candidate = candidates[candidateIdx];
+      if (!candidate.quote?.text || !candidate.quote.timestamp) continue;
+
+      reducedTopics.push({
+        title: selection.title?.trim() || candidate.title,
+        quote: candidate.quote
+      });
+      usedIndices.add(candidateIdx);
+
+      if (reducedTopics.length >= constrainedMax) {
+        break;
+      }
+    }
+  }
+
+  if (reducedTopics.length === 0) {
+    return candidates.slice(0, constrainedMax).map(candidate => ({
+      title: candidate.title,
+      quote: candidate.quote
+    }));
+  }
+
+  return reducedTopics;
+}
+
 function buildFallbackTopics(
   transcript: TranscriptSegment[],
   maxTopics: number,
@@ -275,7 +363,7 @@ function buildFallbackTopics(
     }];
   }
 
-  const fallbackCount = Math.min(3, Math.max(1, maxTopics));
+  const fallbackCount = Math.min(6, Math.max(1, maxTopics));
   const chunkSize = Math.ceil(transcript.length / fallbackCount);
   const fallbackTopics: ParsedTopic[] = [];
 
@@ -565,11 +653,11 @@ export async function generateTopicsFromTranscript(
     chunkDurationSeconds = DEFAULT_CHUNK_DURATION_SECONDS,
     chunkOverlapSeconds = DEFAULT_CHUNK_OVERLAP_SECONDS,
     fastModel = 'gemini-2.5-flash-lite',
-    maxTopics = 5,
+    maxTopics = 6,
     theme
   } = options;
 
-  const requestedTopics = Math.max(1, Math.min(maxTopics, 5));
+  const requestedTopics = Math.max(1, Math.min(maxTopics, 6));
   const fullText = combineTranscript(transcript);
   const transcriptWithTimestamps = formatTranscriptWithTimestamps(transcript);
 
@@ -631,64 +719,73 @@ export async function generateTopicsFromTranscript(
   if (candidateTopics.length > 0) {
     candidateTopics = dedupeCandidates(candidateTopics);
 
-    const reduceCandidates = candidateTopics;
-    const reducePrompt = buildReducePrompt(reduceCandidates, requestedTopics, videoInfo, theme);
-    const selectionSchema = createReduceSelectionSchema(
-      Math.min(requestedTopics, reduceCandidates.length)
-    );
+    const videoDuration = transcript.length > 0
+      ? transcript[transcript.length - 1].start + transcript[transcript.length - 1].duration
+      : 0;
+    let firstHalfCandidates: CandidateTopic[] = [];
+    let secondHalfCandidates: CandidateTopic[] = [];
 
-    let reduceSelections: Array<{ candidateIndex: number; title: string }> = [];
+    if (videoDuration > 0) {
+      const midpoint = videoDuration / 2;
+      firstHalfCandidates = candidateTopics.filter(candidate => candidate.chunkStart < midpoint);
+      secondHalfCandidates = candidateTopics.filter(candidate => candidate.chunkStart >= midpoint);
+    }
 
-    try {
-      const reduceResponse = await generateWithFallback(reducePrompt, {
-        preferredModel: fastModel,
-        generationConfig: { temperature: 0.4 },
-        zodSchema: selectionSchema
+    if (firstHalfCandidates.length === 0 || secondHalfCandidates.length === 0) {
+      const midIndex = Math.ceil(candidateTopics.length / 2);
+      firstHalfCandidates = candidateTopics.slice(0, midIndex);
+      secondHalfCandidates = candidateTopics.slice(midIndex);
+
+      if (secondHalfCandidates.length === 0 && firstHalfCandidates.length > 1) {
+        const pivot = Math.floor(firstHalfCandidates.length / 2);
+        secondHalfCandidates = firstHalfCandidates.slice(pivot);
+        firstHalfCandidates = firstHalfCandidates.slice(0, pivot);
+      } else if (firstHalfCandidates.length === 0 && secondHalfCandidates.length > 1) {
+        const pivot = Math.ceil(secondHalfCandidates.length / 2);
+        firstHalfCandidates = secondHalfCandidates.slice(0, pivot);
+        secondHalfCandidates = secondHalfCandidates.slice(pivot);
+      }
+    }
+
+    const segmentConfigs = [
+      { label: 'first half', candidates: firstHalfCandidates },
+      { label: 'second half', candidates: secondHalfCandidates }
+    ].filter(segment => segment.candidates.length > 0);
+
+    const selectionPromises = segmentConfigs.map(segment => {
+      const maxSelections = Math.min(3, segment.candidates.length);
+      const minSelections = maxSelections >= 2 ? 2 : 1;
+      return reduceCandidateSubset(segment.candidates, {
+        minTopics: minSelections,
+        maxTopics: maxSelections,
+        fastModel,
+        videoInfo,
+        segmentLabel: segment.label
       });
+    });
 
-      if (reduceResponse) {
-        try {
-          reduceSelections = JSON.parse(reduceResponse);
-        } catch (error) {
-          console.warn('Failed to parse reduce response:', error);
-        }
+    const selectionResults = await Promise.allSettled(selectionPromises);
+    const combinedSelections: ParsedTopic[] = [];
+
+    selectionResults.forEach((result, idx) => {
+      if (result.status === 'fulfilled') {
+        combinedSelections.push(...result.value);
+      } else {
+        console.error(
+          `Topic reduction failed for ${segmentConfigs[idx]?.label ?? 'segment'}:`,
+          result.reason
+        );
       }
-    } catch (error) {
-      console.error('Error reducing candidate topics:', error);
-    }
+    });
 
-    const usedIndices = new Set<number>();
-    const reducedTopics: ParsedTopic[] = [];
+    topicsArray = combinedSelections;
 
-    if (Array.isArray(reduceSelections)) {
-      for (const selection of reduceSelections) {
-        if (!selection) continue;
-        const candidateIdx = selection.candidateIndex - 1;
-        if (candidateIdx < 0 || candidateIdx >= reduceCandidates.length) continue;
-        if (usedIndices.has(candidateIdx)) continue;
-
-        const candidate = reduceCandidates[candidateIdx];
-        if (!candidate.quote?.text || !candidate.quote.timestamp) continue;
-
-        reducedTopics.push({
-          title: selection.title?.trim() || candidate.title,
+    if (topicsArray.length === 0) {
+      topicsArray = candidateTopics.slice(0, Math.min(requestedTopics, candidateTopics.length))
+        .map(candidate => ({
+          title: candidate.title,
           quote: candidate.quote
-        });
-        usedIndices.add(candidateIdx);
-
-        if (reducedTopics.length >= requestedTopics) {
-          break;
-        }
-      }
-    }
-
-    if (reducedTopics.length === 0) {
-      topicsArray = reduceCandidates.slice(0, requestedTopics).map(candidate => ({
-        title: candidate.title,
-        quote: candidate.quote
-      }));
-    } else {
-      topicsArray = reducedTopics;
+        }));
     }
   }
 
@@ -786,8 +883,8 @@ You are an expert content analyst and a specialist in semantic keyword extractio
 Analyze the provided video transcript to identify and extract its core concepts. Generate a list of 5-10 keywords or key phrases that precisely capture the main topics discussed. These keywords will be used to help potential viewers quickly understand the video's specific focus and determine its relevance to their interests.
 
 ## Strict Constraints
-1.  **Quantity:** Provide between 5 and 10 keywords/phrases.
-2.  **Length:** Each keyword/phrase must be strictly between 1 and 5 words.
+1.  **Quantity:** Provide between 3 keywords/phrases.
+2.  **Length:** Each keyword/phrase must be strictly between 1 and 3 words.
 3.  **Format:** Output must be a simple, unnumbered bulleted list. Do not add any introductory or concluding sentences.
 
 ## Guiding Principles
