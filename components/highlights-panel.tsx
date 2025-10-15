@@ -35,21 +35,19 @@ export function HighlightsPanel({
   return (
     <Card className="overflow-hidden p-0">
       <div className="p-2.5 bg-background rounded-b-3xl flex-shrink-0">
-        {videoDuration > 0 && (
-          <VideoProgressBar
-            videoDuration={videoDuration}
-            currentTime={currentTime}
-            topics={topics}
-            selectedTopic={selectedTopic}
-            onSeek={onSeek}
-            onTopicSelect={(topic) => onTopicSelect(topic)}
-            onPlayTopic={onPlayTopic}
-            transcript={transcript}
-            onPlayAllTopics={onPlayAll}
-            isPlayingAll={isPlayingAll}
-            playAllIndex={playAllIndex}
-          />
-        )}
+        <VideoProgressBar
+          videoDuration={videoDuration}
+          currentTime={currentTime}
+          topics={topics}
+          selectedTopic={selectedTopic}
+          onSeek={onSeek}
+          onTopicSelect={(topic) => onTopicSelect(topic)}
+          onPlayTopic={onPlayTopic}
+          transcript={transcript}
+          onPlayAllTopics={onPlayAll}
+          isPlayingAll={isPlayingAll}
+          playAllIndex={playAllIndex}
+        />
 
         <div className="mt-3 flex items-center justify-between">
           <div className="ml-2.5 flex items-center gap-1.5">
