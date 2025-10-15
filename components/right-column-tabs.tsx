@@ -123,7 +123,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
 
   return (
     <Card className="h-full flex flex-col overflow-hidden p-0 gap-0">
-      <div className="flex items-center gap-2 p-2 bg-neutral-100 rounded-t-3xl">
+      <div className="flex items-center gap-2 p-2 rounded-t-3xl">
         {showTakeawaysTab && (
           <Button
             variant="ghost"
@@ -132,7 +132,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
             className={cn(
               "flex-1 justify-center gap-2 rounded-2xl",
               activeTab === "takeaways"
-                ? "bg-white text-foreground shadow-[0px_0px_12px_0px_rgba(0,0,0,0.1)]"
+                ? "bg-neutral-100 text-foreground"
                 : "text-muted-foreground hover:text-foreground hover:bg-white/50"
             )}
           >
@@ -151,7 +151,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
           className={cn(
             "flex-1 justify-center gap-2 rounded-2xl",
             activeTab === "transcript"
-              ? "bg-white text-foreground shadow-[0px_0px_12px_0px_rgba(0,0,0,0.1)]"
+              ? "bg-neutral-100 text-foreground"
               : "text-muted-foreground hover:text-foreground hover:bg-white/50"
           )}
         >

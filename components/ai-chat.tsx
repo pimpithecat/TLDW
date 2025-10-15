@@ -194,7 +194,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
   return (
     <TooltipProvider delayDuration={0} skipDelayDuration={0} disableHoverableContent={false}>
       <div className="w-full h-full flex flex-col">
-        <ScrollArea className="flex-1 p-2.5" ref={scrollRef}>
+        <ScrollArea className="flex-1 p-6" ref={scrollRef}>
           <div className="space-y-3.5">
             {pinnedContent && (
               <div className="space-y-2.5">
@@ -225,7 +225,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
         </ScrollArea>
 
         {suggestedQuestions.length > 0 && (
-          <div className="px-2.5 py-1.5 border-t">
+          <div className="px-6 py-1.5 border-t">
             <div className="space-y-1.5">
               <button
                 onClick={() => setShowSuggestions(!showSuggestions)}
@@ -246,14 +246,14 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
           </div>
         )}
 
-        <div className="p-2.5 border-t">
-          <div className="flex gap-1.5">
+        <div className="p-6 border-t">
+          <div className="relative">
             <Textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask about the video..."
-              className="resize-none rounded-xl text-xs"
+              className="resize-none rounded-[20px] text-xs bg-neutral-100 border-[#ebecee] pr-11"
               rows={2}
               disabled={isLoading}
             />
@@ -261,7 +261,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
               onClick={() => sendMessage()}
               disabled={!input.trim() || isLoading}
               size="icon"
-              className="self-end rounded-full h-8 w-8"
+              className="absolute right-2 bottom-2 rounded-full h-8 w-8"
             >
               {isLoading ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />

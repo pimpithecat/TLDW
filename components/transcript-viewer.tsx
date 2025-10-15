@@ -452,7 +452,7 @@ export function TranscriptViewer({
       {/* Transcript content */}
       <ScrollArea className="flex-1 min-h-0" ref={scrollAreaRef}>
         <div
-          className="p-2.5 space-y-1" 
+          className="p-6 space-y-1" 
           ref={(el) => {
             // Get the viewport element from ScrollArea - it's the data-radix-scroll-area-viewport element
             if (el) {
