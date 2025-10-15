@@ -5,7 +5,7 @@ import { TranscriptSegment, Topic, Citation } from "@/lib/types";
 import { getTopicHSLColor, formatDuration } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Play, Eye, EyeOff, ChevronDown } from "lucide-react";
+import { Eye, EyeOff, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 
@@ -506,14 +506,6 @@ export function TranscriptViewer({
                     onMouseEnter={() => setHoveredSegment(index)}
                     onMouseLeave={() => setHoveredSegment(null)}
                   >
-                    {/* Play indicator on hover */}
-                    {isHovered && (
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full pr-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Play className="w-3.5 h-3.5 text-primary" />
-                      </div>
-                    )}
-
-
                     {/* Transcript text with partial highlighting */}
                     <p 
                       className={cn(

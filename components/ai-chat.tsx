@@ -206,18 +206,13 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
                 message={message}
                 onCitationClick={onCitationClick}
                 onTimestampClick={onTimestampClick}
-                onPlayAllCitations={onPlayAllCitations}
               />
             ))}
 
             {isLoading && (
-              <div className="flex gap-2.5">
-                <div className="flex-shrink-0 w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
-                </div>
-                <Card className="p-3 bg-neutral-100/50 rounded-xl">
-                  <p className="text-xs text-muted-foreground">Thinking...</p>
-                </Card>
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">Thinking...</p>
               </div>
             )}
           </div>

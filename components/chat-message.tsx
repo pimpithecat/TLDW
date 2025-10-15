@@ -3,8 +3,6 @@
 import React, { useMemo, ReactNode } from "react";
 import { ChatMessage, Citation } from "@/lib/types";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { User, Bot, Play } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -14,7 +12,6 @@ interface ChatMessageProps {
   message: ChatMessage;
   onCitationClick: (citation: Citation) => void;
   onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean, citationText?: string) => void;
-  onPlayAllCitations?: (citations: Citation[]) => void;
 }
 
 function formatTimestamp(seconds: number): string {
@@ -23,7 +20,7 @@ function formatTimestamp(seconds: number): string {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-export function ChatMessageComponent({ message, onCitationClick, onTimestampClick, onPlayAllCitations }: ChatMessageProps) {
+export function ChatMessageComponent({ message, onCitationClick, onTimestampClick }: ChatMessageProps) {
   const isUser = message.role === 'user';
 
   // Create citation map for quick lookup
@@ -186,80 +183,53 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
   };
 
   return (
-    <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
-      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-        isUser ? 'bg-primary/10' : 'bg-neutral-100'
-      }`}>
-        {isUser ? (
-          <User className="w-4 h-4 text-primary" />
-        ) : (
-          <Bot className="w-4 h-4 text-muted-foreground" />
-        )}
-      </div>
-
-      <div className="flex-1 max-w-[80%]">
-        <Card className={`p-4 rounded-2xl ${isUser ? 'bg-primary/5 border-primary/20' : 'bg-neutral-100/50'}`}>
-          {isUser ? (
-            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-          ) : (
-            <>
-              <div className="prose dark:prose-invert max-w-none text-sm [&>*:last-child]:mb-0">
-                <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  p: ({ children }) => <p className="mb-2 last:mb-0">{renderTextWithCitations(children)}</p>,
-                  ul: ({ children }) => <ul className="list-disc list-inside mb-2 last:mb-0">{children}</ul>,
-                  ol: ({ children }) => <ol className="list-decimal list-inside mb-2 last:mb-0">{children}</ol>,
-                  li: ({ children }) => <li className="mb-1 last:mb-0">{renderTextWithCitations(children)}</li>,
-                  code: ({ className, children, ...props }) => {
-                    const match = /language-(\w+)/.exec(className || '');
-                    return match ? (
-                      <pre className="bg-background/50 p-2 rounded overflow-x-auto mb-2">
-                        <code className={className} {...props}>
-                          {children}
-                        </code>
-                      </pre>
-                    ) : (
-                      <code className="bg-background/50 px-1 py-0.5 rounded text-xs" {...props}>
-                        {children}
-                      </code>
-                    );
-                  },
-                  strong: ({ children }) => <strong className="font-semibold">{renderTextWithCitations(children)}</strong>,
-                  em: ({ children }) => <em className="italic">{renderTextWithCitations(children)}</em>,
-                  blockquote: ({ children }) => (
-                    <blockquote className="border-l-4 border-muted-foreground/30 pl-4 italic mb-2">
-                      {renderTextWithCitations(children)}
-                    </blockquote>
-                  ),
-                  h1: ({ children }) => <h1 className="text-lg font-bold mb-2">{renderTextWithCitations(children)}</h1>,
-                  h2: ({ children }) => <h2 className="text-base font-semibold mb-2">{renderTextWithCitations(children)}</h2>,
-                  h3: ({ children }) => <h3 className="text-sm font-semibold mb-2">{renderTextWithCitations(children)}</h3>,
-                  text: ({ children }) => renderTextWithCitations(children) as any,
-                }}
-              >
-                {message.content}
-              </ReactMarkdown>
-              </div>
-              
-              {/* Play All Clips button for assistant messages with citations */}
-              {message.citations && message.citations.length > 0 && onPlayAllCitations && (
-                <div className="mt-0 pt-3 border-t border-border/50">
-                  <Button
-                    onClick={() => onPlayAllCitations(message.citations!)}
-                    size="sm"
-                    variant="secondary"
-                    className="flex items-center gap-2"
-                  >
-                    <Play className="w-4 h-4" />
-                    Play Clip ({message.citations.length})
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
+    <div className="w-full py-2">
+      {isUser ? (
+        <Card className="p-5 rounded-2xl bg-primary/5 border-0 shadow-none">
+          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
         </Card>
-      </div>
+      ) : (
+        <div className="w-full py-1">
+          <div className="prose dark:prose-invert max-w-none text-sm [&>*:last-child]:mb-0">
+            <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              p: ({ children }) => <p className="mb-2 last:mb-0">{renderTextWithCitations(children)}</p>,
+              ul: ({ children }) => <ul className="list-disc list-inside mb-2 last:mb-0">{children}</ul>,
+              ol: ({ children }) => <ol className="list-decimal list-inside mb-2 last:mb-0">{children}</ol>,
+              li: ({ children }) => <li className="mb-1 last:mb-0">{renderTextWithCitations(children)}</li>,
+              code: ({ className, children, ...props }) => {
+                const match = /language-(\w+)/.exec(className || '');
+                return match ? (
+                  <pre className="bg-background/50 p-2 rounded overflow-x-auto mb-2">
+                    <code className={className} {...props}>
+                      {children}
+                    </code>
+                  </pre>
+                ) : (
+                  <code className="bg-background/50 px-1 py-0.5 rounded text-xs" {...props}>
+                    {children}
+                  </code>
+                );
+              },
+              strong: ({ children }) => <strong className="font-semibold">{renderTextWithCitations(children)}</strong>,
+              em: ({ children }) => <em className="italic">{renderTextWithCitations(children)}</em>,
+              blockquote: ({ children }) => (
+                <blockquote className="border-l-4 border-muted-foreground/30 pl-4 italic mb-2">
+                  {renderTextWithCitations(children)}
+                </blockquote>
+              ),
+              h1: ({ children }) => <h1 className="text-lg font-bold mb-2">{renderTextWithCitations(children)}</h1>,
+              h2: ({ children }) => <h2 className="text-base font-semibold mb-2">{renderTextWithCitations(children)}</h2>,
+              h3: ({ children }) => <h3 className="text-sm font-semibold mb-2">{renderTextWithCitations(children)}</h3>,
+              text: ({ children }) => renderTextWithCitations(children) as any,
+            }}
+          >
+            {message.content}
+          </ReactMarkdown>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
