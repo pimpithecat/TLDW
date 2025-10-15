@@ -653,11 +653,11 @@ export async function generateTopicsFromTranscript(
     chunkDurationSeconds = DEFAULT_CHUNK_DURATION_SECONDS,
     chunkOverlapSeconds = DEFAULT_CHUNK_OVERLAP_SECONDS,
     fastModel = 'gemini-2.5-flash-lite',
-    maxTopics = 6,
+    maxTopics = 5,
     theme
   } = options;
 
-  const requestedTopics = Math.max(1, Math.min(maxTopics, 6));
+  const requestedTopics = Math.max(1, Math.min(maxTopics, 5));
   const fullText = combineTranscript(transcript);
   const transcriptWithTimestamps = formatTranscriptWithTimestamps(transcript);
 
@@ -722,47 +722,82 @@ export async function generateTopicsFromTranscript(
     const videoDuration = transcript.length > 0
       ? transcript[transcript.length - 1].start + transcript[transcript.length - 1].duration
       : 0;
-    let firstHalfCandidates: CandidateTopic[] = [];
-    let secondHalfCandidates: CandidateTopic[] = [];
+    let firstSegmentCandidates: CandidateTopic[] = [];
+    let secondSegmentCandidates: CandidateTopic[] = [];
 
-    if (videoDuration > 0) {
-      const midpoint = videoDuration / 2;
-      firstHalfCandidates = candidateTopics.filter(candidate => candidate.chunkStart < midpoint);
-      secondHalfCandidates = candidateTopics.filter(candidate => candidate.chunkStart >= midpoint);
-    }
-
-    if (firstHalfCandidates.length === 0 || secondHalfCandidates.length === 0) {
-      const midIndex = Math.ceil(candidateTopics.length / 2);
-      firstHalfCandidates = candidateTopics.slice(0, midIndex);
-      secondHalfCandidates = candidateTopics.slice(midIndex);
-
-      if (secondHalfCandidates.length === 0 && firstHalfCandidates.length > 1) {
-        const pivot = Math.floor(firstHalfCandidates.length / 2);
-        secondHalfCandidates = firstHalfCandidates.slice(pivot);
-        firstHalfCandidates = firstHalfCandidates.slice(0, pivot);
-      } else if (firstHalfCandidates.length === 0 && secondHalfCandidates.length > 1) {
-        const pivot = Math.ceil(secondHalfCandidates.length / 2);
-        firstHalfCandidates = secondHalfCandidates.slice(0, pivot);
-        secondHalfCandidates = secondHalfCandidates.slice(pivot);
+    if (candidateTopics.length === 1) {
+      firstSegmentCandidates = [...candidateTopics];
+    } else if (videoDuration > 0) {
+      const boundaryTime = videoDuration * 0.6; // First 3/5 of the video
+      for (const candidate of candidateTopics) {
+        if (candidate.chunkStart < boundaryTime) {
+          firstSegmentCandidates.push(candidate);
+        } else {
+          secondSegmentCandidates.push(candidate);
+        }
       }
     }
 
-    const segmentConfigs = [
-      { label: 'first half', candidates: firstHalfCandidates },
-      { label: 'second half', candidates: secondHalfCandidates }
-    ].filter(segment => segment.candidates.length > 0);
+    if (firstSegmentCandidates.length === 0 && secondSegmentCandidates.length === 0) {
+      firstSegmentCandidates = [...candidateTopics];
+      secondSegmentCandidates = [];
+    }
 
-    const selectionPromises = segmentConfigs.map(segment => {
-      const maxSelections = Math.min(3, segment.candidates.length);
-      const minSelections = maxSelections >= 2 ? 2 : 1;
-      return reduceCandidateSubset(segment.candidates, {
-        minTopics: minSelections,
-        maxTopics: maxSelections,
+    if (firstSegmentCandidates.length === 0 || secondSegmentCandidates.length === 0) {
+      const totalCandidates = candidateTopics.length;
+      if (totalCandidates > 1) {
+        const boundaryIndex = Math.max(
+          1,
+          Math.min(
+            totalCandidates - 1,
+            Math.floor((totalCandidates * 3) / 5)
+          )
+        );
+        firstSegmentCandidates = candidateTopics.slice(0, boundaryIndex);
+        secondSegmentCandidates = candidateTopics.slice(boundaryIndex);
+
+        if (firstSegmentCandidates.length === 0 && secondSegmentCandidates.length > 0) {
+          const pivot = Math.ceil(secondSegmentCandidates.length / 2);
+          firstSegmentCandidates = secondSegmentCandidates.slice(0, pivot);
+          secondSegmentCandidates = secondSegmentCandidates.slice(pivot);
+        } else if (secondSegmentCandidates.length === 0 && firstSegmentCandidates.length > 1) {
+          const pivot = Math.floor(firstSegmentCandidates.length / 2);
+          secondSegmentCandidates = firstSegmentCandidates.slice(pivot);
+          firstSegmentCandidates = firstSegmentCandidates.slice(0, pivot);
+        }
+      } else if (totalCandidates === 1) {
+        firstSegmentCandidates = [...candidateTopics];
+        secondSegmentCandidates = [];
+      }
+    }
+
+    const firstTarget = Math.min(3, requestedTopics);
+    const secondTarget = Math.min(2, Math.max(0, requestedTopics - firstTarget));
+
+    const segmentConfigs = [
+      {
+        label: 'first 3/5 of the video',
+        candidates: firstSegmentCandidates,
+        maxTopics: firstTarget,
+        minTopics: firstTarget
+      },
+      {
+        label: 'final 2/5 of the video',
+        candidates: secondSegmentCandidates,
+        maxTopics: secondTarget,
+        minTopics: secondTarget
+      }
+    ].filter(segment => segment.candidates.length > 0 && segment.maxTopics > 0);
+
+    const selectionPromises = segmentConfigs.map(segment =>
+      reduceCandidateSubset(segment.candidates, {
+        minTopics: Math.max(1, segment.minTopics),
+        maxTopics: segment.maxTopics,
         fastModel,
         videoInfo,
         segmentLabel: segment.label
-      });
-    });
+      })
+    );
 
     const selectionResults = await Promise.allSettled(selectionPromises);
     const combinedSelections: ParsedTopic[] = [];
@@ -779,6 +814,31 @@ export async function generateTopicsFromTranscript(
     });
 
     topicsArray = combinedSelections;
+
+    if (topicsArray.length < requestedTopics) {
+      const usedKeys = new Set(
+        topicsArray
+          .map(topic => topic.quote)
+          .filter((quote): quote is { timestamp: string; text: string } => !!quote?.timestamp && !!quote.text)
+          .map(quote => `${quote.timestamp}|${normalizeWhitespace(quote.text)}`)
+      );
+
+      for (const candidate of candidateTopics) {
+        if (!candidate.quote?.timestamp || !candidate.quote.text) continue;
+        const candidateKey = `${candidate.quote.timestamp}|${normalizeWhitespace(candidate.quote.text)}`;
+        if (usedKeys.has(candidateKey)) continue;
+
+        topicsArray.push({
+          title: candidate.title,
+          quote: candidate.quote
+        });
+        usedKeys.add(candidateKey);
+
+        if (topicsArray.length >= requestedTopics) {
+          break;
+        }
+      }
+    }
 
     if (topicsArray.length === 0) {
       topicsArray = candidateTopics.slice(0, Math.min(requestedTopics, candidateTopics.length))
