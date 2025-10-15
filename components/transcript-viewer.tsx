@@ -498,9 +498,9 @@ export function TranscriptViewer({
                       }
                     }}
                     className={cn(
-                      "group relative px-3 py-2 rounded-lg transition-all duration-200 cursor-pointer select-none",
-                      "hover:bg-muted/50",
-                      isHovered && "bg-muted"
+                      "group relative px-3 py-2 rounded-2xl transition-all duration-200 cursor-pointer select-none",
+                      "hover:bg-neutral-100/50",
+                      isHovered && "bg-neutral-100"
                     )}
                     onClick={() => handleSegmentClick(segment, hasTopicHighlight || false, hasCitationHighlight || false)}
                     onMouseEnter={() => setHoveredSegment(index)}

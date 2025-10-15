@@ -213,10 +213,10 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
             
             {isLoading && (
               <div className="flex gap-3">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center">
                   <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                 </div>
-                <Card className="p-4 bg-muted/30">
+                <Card className="p-4 bg-neutral-100/50 rounded-2xl">
                   <p className="text-sm text-muted-foreground">Thinking...</p>
                 </Card>
               </div>
@@ -253,7 +253,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask about the video..."
-              className="resize-none"
+              className="resize-none rounded-2xl"
               rows={2}
               disabled={isLoading}
             />
@@ -261,7 +261,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
               onClick={() => sendMessage()}
               disabled={!input.trim() || isLoading}
               size="icon"
-              className="self-end"
+              className="self-end rounded-full"
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />

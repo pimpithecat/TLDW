@@ -26,17 +26,17 @@ export function TopicCard({ topic, isSelected, onClick, topicIndex, onPlayTopic 
   return (
     <button
       className={cn(
-        "w-full px-2.5 py-1.5 rounded-lg",
+        "w-full px-2.5 py-1.5 rounded-2xl",
         "flex items-center justify-between gap-3",
         "transition-all duration-200",
-        "hover:scale-[1.01] hover:shadow-md",
+        "hover:scale-[1.01] hover:shadow-[0px_0px_12px_0px_rgba(0,0,0,0.1)]",
         "text-left",
-        isSelected ? "border-[2px] scale-[1.01] shadow-md" : "border",
+        isSelected ? "border-[2px] scale-[1.01] shadow-[0px_0px_12px_0px_rgba(0,0,0,0.1)]" : "border",
       )}
       style={{
         borderColor: `hsl(${topicColor})`,
-        backgroundColor: isSelected 
-          ? `hsl(${topicColor} / 0.15)` 
+        backgroundColor: isSelected
+          ? `hsl(${topicColor} / 0.15)`
           : `hsl(${topicColor} / 0.08)`,
       }}
       onClick={handleClick}

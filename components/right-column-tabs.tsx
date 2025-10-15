@@ -123,17 +123,17 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
 
   return (
     <Card className="h-full flex flex-col overflow-hidden p-0 gap-0">
-      <div className="flex items-center gap-1 p-1.5 border-b">
+      <div className="flex items-center gap-2 p-2 bg-neutral-100 rounded-t-3xl">
         {showTakeawaysTab && (
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setActiveTab("takeaways")}
             className={cn(
-              "flex-1 justify-center gap-2",
-              activeTab === "takeaways" 
-                ? "bg-accent text-accent-foreground" 
-                : "text-muted-foreground hover:text-foreground"
+              "flex-1 justify-center gap-2 rounded-2xl",
+              activeTab === "takeaways"
+                ? "bg-white text-foreground shadow-[0px_0px_12px_0px_rgba(0,0,0,0.1)]"
+                : "text-muted-foreground hover:text-foreground hover:bg-white/50"
             )}
           >
             {isGeneratingTakeaways ? (
@@ -149,10 +149,10 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
           size="sm"
           onClick={() => setActiveTab("transcript")}
           className={cn(
-            "flex-1 justify-center gap-2",
-            activeTab === "transcript" 
-              ? "bg-accent text-accent-foreground" 
-              : "text-muted-foreground hover:text-foreground"
+            "flex-1 justify-center gap-2 rounded-2xl",
+            activeTab === "transcript"
+              ? "bg-white text-foreground shadow-[0px_0px_12px_0px_rgba(0,0,0,0.1)]"
+              : "text-muted-foreground hover:text-foreground hover:bg-white/50"
           )}
         >
           <FileText className="h-4 w-4" />
