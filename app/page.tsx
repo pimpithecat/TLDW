@@ -1177,116 +1177,119 @@ export default function Home() {
           </Card>
         )}
 
-        {pageState === 'LOADING_CACHED' && (
-          <VideoSkeleton />
-        )}
-
-        {pageState === 'ANALYZING_NEW' && (
-          <div className="mx-auto w-full max-w-6xl px-6">
-            <div className="flex flex-col items-center justify-center mb-8">
-              <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
-              <p className="text-foreground font-medium">Analyzing video and generating highlight reels</p>
-              <p className="text-sm text-muted-foreground mt-2">
-                {loadingStage === 'fetching' && 'Fetching transcript...'}
-                {loadingStage === 'understanding' && 'Fetching transcript...'}
-                {loadingStage === 'generating' && `Creating highlight reels... (${elapsedTime} seconds)`}
-                {loadingStage === 'processing' && `Processing and matching quotes... (${processingElapsedTime} seconds)`}
-              </p>
-            </div>
-            
-            {/* Enhanced Loading Experience */}
-            <LoadingContext 
-              videoInfo={videoInfo}
-              preview={videoPreview}
-            />
-            
-            <LoadingTips />
-          </div>
-        )}
-
-        {videoId && topics.length > 0 && pageState === 'IDLE' && (
-          <>
-            <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-6 px-6 pb-16 lg:grid-cols-3">
-              {/* Left Column - Video (2/3 width) */}
-              <div className="lg:col-span-2">
-                <div className="sticky top-4 space-y-4" id="video-container">
-                  <YouTubePlayer
-                    videoId={videoId}
-                    selectedTopic={selectedTopic}
-                    playbackCommand={playbackCommand}
-                    onCommandExecuted={clearPlaybackCommand}
-                    onPlayerReady={handlePlayerReady}
-                    topics={topics}
-                    onTopicSelect={handleTopicSelect}
-                    onTimeUpdate={handleTimeUpdate}
-                    transcript={transcript}
-                    isPlayingAll={isPlayingAll}
-                    playAllIndex={playAllIndex}
-                    onTogglePlayAll={handleTogglePlayAll}
-                    setPlayAllIndex={memoizedSetPlayAllIndex}
-                    setIsPlayingAll={memoizedSetIsPlayingAll}
-                    renderControls={false}
-                    onDurationChange={setVideoDuration}
-                  />
-                  {(themes.length > 0 || isLoadingThemeTopics || themeError) && (
-                    <div className="flex justify-center">
-                      <ThemeSelector
-                        themes={themes}
-                        selectedTheme={selectedTheme}
-                        onSelect={handleThemeSelect}
-                        isLoading={isLoadingThemeTopics}
-                        error={themeError}
-                      />
-                    </div>
-                  )}
-                  <HighlightsPanel
-                    topics={topics}
-                    selectedTopic={selectedTopic}
-                    onTopicSelect={(topic) => handleTopicSelect(topic)}
-                    onSeek={requestSeek}
-                    onPlayAll={handleTogglePlayAll}
-                    isPlayingAll={isPlayingAll}
-                    playAllIndex={playAllIndex}
-                    currentTime={currentTime}
-                    videoDuration={videoDuration}
-                    transcript={transcript}
-                  />
-                </div>
-              </div>
-
-              {/* Right Column - Tabbed Interface (1/3 width) */}
-              <div className="lg:col-span-1">
-                <div 
-                  className="sticky top-4" 
-                  id="right-column-container"
-                  style={{ height: transcriptHeight, maxHeight: transcriptHeight }}
-                >
-                  <RightColumnTabs
-                    ref={rightColumnTabsRef}
-                    transcript={transcript}
-                    selectedTopic={selectedTopic}
-                    onTimestampClick={handleTimestampClick}
-                    onTakeawayTimestampClick={handleTakeawayTimestampClick}
-                    currentTime={currentTime}
-                    topics={topics}
-                    citationHighlight={citationHighlight}
-                    videoId={videoId}
-                    videoTitle={videoInfo?.title}
-                    onCitationClick={handleCitationClick}
-                    onPlayAllCitations={handlePlayAllCitations}
-                    takeawaysContent={takeawaysContent}
-                    isGeneratingTakeaways={isGeneratingTakeaways}
-                    takeawaysError={takeawaysError}
-                    showTakeawaysTab={showTakeawaysTab}
-                    cachedSuggestedQuestions={cachedSuggestedQuestions}
-                  />
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-
       </div>
+      
+      {pageState === 'LOADING_CACHED' && (
+        <div className="mx-auto w-full max-w-7xl px-6">
+          <VideoSkeleton />
+        </div>
+      )}
+
+      {pageState === 'ANALYZING_NEW' && (
+        <div className="mx-auto w-full max-w-7xl px-6">
+          <div className="mb-8 flex flex-col items-center justify-center">
+            <Loader2 className="mb-4 h-8 w-8 animate-spin text-primary" />
+            <p className="text-foreground font-medium">Analyzing video and generating highlight reels</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {loadingStage === 'fetching' && 'Fetching transcript...'}
+              {loadingStage === 'understanding' && 'Fetching transcript...'}
+              {loadingStage === 'generating' && `Creating highlight reels... (${elapsedTime} seconds)`}
+              {loadingStage === 'processing' && `Processing and matching quotes... (${processingElapsedTime} seconds)`}
+            </p>
+          </div>
+          
+          {/* Enhanced Loading Experience */}
+          <LoadingContext 
+            videoInfo={videoInfo}
+            preview={videoPreview}
+          />
+          
+          <LoadingTips />
+        </div>
+      )}
+
+      {videoId && topics.length > 0 && pageState === 'IDLE' && (
+        <div className="mx-auto w-full max-w-7xl px-6 pb-16">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            {/* Left Column - Video (2/3 width) */}
+            <div className="lg:col-span-2">
+              <div className="sticky top-4 space-y-4" id="video-container">
+                <YouTubePlayer
+                  videoId={videoId}
+                  selectedTopic={selectedTopic}
+                  playbackCommand={playbackCommand}
+                  onCommandExecuted={clearPlaybackCommand}
+                  onPlayerReady={handlePlayerReady}
+                  topics={topics}
+                  onTopicSelect={handleTopicSelect}
+                  onTimeUpdate={handleTimeUpdate}
+                  transcript={transcript}
+                  isPlayingAll={isPlayingAll}
+                  playAllIndex={playAllIndex}
+                  onTogglePlayAll={handleTogglePlayAll}
+                  setPlayAllIndex={memoizedSetPlayAllIndex}
+                  setIsPlayingAll={memoizedSetIsPlayingAll}
+                  renderControls={false}
+                  onDurationChange={setVideoDuration}
+                />
+                {(themes.length > 0 || isLoadingThemeTopics || themeError) && (
+                  <div className="flex justify-center">
+                    <ThemeSelector
+                      themes={themes}
+                      selectedTheme={selectedTheme}
+                      onSelect={handleThemeSelect}
+                      isLoading={isLoadingThemeTopics}
+                      error={themeError}
+                    />
+                  </div>
+                )}
+                <HighlightsPanel
+                  topics={topics}
+                  selectedTopic={selectedTopic}
+                  onTopicSelect={(topic) => handleTopicSelect(topic)}
+                  onSeek={requestSeek}
+                  onPlayAll={handleTogglePlayAll}
+                  isPlayingAll={isPlayingAll}
+                  playAllIndex={playAllIndex}
+                  currentTime={currentTime}
+                  videoDuration={videoDuration}
+                  transcript={transcript}
+                />
+              </div>
+            </div>
+
+            {/* Right Column - Tabbed Interface (1/3 width) */}
+            <div className="lg:col-span-1">
+              <div 
+                className="sticky top-4" 
+                id="right-column-container"
+                style={{ height: transcriptHeight, maxHeight: transcriptHeight }}
+              >
+                <RightColumnTabs
+                  ref={rightColumnTabsRef}
+                  transcript={transcript}
+                  selectedTopic={selectedTopic}
+                  onTimestampClick={handleTimestampClick}
+                  onTakeawayTimestampClick={handleTakeawayTimestampClick}
+                  currentTime={currentTime}
+                  topics={topics}
+                  citationHighlight={citationHighlight}
+                  videoId={videoId}
+                  videoTitle={videoInfo?.title}
+                  onCitationClick={handleCitationClick}
+                  onPlayAllCitations={handlePlayAllCitations}
+                  takeawaysContent={takeawaysContent}
+                  isGeneratingTakeaways={isGeneratingTakeaways}
+                  takeawaysError={takeawaysError}
+                  showTakeawaysTab={showTakeawaysTab}
+                  cachedSuggestedQuestions={cachedSuggestedQuestions}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <AuthModal
         open={authModalOpen}
         onOpenChange={(open) => {
