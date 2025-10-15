@@ -160,7 +160,7 @@ export function VideoProgressBar({
 
         {/* Topic insights list */}
         <div className="mt-3">
-          <div className="space-y-1">
+          <div className="space-y-2">
             {topics.map((topic, index) => {
               const isSelected = selectedTopic?.id === topic.id;
               const isCurrentlyPlaying = isPlayingAll && index === playAllIndex;

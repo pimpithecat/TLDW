@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Send, Loader2, ChevronUp, ChevronDown } from "lucide-react";
+import { Send, Loader2 } from "lucide-react";
 
 interface AIChatProps {
   transcript: TranscriptSegment[];
@@ -30,7 +30,6 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [askedQuestions, setAskedQuestions] = useState<Set<string>>(new Set());
-  const [showSuggestions, setShowSuggestions] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -225,28 +224,17 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
         </ScrollArea>
 
         {suggestedQuestions.length > 0 && (
-          <div className="px-6 py-1.5 border-t">
-            <div className="space-y-1.5">
-              <button
-                onClick={() => setShowSuggestions(!showSuggestions)}
-                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
-              >
-                {showSuggestions ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-                <span className="font-medium">Suggested questions</span>
-              </button>
-              {showSuggestions && (
-                <SuggestedQuestions
-                  questions={suggestedQuestions}
-                  onQuestionClick={sendMessage}
-                  isLoading={loadingQuestions}
-                  askedQuestions={askedQuestions}
-                />
-              )}
-            </div>
+          <div className="px-6">
+            <SuggestedQuestions
+              questions={suggestedQuestions}
+              onQuestionClick={sendMessage}
+              isLoading={loadingQuestions}
+              askedQuestions={askedQuestions}
+            />
           </div>
         )}
 
-        <div className="p-6 border-t">
+        <div className="px-6 pt-[18px] pb-6">
           <div className="relative">
             <Textarea
               value={input}

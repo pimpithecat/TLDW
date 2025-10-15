@@ -27,7 +27,7 @@ export function SuggestedQuestions({ questions, onQuestionClick, isLoading, aske
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 -mx-6 px-6">
       {questions.map((question, idx) => {
         const isAsked = askedQuestions.has(question);
         return (
@@ -36,7 +36,7 @@ export function SuggestedQuestions({ questions, onQuestionClick, isLoading, aske
             variant="pill"
             size="sm"
             className={cn(
-              "h-auto py-2 px-4 whitespace-normal transition-all text-sm",
+              "h-auto py-2 px-4 whitespace-nowrap transition-all text-sm flex-shrink-0",
               "hover:bg-neutral-100",
               isAsked && "opacity-60 border-muted-foreground/30"
             )}

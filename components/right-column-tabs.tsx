@@ -123,7 +123,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
 
   return (
     <Card className="h-full flex flex-col overflow-hidden p-0 gap-0">
-      <div className="flex items-center gap-2 p-2 rounded-t-3xl">
+      <div className="flex items-center gap-2 p-2 rounded-t-3xl border-b">
         {showTakeawaysTab && (
           <Button
             variant="ghost"
