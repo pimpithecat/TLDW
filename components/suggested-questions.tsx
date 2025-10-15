@@ -27,26 +27,26 @@ export function SuggestedQuestions({ questions, onQuestionClick, isLoading, aske
   }
 
   return (
-    <div className="space-y-2">
+    <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 -mx-6 px-6">
       {questions.map((question, idx) => {
         const isAsked = askedQuestions.has(question);
         return (
           <Button
             key={idx}
-            variant="outline"
+            variant="pill"
             size="sm"
             className={cn(
-              "w-full justify-start text-left h-auto py-2 px-3 whitespace-normal transition-all",
-              "hover:bg-accent hover:text-accent-foreground",
+              "h-auto py-2 px-4 whitespace-nowrap transition-all text-sm flex-shrink-0",
+              "hover:bg-neutral-100",
               isAsked && "opacity-60 border-muted-foreground/30"
             )}
             onClick={() => onQuestionClick(question)}
           >
-            <span className="flex items-start gap-2 w-full">
+            <span className="flex items-center gap-2">
               {isAsked && (
-                <Check className="w-3 h-3 mt-0.5 text-green-600 dark:text-green-400 flex-shrink-0" />
+                <Check className="w-3 h-3 text-green-600 dark:text-green-400 flex-shrink-0" />
               )}
-              <span className={cn("text-xs", isAsked && "line-through opacity-80")}>
+              <span className={cn(isAsked && "line-through opacity-80")}>
                 {question}
               </span>
             </span>

@@ -371,21 +371,21 @@ export function TranscriptViewer({
     <TooltipProvider delayDuration={300}>
       <div className="h-full max-h-full flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="px-5 py-1.5 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
               {selectedTopic && !selectedTopic.isCitationReel && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div
-                      className="h-3 w-3 rounded-full cursor-help"
+                      className="h-2.5 w-2.5 rounded-full cursor-help"
                       style={{
                         backgroundColor: `hsl(${getTopicHSLColor(topics.indexOf(selectedTopic))})`,
                       }}
                     />
                   </TooltipTrigger>
-                  <TooltipContent side="bottom" className="max-w-[200px]">
-                    <p className="text-xs">{selectedTopic.title}</p>
+                  <TooltipContent side="bottom" className="max-w-[180px]">
+                    <p className="text-[11px]">{selectedTopic.title}</p>
                   </TooltipContent>
                 </Tooltip>
               )}
@@ -393,21 +393,21 @@ export function TranscriptViewer({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div
-                      className="h-3 w-3 rounded-full cursor-help"
+                      className="h-2.5 w-2.5 rounded-full cursor-help"
                       style={{
                         backgroundColor: 'hsl(48, 100%, 50%)',
                       }}
                     />
                   </TooltipTrigger>
                   <TooltipContent side="bottom">
-                    <p className="text-xs">
+                    <p className="text-[11px]">
                       {selectedTopic?.isCitationReel ? 'Cited Clips' : 'AI Chat Citation'}
                     </p>
                   </TooltipContent>
                 </Tooltip>
               )}
             </div>
-            
+
             <Button
               variant={autoScroll ? "default" : "outline"}
               size="sm"
@@ -418,16 +418,16 @@ export function TranscriptViewer({
                   jumpToCurrent();
                 }
               }}
-              className="text-xs h-7"
+              className="text-[11px] h-6"
             >
               {autoScroll ? (
                 <>
-                  <Eye className="w-3 h-3 mr-1" />
+                  <Eye className="w-2.5 h-2.5 mr-1" />
                   Auto
                 </>
               ) : (
                 <>
-                  <EyeOff className="w-3 h-3 mr-1" />
+                  <EyeOff className="w-2.5 h-2.5 mr-1" />
                   Manual
                 </>
               )}
@@ -437,13 +437,13 @@ export function TranscriptViewer({
 
       {/* Jump to current button with improved positioning */}
       {showScrollToCurrentButton && currentTime > 0 && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-10 animate-in fade-in slide-in-from-top-2 duration-300">
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-10 animate-in fade-in slide-in-from-top-2 duration-300">
           <Button
             size="sm"
             onClick={jumpToCurrent}
-            className="shadow-lg bg-primary/95 hover:bg-primary"
+            className="shadow-lg bg-primary/95 hover:bg-primary text-[11px]"
           >
-            <ChevronDown className="w-4 h-4 mr-1 animate-bounce" />
+            <ChevronDown className="w-3.5 h-3.5 mr-1 animate-bounce" />
             Jump to Current
           </Button>
         </div>
@@ -451,8 +451,8 @@ export function TranscriptViewer({
 
       {/* Transcript content */}
       <ScrollArea className="flex-1 min-h-0" ref={scrollAreaRef}>
-        <div 
-          className="p-3 space-y-1" 
+        <div
+          className="p-6 space-y-1" 
           ref={(el) => {
             // Get the viewport element from ScrollArea - it's the data-radix-scroll-area-viewport element
             if (el) {
@@ -498,9 +498,9 @@ export function TranscriptViewer({
                       }
                     }}
                     className={cn(
-                      "group relative px-3 py-2 rounded-lg transition-all duration-200 cursor-pointer select-none",
-                      "hover:bg-muted/50",
-                      isHovered && "bg-muted"
+                      "group relative px-2.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer select-none",
+                      "hover:bg-neutral-100/50",
+                      isHovered && "bg-neutral-100"
                     )}
                     onClick={() => handleSegmentClick(segment, hasTopicHighlight || false, hasCitationHighlight || false)}
                     onMouseEnter={() => setHoveredSegment(index)}
@@ -508,8 +508,8 @@ export function TranscriptViewer({
                   >
                     {/* Play indicator on hover */}
                     {isHovered && (
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Play className="w-4 h-4 text-primary" />
+                      <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full pr-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Play className="w-3.5 h-3.5 text-primary" />
                       </div>
                     )}
 
@@ -559,7 +559,7 @@ export function TranscriptViewer({
 
                   </div>
                 </TooltipTrigger>
-                <TooltipContent side="top" className="font-mono text-xs">
+                <TooltipContent side="top" className="font-mono text-[11px]">
                   {formatDuration(segment.start)} - {formatDuration(segment.start + segment.duration)}
                 </TooltipContent>
               </Tooltip>

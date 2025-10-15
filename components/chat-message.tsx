@@ -188,7 +188,7 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
   return (
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
       <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-        isUser ? 'bg-primary/10' : 'bg-muted'
+        isUser ? 'bg-primary/10' : 'bg-neutral-100'
       }`}>
         {isUser ? (
           <User className="w-4 h-4 text-primary" />
@@ -196,9 +196,9 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
           <Bot className="w-4 h-4 text-muted-foreground" />
         )}
       </div>
-      
+
       <div className="flex-1 max-w-[80%]">
-        <Card className={`p-4 ${isUser ? 'bg-primary/5 border-primary/20' : 'bg-muted/30'}`}>
+        <Card className={`p-4 rounded-2xl ${isUser ? 'bg-primary/5 border-primary/20' : 'bg-neutral-100/50'}`}>
           {isUser ? (
             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
           ) : (

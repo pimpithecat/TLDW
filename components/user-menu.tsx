@@ -32,9 +32,9 @@ export function UserMenu() {
     return (
       <>
         <Button
-          variant="default"
           size="sm"
           onClick={() => setAuthModalOpen(true)}
+          className="h-8 rounded-full bg-black px-4 text-sm font-semibold text-white shadow-none hover:bg-black/90"
         >
           Sign In
         </Button>

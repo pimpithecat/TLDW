@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Send, Loader2, ChevronUp, ChevronDown } from "lucide-react";
+import { Send, Loader2 } from "lucide-react";
 
 interface AIChatProps {
   transcript: TranscriptSegment[];
@@ -30,7 +30,6 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [askedQuestions, setAskedQuestions] = useState<Set<string>>(new Set());
-  const [showSuggestions, setShowSuggestions] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -194,10 +193,10 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
   return (
     <TooltipProvider delayDuration={0} skipDelayDuration={0} disableHoverableContent={false}>
       <div className="w-full h-full flex flex-col">
-        <ScrollArea className="flex-1 p-3" ref={scrollRef}>
-          <div className="space-y-4">
+        <ScrollArea className="flex-1 p-6" ref={scrollRef}>
+          <div className="space-y-3.5">
             {pinnedContent && (
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {pinnedContent}
               </div>
             )}
@@ -210,14 +209,14 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
                 onPlayAllCitations={onPlayAllCitations}
               />
             ))}
-            
+
             {isLoading && (
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+              <div className="flex gap-2.5">
+                <div className="flex-shrink-0 w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
                 </div>
-                <Card className="p-4 bg-muted/30">
-                  <p className="text-sm text-muted-foreground">Thinking...</p>
+                <Card className="p-3 bg-neutral-100/50 rounded-xl">
+                  <p className="text-xs text-muted-foreground">Thinking...</p>
                 </Card>
               </div>
             )}
@@ -225,35 +224,24 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
         </ScrollArea>
 
         {suggestedQuestions.length > 0 && (
-          <div className="px-3 py-2 border-t">
-            <div className="space-y-2">
-              <button
-                onClick={() => setShowSuggestions(!showSuggestions)}
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full"
-              >
-                {showSuggestions ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
-                <span className="font-medium">Suggested questions</span>
-              </button>
-              {showSuggestions && (
-                <SuggestedQuestions
-                  questions={suggestedQuestions}
-                  onQuestionClick={sendMessage}
-                  isLoading={loadingQuestions}
-                  askedQuestions={askedQuestions}
-                />
-              )}
-            </div>
+          <div className="px-6">
+            <SuggestedQuestions
+              questions={suggestedQuestions}
+              onQuestionClick={sendMessage}
+              isLoading={loadingQuestions}
+              askedQuestions={askedQuestions}
+            />
           </div>
         )}
 
-        <div className="p-3 border-t">
-          <div className="flex gap-2">
+        <div className="px-6 pt-[18px] pb-6">
+          <div className="relative">
             <Textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask about the video..."
-              className="resize-none"
+              className="resize-none rounded-[20px] text-xs bg-neutral-100 border-[#ebecee] pr-11"
               rows={2}
               disabled={isLoading}
             />
@@ -261,12 +249,12 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
               onClick={() => sendMessage()}
               disabled={!input.trim() || isLoading}
               size="icon"
-              className="self-end"
+              className="absolute right-2 bottom-2 rounded-full h-8 w-8"
             >
               {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
-                <Send className="w-4 h-4" />
+                <Send className="w-3.5 h-3.5" />
               )}
             </Button>
           </div>

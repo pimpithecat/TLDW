@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Play, Link } from "lucide-react";
+import { Loader2, ArrowUp, Link } from "lucide-react";
 import { extractVideoId } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -36,48 +36,45 @@ export function UrlInput({ onSubmit, isLoading = false }: UrlInputProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-2xl">
+    <form onSubmit={handleSubmit} className="w-full max-w-[615px]">
       <div className="flex flex-col gap-2">
-        <Card 
+        <Card
           className={cn(
-            "p-1 transition-all duration-200",
-            isFocused && "ring-2 ring-primary shadow-lg",
+            "relative flex flex-col items-start gap-[9px] self-stretch rounded-[22px] border border-[#f0f1f1] bg-white p-5 shadow-[2px_11px_40.4px_rgba(0,0,0,0.06)] transition-shadow",
+            isFocused && "shadow-[2px_11px_40.4px_rgba(0,0,0,0.1)]",
             error && "ring-2 ring-destructive"
           )}
         >
-          <div className="flex items-center gap-2">
-            <Link className="w-5 h-5 text-muted-foreground ml-3" />
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setIsFocused(false)}
-              placeholder="Paste YouTube URL here..."
-              className="flex-1 px-2 py-3 bg-transparent border-0 focus:outline-none placeholder:text-muted-foreground"
-              disabled={isLoading}
-            />
+          <div className="flex w-full items-center justify-between gap-3.5">
+            <div className="flex flex-1 items-center gap-2.5">
+              <Link className="h-5 w-5 text-[#989999]" strokeWidth={1.8} />
+              <input
+                type="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
+                placeholder="Paste Youtube URL link here..."
+                className="flex-1 border-0 bg-transparent text-[14px] text-[#989999] placeholder:text-[#989999] focus:outline-none"
+                disabled={isLoading}
+              />
+            </div>
             <Button
               type="submit"
               disabled={isLoading || !url.trim()}
-              className="mr-1 h-10 px-6"
+              size="icon"
+              className="h-7 w-7 shrink-0 rounded-full bg-[#B3B4B4] text-white hover:bg-[#9d9e9e] disabled:bg-[#B3B4B4] disabled:text-white disabled:opacity-100"
             >
               {isLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Processing...
-                </>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
-                <>
-                  <Play className="w-4 h-4 mr-2" />
-                  Analyze
-                </>
+                <ArrowUp className="h-3.5 w-3.5" />
               )}
             </Button>
           </div>
         </Card>
         {error && (
-          <p className="text-sm text-destructive ml-1">{error}</p>
+          <p className="text-xs text-destructive ml-1">{error}</p>
         )}
       </div>
     </form>
