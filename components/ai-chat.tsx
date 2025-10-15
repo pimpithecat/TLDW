@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, ReactNode } from "react";
+import { useState, useRef, useEffect, ReactNode, useCallback } from "react";
 import { ChatMessage, TranscriptSegment, Topic, Citation } from "@/lib/types";
 import { ChatMessageComponent } from "./chat-message";
 import { SuggestedQuestions } from "./suggested-questions";
@@ -78,7 +78,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
     }
   };
 
-  const sendMessage = async (messageText?: string, retryCount = 0) => {
+  const sendMessage = useCallback(async (messageText?: string, retryCount = 0) => {
     const text = messageText || input.trim();
     if (!text || isLoading) return;
 
@@ -181,7 +181,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [input, isLoading, messages, transcript, topics, videoId]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -189,6 +189,19 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
       sendMessage();
     }
   };
+
+  const handleRetry = useCallback((messageId: string) => {
+    const messageIndex = messages.findIndex(m => m.id === messageId);
+    if (messageIndex > 0) {
+      const userMessage = messages[messageIndex - 1];
+      if (userMessage.role === 'user') {
+        // Remove the assistant message being retried
+        setMessages(prev => prev.filter((_, i) => i !== messageIndex));
+        // Pass retryCount > 0 to prevent re-adding the user message
+        sendMessage(userMessage.content, 1);
+      }
+    }
+  }, [messages, sendMessage]);
 
   return (
     <TooltipProvider delayDuration={0} skipDelayDuration={0} disableHoverableContent={false}>
@@ -206,11 +219,12 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
                 message={message}
                 onCitationClick={onCitationClick}
                 onTimestampClick={onTimestampClick}
+                onRetry={message.role === 'assistant' ? handleRetry : undefined}
               />
             ))}
 
             {isLoading && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 mb-3">
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
                 <p className="text-xs text-muted-foreground">Thinking...</p>
               </div>

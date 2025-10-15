@@ -4,14 +4,18 @@ import React, { ReactNode, useRef, useCallback, useState, useMemo, useEffect } f
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { parseTimestamp, TIMESTAMP_REGEX } from "@/lib/timestamp-utils";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Copy, RefreshCw, Check } from "lucide-react";
 import { TimestampButton } from "./timestamp-button";
 
 interface SummaryViewerProps {
   content: string;
   onTimestampClick?: (seconds: number) => void;
   collapsibleSections?: boolean;
+  onRetry?: () => void;
+  showActions?: boolean;
 }
 
 interface Section {
@@ -21,10 +25,29 @@ interface Section {
   level: number;
 }
 
-export function SummaryViewer({ content, onTimestampClick, collapsibleSections = true }: SummaryViewerProps) {
+export function SummaryViewer({ content, onTimestampClick, collapsibleSections = true, onRetry, showActions = false }: SummaryViewerProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const scrollPositionRef = useRef<number>(0);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const [copied, setCopied] = useState(false);
+
+  // Handle copy to clipboard
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+    }
+  }, [content]);
+
+  // Handle retry
+  const handleRetry = useCallback(() => {
+    if (onRetry) {
+      onRetry();
+    }
+  }, [onRetry]);
   
   // Parse content into sections based on h2 headings
   const sections = useMemo(() => {
@@ -354,6 +377,49 @@ export function SummaryViewer({ content, onTimestampClick, collapsibleSections =
             {content}
           </ReactMarkdown>
         </article>
+        
+        {/* Action buttons */}
+        {showActions && (
+          <div className="flex items-center gap-2 mt-2 mb-3">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCopy}
+                  className="h-7 px-2 text-muted-foreground hover:text-foreground"
+                >
+                  {copied ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">{copied ? 'Copied!' : 'Copy'}</p>
+              </TooltipContent>
+            </Tooltip>
+            
+            {onRetry && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRetry}
+                    className="h-7 px-2 text-muted-foreground hover:text-foreground"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">Retry</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        )}
       </div>
     );
   }

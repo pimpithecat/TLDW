@@ -28,6 +28,7 @@ interface RightColumnTabsProps {
   takeawaysError?: string;
   showTakeawaysTab?: boolean;
   cachedSuggestedQuestions?: string[] | null;
+  onRetryTakeaways?: () => void;
 }
 
 export interface RightColumnTabsHandle {
@@ -52,6 +53,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   takeawaysError,
   showTakeawaysTab,
   cachedSuggestedQuestions,
+  onRetryTakeaways,
 }, ref) => {
   const [activeTab, setActiveTab] = useState<"transcript" | "takeaways">(showTakeawaysTab ? "takeaways" : "transcript");
   const [hasShownTakeaways, setHasShownTakeaways] = useState<boolean>(!!showTakeawaysTab);
@@ -110,6 +112,8 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
           content={takeawaysContent}
           onTimestampClick={handleTimestamp}
           collapsibleSections={false}
+          onRetry={onRetryTakeaways}
+          showActions={true}
         />
       );
     }

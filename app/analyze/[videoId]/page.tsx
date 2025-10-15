@@ -916,6 +916,60 @@ export default function AnalyzePage() {
     requestSeek(seconds);
   };
 
+  const handleRetryTakeaways = useCallback(async () => {
+    if (!videoId || !transcript.length) return;
+
+    // Clear existing content and error
+    setTakeawaysContent(null);
+    setTakeawaysError("");
+    setIsGeneratingTakeaways(true);
+
+    try {
+      const takeawaysController = abortManager.current.createController('retry-takeaways', 60000);
+
+      const response = await fetch("/api/generate-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transcript,
+          videoInfo,
+          videoId
+        }),
+        signal: takeawaysController.signal,
+      });
+
+      if (response.ok) {
+        const { summaryContent: generatedTakeaways } = await response.json();
+        setTakeawaysContent(generatedTakeaways);
+
+        // Update the video analysis with the new takeaways
+        backgroundOperation(
+          'update-retry-takeaways',
+          async () => {
+            await fetch("/api/update-video-analysis", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                videoId,
+                summary: generatedTakeaways
+              }),
+            });
+          }
+        );
+      } else {
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || "Failed to generate takeaways");
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to generate takeaways. Please try again.";
+      setTakeawaysError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsGeneratingTakeaways(false);
+      abortManager.current.cleanup('retry-takeaways');
+    }
+  }, [videoId, transcript, videoInfo]);
+
   const handleTimeUpdate = useCallback((seconds: number) => {
     setCurrentTime(seconds);
   }, []);
@@ -1324,6 +1378,7 @@ export default function AnalyzePage() {
                   takeawaysError={takeawaysError}
                   showTakeawaysTab={showTakeawaysTab}
                   cachedSuggestedQuestions={cachedSuggestedQuestions}
+                  onRetryTakeaways={handleRetryTakeaways}
                 />
               </div>
             </div>

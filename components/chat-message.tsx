@@ -1,17 +1,20 @@
 "use client";
 
-import React, { useMemo, ReactNode } from "react";
+import React, { useMemo, ReactNode, useState } from "react";
 import { ChatMessage, Citation } from "@/lib/types";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TimestampButton } from "./timestamp-button";
+import { Copy, RefreshCw, Check } from "lucide-react";
 
 interface ChatMessageProps {
   message: ChatMessage;
   onCitationClick: (citation: Citation) => void;
   onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean, citationText?: string) => void;
+  onRetry?: (messageId: string) => void;
 }
 
 function formatTimestamp(seconds: number): string {
@@ -20,8 +23,27 @@ function formatTimestamp(seconds: number): string {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-export function ChatMessageComponent({ message, onCitationClick, onTimestampClick }: ChatMessageProps) {
+export function ChatMessageComponent({ message, onCitationClick, onTimestampClick, onRetry }: ChatMessageProps) {
   const isUser = message.role === 'user';
+  const [copied, setCopied] = useState(false);
+
+  // Handle copy to clipboard
+  const handleCopy = React.useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+    }
+  }, [message.content]);
+
+  // Handle retry
+  const handleRetry = React.useCallback(() => {
+    if (onRetry) {
+      onRetry(message.id);
+    }
+  }, [onRetry, message.id]);
 
   // Create citation map for quick lookup
   const citationMap = useMemo(() => {
@@ -227,6 +249,47 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
           >
             {message.content}
           </ReactMarkdown>
+          </div>
+          
+          {/* Action buttons */}
+          <div className="flex items-center gap-2 mt-2 mb-3">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCopy}
+                  className="h-7 px-2 text-muted-foreground hover:text-foreground"
+                >
+                  {copied ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">{copied ? 'Copied!' : 'Copy'}</p>
+              </TooltipContent>
+            </Tooltip>
+            
+            {onRetry && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRetry}
+                    className="h-7 px-2 text-muted-foreground hover:text-foreground"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">Retry</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
           </div>
         </div>
       )}
