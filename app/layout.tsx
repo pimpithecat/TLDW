@@ -20,6 +20,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "TLDW - Too Long; Didn't Watch",
   description: "Smart video navigation that transforms long YouTube videos into topic-driven learning experiences",
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({
@@ -30,17 +33,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white text-[#787878]`}
       >
         <AuthProvider>
           <div className="min-h-screen flex flex-col">
-            <header className="border-b">
-              <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-                <Link href="/" className="flex items-center space-x-2">
-                  <span className="font-bold text-xl">TLDW</span>
-                </Link>
-                <UserMenu />
-              </div>
+            <header className="fixed top-0 right-0 z-50 p-6">
+              <UserMenu />
             </header>
             <main className="flex-1">
               {children}

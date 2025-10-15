@@ -9,6 +9,7 @@ import { ThemeSelector } from "@/components/theme-selector";
 import { LoadingContext } from "@/components/loading-context";
 import { LoadingTips } from "@/components/loading-tips";
 import { VideoSkeleton } from "@/components/video-skeleton";
+import Image from "next/image";
 import { Topic, TranscriptSegment, VideoInfo, Citation, PlaybackCommand } from "@/lib/types";
 
 // Playback context for tracking what's currently playing
@@ -25,7 +26,7 @@ interface PlaybackContext {
 type PageState = 'IDLE' | 'ANALYZING_NEW' | 'LOADING_CACHED';
 import { extractVideoId } from "@/lib/utils";
 import { useElapsedTimer } from "@/lib/hooks/use-elapsed-timer";
-import { Loader2, Video } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { AuthModal } from "@/components/auth-modal";
 import { useAuth } from "@/contexts/auth-context";
@@ -1120,20 +1121,54 @@ export default function Home() {
   }, [videoId, topics]); // Re-run when video or topics change
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <header className="text-center mb-8">
-          <div className="flex items-center justify-center gap-3 mb-2">
-            <Video className="h-8 w-8 text-primary" />
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-              TLDW
-            </h1>
+    <div className="min-h-screen bg-white">
+      <div className="mx-auto flex max-w-[734px] flex-col items-center gap-10 px-6 pb-16 pt-[150px] text-center">
+        <header className="flex flex-col items-center gap-5">
+          <div className="flex items-center gap-3">
+            <Image 
+              src="/Video_Play.svg" 
+              alt="Video play icon" 
+              width={34} 
+              height={34}
+              className="h-[34px] w-[34px]"
+            />
+            <h1 className="text-[24px] font-bold tracking-tight text-[#787878]">TLDW</h1>
           </div>
-          <p className="text-muted-foreground">Too Long; Didn't Watch - Smart Video Navigation</p>
+          <p className="text-[16px] leading-[17px] text-[#787878]">
+            Too Long; Didn't Watch - Learn from long videos 10x faster
+          </p>
         </header>
 
-        <div className="flex flex-col items-center gap-4 mb-8">
+        <div className="flex w-full flex-col items-center gap-10">
           <UrlInput onSubmit={processVideo} isLoading={pageState === 'ANALYZING_NEW'} />
+
+          {pageState === 'IDLE' && !videoId && (
+            <Card className="relative flex w-[470px] max-w-full flex-col gap-3 overflow-hidden rounded-[24px] border border-[#f0f1f1] bg-white p-6 text-left shadow-[2px_11px_40.4px_rgba(0,0,0,0.06)]">
+              <div className="relative z-10 flex flex-col gap-3">
+                <h3 className="text-[16px] font-medium leading-[17px] text-[#5c5c5c]">
+                  Jump to top insights immediately
+                </h3>
+                <p className="text-[16px] leading-[1.2] text-[#8d8d8d]">
+                  Paste a link, and we’ll generate highlight reels for you. Consume a 1-hour video in 5 minutes.
+                </p>
+              </div>
+              <div className="pointer-events-none absolute right-[-28px] top-[-40px] h-[190px] w-[190px]">
+                <div className="absolute inset-0 overflow-hidden rounded-full border border-white/40 shadow-[0_18px_45px_rgba(37,29,53,0.2)]">
+                  <Image
+                    src="/gradient_person.jpg"
+                    alt="Gradient silhouette illustration"
+                    fill
+                    sizes="190px"
+                    className="object-cover"
+                    priority
+                  />
+                  <div className="pointer-events-none absolute inset-0 rounded-full border border-white/60" />
+                  <div className="pointer-events-none absolute inset-4 rounded-full border border-white/40" />
+                </div>
+                <div className="absolute inset-0 rounded-full bg-white/50 blur-[42px] opacity-70" />
+              </div>
+            </Card>
+          )}
         </div>
 
         {error && (
@@ -1147,7 +1182,7 @@ export default function Home() {
         )}
 
         {pageState === 'ANALYZING_NEW' && (
-          <div className="max-w-6xl mx-auto">
+          <div className="mx-auto w-full max-w-6xl px-6">
             <div className="flex flex-col items-center justify-center mb-8">
               <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
               <p className="text-foreground font-medium">Analyzing video and generating highlight reels</p>
@@ -1171,7 +1206,7 @@ export default function Home() {
 
         {videoId && topics.length > 0 && pageState === 'IDLE' && (
           <>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-6 px-6 pb-16 lg:grid-cols-3">
               {/* Left Column - Video (2/3 width) */}
               <div className="lg:col-span-2">
                 <div className="sticky top-4 space-y-4" id="video-container">
@@ -1251,17 +1286,6 @@ export default function Home() {
           </>
         )}
 
-        {pageState === 'IDLE' && !error && topics.length === 0 && !videoId && (
-          <Card className="max-w-2xl mx-auto p-12 text-center bg-muted/30">
-            <Video className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-            <p className="text-foreground mb-2 text-lg">
-              Enter a YouTube URL above to get started
-            </p>
-            <p className="text-sm text-muted-foreground">
-              We'll analyze the video and create smart topics for efficient navigation
-            </p>
-          </Card>
-        )}
       </div>
       <AuthModal
         open={authModalOpen}
