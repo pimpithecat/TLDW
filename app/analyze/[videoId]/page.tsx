@@ -520,11 +520,11 @@ export default function AnalyzePage() {
                 const summaryRes = await fetch("/api/generate-summary", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  transcript: sanitizedTranscript,
-                  videoInfo: cacheData.videoInfo,
-                  videoId: extractedVideoId
-                }),
+                  body: JSON.stringify({
+                    transcript: sanitizedTranscript,
+                    videoInfo: cacheData.videoInfo,
+                    videoId: extractedVideoId
+                  }),
                 });
 
                 if (summaryRes.ok) {
@@ -1108,19 +1108,26 @@ export default function AnalyzePage() {
       return;
     }
 
-    if (selectedTheme === themeLabel) {
+    const normalizedTheme = themeLabel.trim();
+
+    if (!normalizedTheme) {
       resetToDefault();
       return;
     }
 
-    setSelectedTheme(themeLabel);
+    if (selectedTheme === normalizedTheme) {
+      resetToDefault();
+      return;
+    }
+
+    setSelectedTheme(normalizedTheme);
     setThemeError(null);
     setIsLoadingThemeTopics(true);
     setSelectedTopic(null);
     setIsPlayingAll(false);
     setPlayAllIndex(0);
 
-    let themedTopics = themeTopicsMap[themeLabel];
+    let themedTopics = themeTopicsMap[normalizedTheme];
     const needsHydration =
       Array.isArray(themedTopics) &&
       themedTopics.some((topic) => {
@@ -1132,7 +1139,7 @@ export default function AnalyzePage() {
       themedTopics = hydrateTopicsWithTranscript(themedTopics, transcript);
       setThemeTopicsMap(prev => ({
         ...prev,
-        [themeLabel]: themedTopics || [],
+        [normalizedTheme]: themedTopics || [],
       }));
     }
 
@@ -1147,7 +1154,7 @@ export default function AnalyzePage() {
             videoInfo,
             transcript,
             model: 'gemini-2.5-flash',
-            theme: themeLabel
+            theme: normalizedTheme
           }),
           signal: controller.signal
         });
@@ -1161,7 +1168,7 @@ export default function AnalyzePage() {
         themedTopics = hydrateTopicsWithTranscript(Array.isArray(data.topics) ? data.topics : [], transcript);
         setThemeTopicsMap(prev => ({
           ...prev,
-          [themeLabel]: themedTopics || []
+          [normalizedTheme]: themedTopics || []
         }));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to generate themed topics";
@@ -1235,8 +1242,8 @@ export default function AnalyzePage() {
   }, [videoId, topics]); // Re-run when video or topics change
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-slate-50">
+    <div className="min-h-screen bg-white">
+      <header className="bg-white">
         <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-center gap-3.5 px-5 py-5 lg:flex-row">
           <Link href="/" className="flex items-center gap-2.5" aria-label="Go to TLDW home">
             <Image
@@ -1327,7 +1334,7 @@ export default function AnalyzePage() {
                   renderControls={false}
                   onDurationChange={setVideoDuration}
                 />
-                {(themes.length > 0 || isLoadingThemeTopics || themeError) && (
+                {(themes.length > 0 || isLoadingThemeTopics || themeError || selectedTheme) && (
                   <div className="flex justify-center">
                     <ThemeSelector
                       themes={themes}

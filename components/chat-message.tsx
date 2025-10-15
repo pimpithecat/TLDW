@@ -9,6 +9,7 @@ import remarkGfm from 'remark-gfm';
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TimestampButton } from "./timestamp-button";
 import { Copy, RefreshCw, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface ChatMessageProps {
   message: ChatMessage;
@@ -205,7 +206,7 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
   };
 
   return (
-    <div className="w-full py-2">
+    <div className={cn("w-full py-2", isUser && "mb-8")}>
       {isUser ? (
         <Card className="p-5 rounded-2xl bg-primary/5 border-0 shadow-none">
           <p className="text-sm whitespace-pre-wrap">{message.content}</p>
