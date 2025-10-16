@@ -283,7 +283,7 @@ const findMatchingCitation = useCallback((seconds: number): Citation | null => {
   };
 
   return (
-    <div className={cn("w-full py-2", isUser && "mb-8")}>
+    <div className={cn("py-2", isUser ? "max-w-[80%] ml-auto mb-8" : "w-full")}>
       {isUser ? (
         <Card className="p-5 rounded-2xl bg-primary/5 border-0 shadow-none">
           <p className="text-sm whitespace-pre-wrap">{message.content}</p>
@@ -330,7 +330,7 @@ const findMatchingCitation = useCallback((seconds: number): Citation | null => {
           </div>
           
           {/* Action buttons */}
-          <div className="flex items-center gap-2 mt-2 mb-3">
+          <div className="flex items-center gap-0 mt-2 mb-3">
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

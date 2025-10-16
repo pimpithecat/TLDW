@@ -392,7 +392,7 @@ export function SummaryViewer({ content, onTimestampClick, collapsibleSections =
         
         {/* Action buttons */}
         {showActions && (
-          <div className="flex items-center gap-2 mt-2 mb-3">
+          <div className="flex items-center gap-0 mt-2 mb-3">
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
