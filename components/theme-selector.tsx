@@ -253,49 +253,51 @@ export function ThemeSelector({
 
         {/* Overlay for custom input - absolute positioned */}
         {showCustomInput && (
-          <div className="absolute left-0 top-0 flex items-center gap-2 z-10 bg-background">
-            {/* X button - external on the left */}
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 rounded-full text-muted-foreground transition-all duration-200"
-              onClick={closeCustomInput}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-            
-            {/* Form with expanded textbox and inline arrow button */}
-            <form className="relative" onSubmit={handleSubmit}>
-              <Input
-                ref={inputRef}
-                value={customThemeInput}
-                onChange={(event) => {
-                  if (validationError) {
-                    setValidationError(null);
-                  }
-                  setCustomThemeInput(event.target.value);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") {
-                    event.preventDefault();
-                    closeCustomInput();
-                  }
-                }}
-                placeholder="Input your topics"
-                disabled={isLoading}
-                className="h-8 w-[300px] rounded-full px-3 pr-10 text-sm transition-all duration-300 ease-in-out"
-              />
+          <div className="absolute left-0 top-0 z-10">
+            <div className="flex items-center gap-2 rounded-full bg-transparent">
+              {/* X button - external on the left */}
               <Button
-                type="submit"
+                type="button"
                 size="icon"
                 variant="ghost"
-                disabled={isSubmitDisabled}
-                className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 rounded-full text-muted-foreground hover:text-foreground disabled:opacity-40"
+                className="h-8 w-8 rounded-full bg-muted text-muted-foreground transition-all duration-200"
+                onClick={closeCustomInput}
               >
-                <ArrowUp className="h-4 w-4" />
+                <X className="h-4 w-4" />
               </Button>
-            </form>
+              
+              {/* Form with expanded textbox and inline arrow button */}
+              <form className="relative" onSubmit={handleSubmit}>
+                <Input
+                  ref={inputRef}
+                  value={customThemeInput}
+                  onChange={(event) => {
+                    if (validationError) {
+                      setValidationError(null);
+                    }
+                    setCustomThemeInput(event.target.value);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      closeCustomInput();
+                    }
+                  }}
+                  placeholder="Input your topics"
+                  disabled={isLoading}
+                  className="h-8 w-[300px] rounded-full bg-muted border-0 px-3 pr-10 text-sm transition-all duration-300 ease-in-out"
+                />
+                <Button
+                  type="submit"
+                  size="icon"
+                  variant="ghost"
+                  disabled={isSubmitDisabled}
+                  className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 rounded-full text-muted-foreground hover:text-foreground disabled:opacity-40"
+                >
+                  <ArrowUp className="h-4 w-4" />
+                </Button>
+              </form>
+            </div>
           </div>
         )}
       </div>
