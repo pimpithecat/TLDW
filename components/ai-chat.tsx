@@ -38,16 +38,28 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
   const takeawaysContainerRef = useRef<HTMLDivElement | null>(null);
   const chatMessagesContainerRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const scrollViewportRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const node = messagesEndRef.current;
-    if (!node) {
+    const viewport = scrollViewportRef.current;
+    if (!viewport) {
       return;
     }
-    node.scrollIntoView({
-      block: "end",
-      behavior: messages.length <= 1 ? "auto" : "smooth",
-    });
+    
+    // Scroll to bottom of viewport only
+    const scrollToBottom = () => {
+      viewport.scrollTop = viewport.scrollHeight;
+    };
+
+    if (messages.length <= 1) {
+      scrollToBottom();
+    } else {
+      // Smooth scroll for subsequent messages
+      viewport.scrollTo({
+        top: viewport.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
   }, [messages, isLoading]);
 
   // Reset questions when video changes
@@ -332,7 +344,13 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
   return (
     <TooltipProvider delayDuration={0} skipDelayDuration={0} disableHoverableContent={false}>
       <div className="w-full h-full flex flex-col">
-        <ScrollArea className="flex-1 px-6">
+        <ScrollArea className="flex-1 px-6" ref={(node) => {
+          if (node) {
+            // Radix ScrollArea has a viewport element as its first child
+            const viewport = node.querySelector('[data-slot="scroll-area-viewport"]') as HTMLDivElement;
+            scrollViewportRef.current = viewport;
+          }
+        }}>
           <div className="space-y-3.5">
             {pinnedContent && (
               <div className="space-y-2.5" ref={takeawaysContainerRef}>
@@ -391,7 +409,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
                 <p className="text-xs text-muted-foreground">Thinking...</p>
               </div>
             )}
-            <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} className="pb-24" />
           </div>
         </ScrollArea>
 
