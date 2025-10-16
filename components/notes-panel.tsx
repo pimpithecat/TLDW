@@ -1,4 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Note, NoteSource, NoteMetadata } from "@/lib/types";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
@@ -6,6 +8,57 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Trash2, Clock } from "lucide-react";
 import { NoteEditor } from "@/components/note-editor";
+
+const markdownComponents = {
+  p: ({ children }: { children: ReactNode }) => (
+    <p className="mb-2 last:mb-0 whitespace-pre-wrap">{children}</p>
+  ),
+  ul: ({ children }: { children: ReactNode }) => (
+    <ul className="list-disc list-inside space-y-1 mb-2 last:mb-0">{children}</ul>
+  ),
+  ol: ({ children }: { children: ReactNode }) => (
+    <ol className="list-decimal list-inside space-y-1 mb-2 last:mb-0">{children}</ol>
+  ),
+  li: ({ children }: { children: ReactNode }) => (
+    <li className="whitespace-pre-wrap">{children}</li>
+  ),
+  a: ({ children, href }: { children: ReactNode; href?: string }) => (
+    <a
+      href={href}
+      className="text-primary hover:text-primary/80 underline decoration-1 underline-offset-2"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {children}
+    </a>
+  ),
+  code: ({ children }: { children: ReactNode }) => (
+    <code className="bg-background/80 px-1 py-0.5 rounded text-xs">{children}</code>
+  ),
+  pre: ({ children }: { children: ReactNode }) => (
+    <pre className="bg-background/70 p-3 rounded-lg overflow-x-auto text-xs space-y-2">
+      {children}
+    </pre>
+  ),
+  blockquote: ({ children }: { children: ReactNode }) => (
+    <blockquote className="border-l-4 border-muted-foreground/30 pl-4 italic">{children}</blockquote>
+  ),
+  strong: ({ children }: { children: ReactNode }) => (
+    <strong className="font-semibold">{children}</strong>
+  ),
+  em: ({ children }: { children: ReactNode }) => (
+    <em className="italic">{children}</em>
+  ),
+  h1: ({ children }: { children: ReactNode }) => (
+    <h1 className="text-base font-semibold mb-2">{children}</h1>
+  ),
+  h2: ({ children }: { children: ReactNode }) => (
+    <h2 className="text-sm font-semibold mb-1">{children}</h2>
+  ),
+  h3: ({ children }: { children: ReactNode }) => (
+    <h3 className="text-sm font-medium mb-1">{children}</h3>
+  ),
+};
 
 export interface EditingNote {
   text: string;
@@ -77,7 +130,7 @@ export function NotesPanel({ notes = [], onDeleteNote, editingNote, onSaveEditin
                 const text = note.text ?? "";
 
                 let quoteText = "";
-                let additionalText = "";
+                    let additionalText = "";
 
                 if (selectedText) {
                   quoteText = selectedText;
@@ -97,14 +150,24 @@ export function NotesPanel({ notes = [], onDeleteNote, editingNote, onSaveEditin
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 space-y-2">
                         {quoteText && (
-                          <div className="border-l-2 border-primary/40 pl-3 py-1 rounded-r text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">
-                            {quoteText}
+                          <div className="border-l-2 border-primary/40 pl-3 py-1 rounded-r text-sm text-foreground/90 leading-relaxed">
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={markdownComponents}
+                            >
+                              {quoteText}
+                            </ReactMarkdown>
                           </div>
                         )}
                         {additionalText && (
-                          <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
-                            {additionalText}
-                          </p>
+                          <div className="text-sm leading-relaxed text-foreground">
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={markdownComponents}
+                            >
+                              {additionalText}
+                            </ReactMarkdown>
+                          </div>
                         )}
                         <div className="flex flex-col gap-1 text-[11px] text-muted-foreground">
                           <div className="flex flex-wrap items-center gap-3">

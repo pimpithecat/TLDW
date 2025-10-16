@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { NoteWithVideo, NoteSource } from '@/lib/types';
 import { fetchAllNotes, deleteNote } from '@/lib/notes-client';
@@ -13,6 +13,8 @@ import { Search, Trash2, Video, NotebookPen, Loader2 } from 'lucide-react';
 import { formatDuration } from '@/lib/utils';
 import Image from 'next/image';
 import Link from 'next/link';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 function getSourceLabel(source: NoteSource) {
   switch (source) {
@@ -39,6 +41,57 @@ function getSourceColor(source: NoteSource) {
       return 'bg-gray-100 text-gray-700';
   }
 }
+
+const markdownComponents = {
+  p: ({ children }: { children: ReactNode }) => (
+    <p className="mb-2 last:mb-0 whitespace-pre-wrap">{children}</p>
+  ),
+  ul: ({ children }: { children: ReactNode }) => (
+    <ul className="list-disc list-inside space-y-1 mb-2 last:mb-0">{children}</ul>
+  ),
+  ol: ({ children }: { children: ReactNode }) => (
+    <ol className="list-decimal list-inside space-y-1 mb-2 last:mb-0">{children}</ol>
+  ),
+  li: ({ children }: { children: ReactNode }) => (
+    <li className="whitespace-pre-wrap">{children}</li>
+  ),
+  a: ({ children, href }: { children: ReactNode; href?: string }) => (
+    <a
+      href={href}
+      className="text-primary hover:text-primary/80 underline decoration-1 underline-offset-2"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {children}
+    </a>
+  ),
+  code: ({ children }: { children: ReactNode }) => (
+    <code className="bg-background/80 px-1 py-0.5 rounded text-xs">{children}</code>
+  ),
+  pre: ({ children }: { children: ReactNode }) => (
+    <pre className="bg-background/70 p-3 rounded-lg overflow-x-auto text-xs space-y-2">
+      {children}
+    </pre>
+  ),
+  blockquote: ({ children }: { children: ReactNode }) => (
+    <blockquote className="border-l-4 border-muted-foreground/30 pl-4 italic">{children}</blockquote>
+  ),
+  strong: ({ children }: { children: ReactNode }) => (
+    <strong className="font-semibold">{children}</strong>
+  ),
+  em: ({ children }: { children: ReactNode }) => (
+    <em className="italic">{children}</em>
+  ),
+  h1: ({ children }: { children: ReactNode }) => (
+    <h1 className="text-base font-semibold mb-2">{children}</h1>
+  ),
+  h2: ({ children }: { children: ReactNode }) => (
+    <h2 className="text-sm font-semibold mb-1">{children}</h2>
+  ),
+  h3: ({ children }: { children: ReactNode }) => (
+    <h3 className="text-sm font-medium mb-1">{children}</h3>
+  ),
+};
 
 export default function AllNotesPage() {
   const router = useRouter();
@@ -293,14 +346,24 @@ export default function AllNotesPage() {
 
                             {/* Note Content */}
                             {quoteText && (
-                              <div className="border-l-2 border-primary/40 pl-3 py-1 rounded-r text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">
-                                {quoteText}
+                              <div className="border-l-2 border-primary/40 pl-3 py-1 rounded-r text-sm text-foreground/90 leading-relaxed">
+                                <ReactMarkdown
+                                  remarkPlugins={[remarkGfm]}
+                                  components={markdownComponents}
+                                >
+                                  {quoteText}
+                                </ReactMarkdown>
                               </div>
                             )}
                             {additionalText && (
-                              <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
-                                {additionalText}
-                              </p>
+                              <div className="text-sm leading-relaxed text-foreground">
+                                <ReactMarkdown
+                                  remarkPlugins={[remarkGfm]}
+                                  components={markdownComponents}
+                                >
+                                  {additionalText}
+                                </ReactMarkdown>
+                              </div>
                             )}
 
                             {/* Timestamp */}
