@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { ArrowUp, ChevronLeft, ChevronRight, Loader2, Plus, X } from "lucide-react";
+import { ArrowUp, ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
 
 interface ThemeSelectorProps {
   themes: string[];
@@ -215,9 +215,6 @@ export function ThemeSelector({
               {theme}
             </Button>
           ))}
-          {isLoading && (
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground flex-shrink-0" aria-hidden="true" />
-          )}
         </div>
         
         {/* Combined scroll button - absolutely positioned on right edge */}

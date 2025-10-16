@@ -4,8 +4,8 @@ import { Topic, TranscriptSegment } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { VideoProgressBar } from "@/components/video-progress-bar";
-import { formatDuration } from "@/lib/utils";
-import { Play, Pause } from "lucide-react";
+import { formatDuration, cn } from "@/lib/utils";
+import { Play, Pause, Loader2 } from "lucide-react";
 
 interface HighlightsPanelProps {
   topics: Topic[];
@@ -19,6 +19,7 @@ interface HighlightsPanelProps {
   currentTime: number;
   videoDuration: number;
   transcript?: TranscriptSegment[];
+  isLoadingThemeTopics?: boolean;
 }
 
 export function HighlightsPanel({
@@ -33,10 +34,14 @@ export function HighlightsPanel({
   currentTime,
   videoDuration,
   transcript = [],
+  isLoadingThemeTopics = false,
 }: HighlightsPanelProps) {
   return (
-    <Card className="overflow-hidden p-0 border-0">
-      <div className="p-2.5 bg-background rounded-b-3xl flex-shrink-0">
+    <Card className="overflow-hidden p-0 border-0 relative">
+      <div className={cn(
+        "p-2.5 bg-background rounded-b-3xl flex-shrink-0 transition-all duration-200",
+        isLoadingThemeTopics && "blur-[4px] opacity-50 pointer-events-none"
+      )}>
         <VideoProgressBar
           videoDuration={videoDuration}
           currentTime={currentTime}
@@ -46,6 +51,7 @@ export function HighlightsPanel({
           onTopicSelect={(topic) => onTopicSelect(topic)}
           onPlayTopic={onPlayTopic}
           transcript={transcript}
+          isLoadingThemeTopics={isLoadingThemeTopics}
         />
 
         <div className="mt-3 flex items-center justify-between">
@@ -76,6 +82,16 @@ export function HighlightsPanel({
           </div>
         </div>
       </div>
+
+      {/* Loading overlay */}
+      {isLoadingThemeTopics && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 pointer-events-none">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          <p className="text-sm font-medium text-foreground">
+            Generating your topics...
+          </p>
+        </div>
+      )}
     </Card>
   );
 }

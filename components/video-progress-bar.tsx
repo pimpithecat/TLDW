@@ -15,6 +15,7 @@ interface VideoProgressBarProps {
   onTopicSelect?: (topic: Topic, fromPlayAll?: boolean) => void;
   onPlayTopic?: (topic: Topic) => void;
   transcript?: TranscriptSegment[];
+  isLoadingThemeTopics?: boolean;
 }
 
 export function VideoProgressBar({
@@ -26,6 +27,7 @@ export function VideoProgressBar({
   onTopicSelect,
   onPlayTopic,
   transcript,
+  isLoadingThemeTopics = false,
 }: VideoProgressBarProps) {
   const progressBarRef = useRef<HTMLDivElement>(null);
   const hasDuration = videoDuration > 0;
