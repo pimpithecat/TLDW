@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/react';
 import { AuthProvider } from '@/contexts/auth-context';
 import { UserMenu } from '@/components/user-menu';
 import { ToastProvider } from '@/components/toast-provider';
+import { Footer } from '@/components/footer';
 import Link from 'next/link';
 import "./globals.css";
 
@@ -43,6 +44,7 @@ export default function RootLayout({
             <main className="flex-1">
               {children}
             </main>
+            <Footer />
           </div>
           <ToastProvider />
         </AuthProvider>
