@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, ReactNode, useCallback } from "react";
-import { ChatMessage, TranscriptSegment, Topic, Citation } from "@/lib/types";
+import { ChatMessage, TranscriptSegment, Topic, Citation, NoteSource, NoteMetadata } from "@/lib/types";
+import { SelectionActions, SelectionActionPayload, triggerExplainSelection, EXPLAIN_SELECTION_EVENT } from "@/components/selection-actions";
 import { ChatMessageComponent } from "./chat-message";
 import { SuggestedQuestions } from "./suggested-questions";
 import { Card } from "@/components/ui/card";
@@ -21,9 +22,11 @@ interface AIChatProps {
   onPlayAllCitations?: (citations: Citation[]) => void;
   cachedSuggestedQuestions?: string[] | null;
   pinnedContent?: ReactNode;
+  onSaveNote?: (payload: { text: string; source: NoteSource; sourceId?: string | null; metadata?: NoteMetadata | null }) => Promise<void>;
+  onTakeNoteFromSelection?: (payload: SelectionActionPayload) => void;
 }
 
-export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClick, onTimestampClick, onPlayAllCitations, cachedSuggestedQuestions, pinnedContent }: AIChatProps) {
+export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClick, onTimestampClick, onPlayAllCitations, cachedSuggestedQuestions, pinnedContent, onSaveNote, onTakeNoteFromSelection }: AIChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -31,6 +34,16 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [askedQuestions, setAskedQuestions] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const chatViewportRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!scrollRef.current) return;
+    const viewport = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
+    if (viewport) {
+      chatViewportRef.current = viewport;
+    }
+  }, [scrollRef.current]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -57,26 +70,6 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
       fetchSuggestedQuestions();
     }
   }, [transcript, cachedSuggestedQuestions]);
-
-
-  const fetchSuggestedQuestions = async () => {
-    setLoadingQuestions(true);
-    try {
-      const response = await fetch("/api/suggested-questions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript, topics, videoTitle }),
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setSuggestedQuestions(data.questions || []);
-      }
-    } catch (error) {
-    } finally {
-      setLoadingQuestions(false);
-    }
-  };
 
   const sendMessage = useCallback(async (messageText?: string, retryCount = 0) => {
     const text = messageText || input.trim();
@@ -183,6 +176,59 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
     }
   }, [input, isLoading, messages, transcript, topics, videoId]);
 
+  useEffect(() => {
+    const handleExplain = (event: Event) => {
+      const custom = event as CustomEvent<SelectionActionPayload>;
+      const detail = custom.detail;
+      if (!detail?.text?.trim()) {
+        return;
+      }
+
+      const origin = detail.source === 'transcript' ? 'transcript excerpt' : 'text';
+      const contextLines: string[] = [];
+      if (detail.metadata?.timestampLabel) {
+        contextLines.push(`Timestamp: ${detail.metadata.timestampLabel}`);
+      }
+      if (detail.metadata?.selectionContext && detail.metadata.selectionContext !== videoTitle) {
+        contextLines.push(`Context: ${detail.metadata.selectionContext}`);
+      }
+
+      const prompt = `Explain the following ${origin}${videoTitle ? ` from "${videoTitle}"` : ''}:
+
+"${detail.text}"${contextLines.length ? `
+
+Additional details:
+- ${contextLines.join('\n- ')}` : ''}`;
+
+      sendMessage(prompt);
+    };
+
+    window.addEventListener(EXPLAIN_SELECTION_EVENT, handleExplain as EventListener);
+    return () => {
+      window.removeEventListener(EXPLAIN_SELECTION_EVENT, handleExplain as EventListener);
+    };
+  }, [sendMessage, videoTitle]);
+
+
+  const fetchSuggestedQuestions = async () => {
+    setLoadingQuestions(true);
+    try {
+      const response = await fetch("/api/suggested-questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcript, topics, videoTitle }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setSuggestedQuestions(data.questions || []);
+      }
+    } catch (error) {
+    } finally {
+      setLoadingQuestions(false);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -203,24 +249,42 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
     }
   }, [messages, sendMessage]);
 
+
   return (
     <TooltipProvider delayDuration={0} skipDelayDuration={0} disableHoverableContent={false}>
       <div className="w-full h-full flex flex-col">
         <ScrollArea className="flex-1 px-6" ref={scrollRef}>
-          <div className="space-y-3.5">
+          <div className="space-y-3.5" ref={chatContainerRef}>
+            <SelectionActions
+              containerRef={chatViewportRef as unknown as React.RefObject<HTMLElement | null>}
+              onExplain={(payload) => {
+                triggerExplainSelection({
+                  ...payload,
+                  source: 'chat'
+                });
+              }}
+              onTakeNote={(payload) => {
+                onTakeNoteFromSelection?.({
+                  ...payload,
+                  source: 'chat'
+                });
+              }}
+              source="chat"
+            />
             {pinnedContent && (
               <div className="space-y-2.5">
                 {pinnedContent}
               </div>
             )}
             {messages.map((message) => (
-              <ChatMessageComponent
-                key={message.id}
-                message={message}
-                onCitationClick={onCitationClick}
-                onTimestampClick={onTimestampClick}
-                onRetry={message.role === 'assistant' ? handleRetry : undefined}
-              />
+            <ChatMessageComponent
+              key={message.id}
+              message={message}
+              onCitationClick={onCitationClick}
+              onTimestampClick={onTimestampClick}
+              onRetry={message.role === 'assistant' ? handleRetry : undefined}
+              onSaveNote={message.role === 'assistant' ? onSaveNote : undefined}
+            />
             ))}
 
             {isLoading && (

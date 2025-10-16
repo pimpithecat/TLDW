@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+// Shared regex
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 // YouTube Video ID validation
 const YOUTUBE_ID_REGEX = /^[a-zA-Z0-9_-]{11}$/;
 export const youtubeIdSchema = z.string()
@@ -129,6 +132,38 @@ export const chatRequestSchema = z.object({
 export const toggleFavoriteRequestSchema = z.object({
   videoId: youtubeIdSchema,
   isFavorite: z.boolean()
+});
+
+export const noteSourceSchema = z.enum(['chat', 'takeaways', 'transcript', 'custom']);
+
+export const noteMetadataSchema = z.object({
+  transcript: z.object({
+    start: z.number().min(0),
+    end: z.number().min(0).optional(),
+    segmentIndex: z.number().int().min(0).optional(),
+    topicId: z.string().optional()
+  }).optional(),
+  chat: z.object({
+    messageId: z.string().min(1),
+    role: z.enum(['user', 'assistant']),
+    timestamp: z.string().optional()
+  }).optional(),
+  selectionContext: z.string().optional(),
+  timestampLabel: z.string().optional(),
+  extra: z.record(z.string(), z.unknown()).optional()
+}).passthrough().optional();
+
+export const noteInsertSchema = z.object({
+  youtubeId: youtubeIdSchema,
+  videoId: z.string().regex(UUID_REGEX, 'Invalid video record ID').optional(),
+  source: noteSourceSchema,
+  sourceId: z.string().optional(),
+  text: z.string().min(1).max(5000),
+  metadata: noteMetadataSchema
+});
+
+export const noteDeleteSchema = z.object({
+  noteId: z.string().regex(UUID_REGEX, 'Invalid note ID')
 });
 
 export const checkVideoCacheRequestSchema = z.object({

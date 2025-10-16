@@ -5,11 +5,14 @@ import { TranscriptViewer } from "@/components/transcript-viewer";
 import { AIChat } from "@/components/ai-chat";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { FileText, Sparkles, Loader2 } from "lucide-react";
-import { TranscriptSegment, Topic, Citation } from "@/lib/types";
+import { FileText, Sparkles, Loader2, StickyNote } from "lucide-react";
+import { TranscriptSegment, Topic, Citation, Note, NoteSource, NoteMetadata } from "@/lib/types";
+import { SelectionActionPayload } from "@/components/selection-actions";
+import { NotesPanel } from "@/components/notes-panel";
 import { cn } from "@/lib/utils";
 import { SummaryViewer } from "@/components/summary-viewer";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 interface RightColumnTabsProps {
   transcript: TranscriptSegment[];
@@ -29,6 +32,10 @@ interface RightColumnTabsProps {
   showTakeawaysTab?: boolean;
   cachedSuggestedQuestions?: string[] | null;
   onRetryTakeaways?: () => void;
+  notes?: Note[];
+  onSaveNote?: (payload: { text: string; source: NoteSource; sourceId?: string | null; metadata?: NoteMetadata | null }) => Promise<void>;
+  onDeleteNote?: (noteId: string) => Promise<void>;
+  onTakeNoteFromSelection?: (payload: SelectionActionPayload) => void;
 }
 
 export interface RightColumnTabsHandle {
@@ -36,7 +43,7 @@ export interface RightColumnTabsHandle {
   switchToTakeaways?: () => void;
 }
 
-export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabsProps>(({
+export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabsProps>(({ 
   transcript,
   selectedTopic,
   onTimestampClick,
@@ -54,8 +61,12 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   showTakeawaysTab,
   cachedSuggestedQuestions,
   onRetryTakeaways,
+  notes,
+  onSaveNote,
+  onDeleteNote,
+  onTakeNoteFromSelection,
 }, ref) => {
-  const [activeTab, setActiveTab] = useState<"transcript" | "takeaways">(showTakeawaysTab ? "takeaways" : "transcript");
+  const [activeTab, setActiveTab] = useState<"transcript" | "takeaways" | "notes">(showTakeawaysTab ? "takeaways" : "transcript");
   const [hasShownTakeaways, setHasShownTakeaways] = useState<boolean>(!!showTakeawaysTab);
 
   // Expose methods to parent to switch tabs
@@ -162,6 +173,21 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
           <FileText className="h-4 w-4" />
           Transcript
         </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setActiveTab("notes")}
+          className={cn(
+            "flex-1 justify-center gap-2 rounded-2xl",
+            activeTab === "notes"
+              ? "bg-neutral-100 text-foreground"
+              : "text-muted-foreground hover:text-foreground hover:bg-white/50",
+            notes?.length ? undefined : "opacity-75"
+          )}
+        >
+          <StickyNote className="h-4 w-4" />
+          Notes
+        </Button>
       </div>
       
       <div className="flex-1 overflow-hidden relative">
@@ -174,6 +200,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
             currentTime={currentTime}
             topics={topics}
             citationHighlight={citationHighlight}
+            onTakeNoteFromSelection={onTakeNoteFromSelection}
           />
         </div>
         <div className={cn("absolute inset-0", (activeTab !== "takeaways" || !showTakeawaysTab) && "hidden")}>
@@ -187,7 +214,18 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
             onPlayAllCitations={onPlayAllCitations}
             cachedSuggestedQuestions={cachedSuggestedQuestions}
             pinnedContent={takeawaysSection}
+            onSaveNote={onSaveNote}
+            onTakeNoteFromSelection={onTakeNoteFromSelection}
           />
+        </div>
+        <div className={cn("absolute inset-0", activeTab !== "notes" && "hidden")}
+        >
+          <TooltipProvider delayDuration={0}>
+            <NotesPanel
+              notes={notes}
+              onDeleteNote={onDeleteNote}
+            />
+          </TooltipProvider>
         </div>
       </div>
     </Card>

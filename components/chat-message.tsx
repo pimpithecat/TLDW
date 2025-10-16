@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useMemo, ReactNode, useState } from "react";
-import { ChatMessage, Citation } from "@/lib/types";
+import { ChatMessage, Citation, NoteSource, NoteMetadata } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TimestampButton } from "./timestamp-button";
-import { Copy, RefreshCw, Check } from "lucide-react";
+import { Copy, RefreshCw, Check, NotebookPen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ChatMessageProps {
@@ -16,6 +16,7 @@ interface ChatMessageProps {
   onCitationClick: (citation: Citation) => void;
   onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean, citationText?: string) => void;
   onRetry?: (messageId: string) => void;
+  onSaveNote?: (payload: { text: string; source: NoteSource; sourceId?: string | null; metadata?: NoteMetadata | null }) => Promise<void>;
 }
 
 function formatTimestamp(seconds: number): string {
@@ -24,7 +25,7 @@ function formatTimestamp(seconds: number): string {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-export function ChatMessageComponent({ message, onCitationClick, onTimestampClick, onRetry }: ChatMessageProps) {
+export function ChatMessageComponent({ message, onCitationClick, onTimestampClick, onRetry, onSaveNote }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
 
@@ -273,6 +274,35 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
                 <p className="text-xs">{copied ? 'Copied!' : 'Copy'}</p>
               </TooltipContent>
             </Tooltip>
+
+            {onSaveNote && message.role === 'assistant' && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onSaveNote({
+                      text: message.content,
+                      source: 'chat',
+                      sourceId: message.id,
+                      metadata: {
+                        chat: {
+                          messageId: message.id,
+                          role: message.role,
+                          timestamp: message.timestamp?.toISOString()
+                        }
+                      }
+                    })}
+                    className="h-7 px-2 text-muted-foreground hover:text-foreground"
+                  >
+                    <NotebookPen className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">Save note</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
             
             {onRetry && (
               <Tooltip>

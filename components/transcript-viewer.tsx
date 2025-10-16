@@ -8,6 +8,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Eye, EyeOff, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
+import { SelectionActions, triggerExplainSelection, SelectionActionPayload } from "@/components/selection-actions";
+import { NoteMetadata } from "@/lib/types";
 
 interface TranscriptViewerProps {
   transcript: TranscriptSegment[];
@@ -16,6 +18,7 @@ interface TranscriptViewerProps {
   currentTime?: number;
   topics?: Topic[];
   citationHighlight?: Citation | null;
+  onTakeNoteFromSelection?: (payload: SelectionActionPayload) => void;
 }
 
 export function TranscriptViewer({
@@ -25,6 +28,7 @@ export function TranscriptViewer({
   currentTime = 0,
   topics = [],
   citationHighlight,
+  onTakeNoteFromSelection
 }: TranscriptViewerProps) {
   const highlightedRefs = useRef<(HTMLDivElement | null)[]>([]);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -463,6 +467,47 @@ export function TranscriptViewer({
             }
           }}
         >
+          <SelectionActions
+            containerRef={scrollViewportRef}
+            onExplain={(payload) => {
+              triggerExplainSelection({
+                ...payload,
+                source: 'transcript'
+              });
+            }}
+            onTakeNote={(payload) => {
+              onTakeNoteFromSelection?.({
+                ...payload,
+                source: 'transcript'
+              });
+            }}
+            getMetadata={(range) => {
+              const metadata: NoteMetadata = {};
+              const startNode = range.startContainer.parentElement;
+              const segmentElement = startNode?.closest('[data-segment-index]') as HTMLElement | null;
+              if (segmentElement) {
+                const segmentIndex = segmentElement.dataset.segmentIndex;
+                if (segmentIndex) {
+                  const index = parseInt(segmentIndex, 10);
+                  const segment = transcript[index];
+                  if (segment) {
+                    metadata.transcript = {
+                      start: segment.start,
+                      end: segment.start + segment.duration,
+                      segmentIndex: index,
+                      topicId: selectedTopic?.id
+                    };
+                    metadata.timestampLabel = `${formatDuration(segment.start)} - ${formatDuration(segment.start + segment.duration)}`;
+                  }
+                }
+              }
+              if (selectedTopic?.title) {
+                metadata.selectionContext = selectedTopic.title;
+              }
+              return metadata;
+            }}
+            source="transcript"
+          />
           {transcript.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground text-sm">
               No transcript available
@@ -486,6 +531,7 @@ export function TranscriptViewer({
               <Tooltip key={index} delayDuration={300}>
                 <TooltipTrigger asChild>
                   <div
+                    data-segment-index={index}
                     ref={(el) => {
                       // Store refs properly
                       if (el) {
