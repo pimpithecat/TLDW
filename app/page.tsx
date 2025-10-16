@@ -61,8 +61,8 @@ function HomeContent() {
   );
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="mx-auto flex max-w-[660px] flex-col items-center gap-9 px-6 pb-14 pt-[135px] text-center">
+    <div className="flex min-h-screen items-center justify-center bg-white">
+      <div className="mx-auto flex w-full max-w-[660px] -translate-y-[5vh] transform flex-col items-center gap-9 px-6 py-16 text-center sm:py-24">
         <header className="flex flex-col items-center gap-4">
           <div className="flex items-center gap-3">
             <Image
