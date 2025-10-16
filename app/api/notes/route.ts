@@ -110,15 +110,18 @@ async function handler(req: NextRequest) {
         );
       }
 
-      const { data: video, error: videoError } = await supabase
+      const { data: videos, error: videoError } = await supabase
         .from('video_analyses')
         .select('id')
         .eq('youtube_id', youtubeId)
-        .single();
+        .order('created_at', { ascending: false })
+        .limit(1);
 
       if (videoError) {
         throw videoError;
       }
+
+      const video = videos?.[0];
 
       if (!video?.id) {
         return NextResponse.json(

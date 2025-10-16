@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { FileText, Lightbulb, Loader2, PenLine } from "lucide-react";
 import { TranscriptSegment, Topic, Citation, Note, NoteSource, NoteMetadata } from "@/lib/types";
 import { SelectionActionPayload } from "@/components/selection-actions";
-import { NotesPanel } from "@/components/notes-panel";
+import { NotesPanel, EditingNote } from "@/components/notes-panel";
 import { cn } from "@/lib/utils";
 import { SummaryViewer } from "@/components/summary-viewer";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,14 +36,18 @@ interface RightColumnTabsProps {
   onSaveNote?: (payload: { text: string; source: NoteSource; sourceId?: string | null; metadata?: NoteMetadata | null }) => Promise<void>;
   onDeleteNote?: (noteId: string) => Promise<void>;
   onTakeNoteFromSelection?: (payload: SelectionActionPayload) => void;
+  editingNote?: EditingNote | null;
+  onSaveEditingNote?: (noteText: string) => void;
+  onCancelEditing?: () => void;
 }
 
 export interface RightColumnTabsHandle {
   switchToTranscript: () => void;
   switchToTakeaways?: () => void;
+  switchToNotes: () => void;
 }
 
-export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabsProps>(({ 
+export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabsProps>(({
   transcript,
   selectedTopic,
   onTimestampClick,
@@ -65,6 +69,9 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   onSaveNote,
   onDeleteNote,
   onTakeNoteFromSelection,
+  editingNote,
+  onSaveEditingNote,
+  onCancelEditing,
 }, ref) => {
   const [activeTab, setActiveTab] = useState<"transcript" | "takeaways" | "notes">(showTakeawaysTab ? "takeaways" : "transcript");
   const [hasShownTakeaways, setHasShownTakeaways] = useState<boolean>(!!showTakeawaysTab);
@@ -78,6 +85,9 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
       if (showTakeawaysTab) {
         setActiveTab("takeaways");
       }
+    },
+    switchToNotes: () => {
+      setActiveTab("notes");
     }
   }));
 
@@ -225,6 +235,9 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
             <NotesPanel
               notes={notes}
               onDeleteNote={onDeleteNote}
+              editingNote={editingNote}
+              onSaveEditingNote={onSaveEditingNote}
+              onCancelEditing={onCancelEditing}
             />
           </TooltipProvider>
         </div>
