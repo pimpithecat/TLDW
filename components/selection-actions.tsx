@@ -186,8 +186,9 @@ export function SelectionActions({
   return createPortal(
     <Card
       className={cn(
-        "fixed z-[9999] flex items-center gap-2 rounded-full border bg-background px-2.5 py-1.5 shadow-lg",
+        "fixed z-[9999] flex flex-row items-center gap-1 rounded-xl border border-border/40 bg-primary/5 backdrop-blur-md shadow-lg",
         "transition-opacity animate-in fade-in",
+        "px-3 py-1.5",
       )}
       style={{
         top: Math.max(top, 12),
@@ -200,22 +201,25 @@ export function SelectionActions({
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 px-2 text-xs"
+          className="h-7 px-2.5 text-sm font-normal rounded-lg transition-all duration-200 hover:bg-primary/10 hover:scale-105 hover:text-foreground"
           disabled={isProcessing}
           onClick={() => handleAction("explain")}
         >
           Explain
         </Button>
       )}
+      {onExplain && onTakeNote && (
+        <div className="h-6 w-px bg-border/60" />
+      )}
       {onTakeNote && (
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 px-2 text-xs"
+          className="h-7 px-2.5 text-sm font-normal rounded-lg transition-all duration-200 hover:bg-primary/10 hover:scale-105 hover:text-foreground"
           disabled={isProcessing}
           onClick={() => handleAction("note")}
         >
-          Take Note
+          Take Notes
         </Button>
       )}
     </Card>,

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, ReactNode, useState } from "react";
+import React, { useMemo, ReactNode, useState, useCallback } from "react";
 import { ChatMessage, Citation, NoteSource, NoteMetadata } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,10 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TimestampButton } from "./timestamp-button";
-import { Copy, RefreshCw, Check, NotebookPen } from "lucide-react";
+import { Copy, RefreshCw, Check, SquarePen } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { parseTimestamp } from "@/lib/timestamp-utils";
+import { normalizeTimestampSources } from "@/lib/timestamp-normalization";
 
 interface ChatMessageProps {
   message: ChatMessage;
@@ -96,12 +98,70 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
     );
   }, (prevProps, nextProps) => prevProps.citationNumber === nextProps.citationNumber);
 
+const findMatchingCitation = useCallback((seconds: number): Citation | null => {
+  if (!message.citations || message.citations.length === 0) {
+    return null;
+  }
+
+    let bestMatch: Citation | null = null;
+    let bestDiff = Number.POSITIVE_INFINITY;
+
+    for (const citation of message.citations) {
+      const diff = Math.abs(citation.start - seconds);
+      if (diff < bestDiff && diff <= 6) {
+        bestDiff = diff;
+        bestMatch = citation;
+      }
+    }
+
+  return bestMatch;
+}, [message.citations]);
+
+  const renderTimestampElement = useCallback(
+    (timestampText: string, originalSeconds: number, key: string): ReactNode => {
+      const citationMatch = findMatchingCitation(originalSeconds);
+      const buttonSeconds = citationMatch ? citationMatch.start : originalSeconds;
+      const displayTimestamp = citationMatch ? formatTimestamp(citationMatch.start) : timestampText;
+
+      const handleTimestampClick = (seconds: number) => {
+        if (citationMatch) {
+          onCitationClick(citationMatch);
+        } else {
+          onTimestampClick(seconds, undefined, true);
+        }
+      };
+
+      return (
+        <Tooltip key={key} delayDuration={0} disableHoverableContent={true}>
+          <TooltipTrigger asChild>
+            <span className="inline-block ml-1 align-baseline">
+              <TimestampButton
+                timestamp={displayTimestamp}
+                seconds={buttonSeconds}
+                onClick={handleTimestampClick}
+                className="text-[11px]"
+              />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent className="p-2 z-[100] pointer-events-none" sideOffset={5}>
+            <div className="font-semibold text-xs whitespace-nowrap">
+              {citationMatch
+                ? `${formatTimestamp(citationMatch.start)} - ${formatTimestamp(citationMatch.end)}`
+                : displayTimestamp}
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      );
+    },
+    [findMatchingCitation, onCitationClick, onTimestampClick]
+  );
+
   // Process text to replace citation patterns with components
   const processTextWithCitations = (text: string): ReactNode[] => {
     // Pattern for numbered citations, allowing for comma-separated lists
     const citationPattern = /\[([\d,\s]+)\]/g;
-    // Pattern for raw timestamps [MM:SS] or [MM:SS-MM:SS]
-    const rawTimestampPattern = /\[(\d{1,2}:\d{2})(?:-(\d{1,2}:\d{2}))?\]/g;
+    // Pattern for raw timestamps [MM:SS] or [HH:MM:SS]
+    const rawTimestampPattern = /\[(\d{1,2}:\d{2}(?::\d{2})?)\]/g;
     
     const parts: ReactNode[] = [];
     let lastIndex = 0;
@@ -142,24 +202,40 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
       );
       
       if (!hasNumberedCitation) {
-        const [fullMatch, startTime, endTime] = match;
-        const [startMin, startSec] = startTime.split(':').map(Number);
-        const startSeconds = startMin * 60 + startSec;
-        
-        // Create a clickable timestamp without citation data
+        const [, timestampGroup] = match;
+        const normalized = normalizeTimestampSources([timestampGroup], { limit: 5 });
+
+        const timestampElements = normalized.flatMap((ts, idx) => {
+          const seconds = parseTimestamp(ts);
+          if (seconds === null) {
+            return [];
+          }
+
+          return [
+            renderTimestampElement(ts, seconds, `raw-timestamp-${match!.index}-${idx}`)
+          ];
+        });
+
+        if (timestampElements.length === 0) {
+          continue;
+        }
+
+        const element =
+          timestampElements.length === 1 ? (
+            timestampElements[0]
+          ) : (
+            <span
+              key={`timestamp-group-${match!.index}`}
+              className="inline-flex flex-wrap items-center gap-1 align-baseline"
+            >
+              {timestampElements}
+            </span>
+          );
+
         allMatches.push({
           index: match.index,
           length: match[0].length,
-          element: (
-            <span key={`raw-timestamp-${match!.index}`} className="inline-block ml-1 align-baseline">
-              <TimestampButton
-                timestamp={startTime}
-                seconds={startSeconds}
-                onClick={() => onTimestampClick(startSeconds, undefined, true)}
-                className="text-[11px]"
-              />
-            </span>
-          )
+          element
         });
       }
     }
@@ -295,7 +371,7 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
                     })}
                     className="h-7 px-2 text-muted-foreground hover:text-foreground"
                   >
-                    <NotebookPen className="h-4 w-4" />
+                    <SquarePen className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>

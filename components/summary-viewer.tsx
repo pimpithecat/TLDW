@@ -7,8 +7,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { parseTimestamp, TIMESTAMP_REGEX } from "@/lib/timestamp-utils";
-import { ChevronDown, Copy, RefreshCw, Check } from "lucide-react";
+import { ChevronDown, Copy, RefreshCw, Check, SquarePen } from "lucide-react";
 import { TimestampButton } from "./timestamp-button";
+import type { NoteMetadata, NoteSource } from "@/lib/types";
 
 interface SummaryViewerProps {
   content: string;
@@ -16,6 +17,7 @@ interface SummaryViewerProps {
   collapsibleSections?: boolean;
   onRetry?: () => void;
   showActions?: boolean;
+  onSaveNote?: (payload: { text: string; source: NoteSource; sourceId?: string | null; metadata?: NoteMetadata | null }) => Promise<void>;
 }
 
 interface Section {
@@ -25,11 +27,20 @@ interface Section {
   level: number;
 }
 
-export function SummaryViewer({ content, onTimestampClick, collapsibleSections = true, onRetry, showActions = false }: SummaryViewerProps) {
+export function SummaryViewer({ content, onTimestampClick, collapsibleSections = true, onRetry, showActions = false, onSaveNote }: SummaryViewerProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const scrollPositionRef = useRef<number>(0);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [copied, setCopied] = useState(false);
+  const handleSaveNote = useCallback(() => {
+    if (!onSaveNote) {
+      return;
+    }
+    void onSaveNote({
+      text: content,
+      source: "takeaways",
+    });
+  }, [onSaveNote, content]);
 
   // Handle copy to clipboard
   const handleCopy = useCallback(async () => {
@@ -400,6 +411,24 @@ export function SummaryViewer({ content, onTimestampClick, collapsibleSections =
                 <p className="text-xs">{copied ? 'Copied!' : 'Copy'}</p>
               </TooltipContent>
             </Tooltip>
+
+            {onSaveNote && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSaveNote}
+                    className="h-7 px-2 text-muted-foreground hover:text-foreground"
+                  >
+                    <SquarePen className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">Save note</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
             
             {onRetry && (
               <Tooltip>

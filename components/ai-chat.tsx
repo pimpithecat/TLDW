@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, ReactNode, useCallback } from "react";
+import { useState, useRef, useEffect, ReactNode, useCallback, RefObject } from "react";
 import { ChatMessage, TranscriptSegment, Topic, Citation, NoteSource, NoteMetadata } from "@/lib/types";
 import { SelectionActions, SelectionActionPayload, triggerExplainSelection, EXPLAIN_SELECTION_EVENT } from "@/components/selection-actions";
 import { ChatMessageComponent } from "./chat-message";
@@ -11,6 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Send, Loader2 } from "lucide-react";
+import { parseTimestamp } from "@/lib/timestamp-utils";
+import { formatDuration } from "@/lib/utils";
 
 interface AIChatProps {
   transcript: TranscriptSegment[];
@@ -35,15 +37,8 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
   const [askedQuestions, setAskedQuestions] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const chatViewportRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (!scrollRef.current) return;
-    const viewport = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
-    if (viewport) {
-      chatViewportRef.current = viewport;
-    }
-  }, [scrollRef.current]);
+  const takeawaysContainerRef = useRef<HTMLDivElement | null>(null);
+  const chatMessagesContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -184,21 +179,64 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
         return;
       }
 
-      const origin = detail.source === 'transcript' ? 'transcript excerpt' : 'text';
+      const origin =
+        detail.source === 'transcript'
+          ? 'transcript excerpt'
+          : detail.source === 'takeaways'
+            ? 'takeaway insight'
+            : 'text';
+
       const contextLines: string[] = [];
+
+      if (detail.source === 'takeaways') {
+        contextLines.push('Source: Key takeaways summary (paraphrased from the transcript)');
+      }
+
       if (detail.metadata?.timestampLabel) {
         contextLines.push(`Timestamp: ${detail.metadata.timestampLabel}`);
       }
+
+      if (detail.metadata?.transcript?.start !== undefined) {
+        const transcriptStart = detail.metadata.transcript.start;
+        const transcriptEnd = detail.metadata.transcript.end ?? transcriptStart;
+        const startLabel = formatDuration(transcriptStart);
+        const endLabel = formatDuration(transcriptEnd);
+        contextLines.push(
+          transcriptEnd === transcriptStart
+            ? `Transcript reference: ${startLabel}`
+            : `Transcript window: ${startLabel} - ${endLabel}`
+        );
+      }
+
       if (detail.metadata?.selectionContext && detail.metadata.selectionContext !== videoTitle) {
         contextLines.push(`Context: ${detail.metadata.selectionContext}`);
       }
 
-      const prompt = `Explain the following ${origin}${videoTitle ? ` from "${videoTitle}"` : ''}:
-
-"${detail.text}"${contextLines.length ? `
+      const additionalDetails = contextLines.length
+        ? `
 
 Additional details:
-- ${contextLines.join('\n- ')}` : ''}`;
+- ${contextLines.join('\n- ')}`
+        : '';
+
+      let prompt = `Explain the following ${origin}${videoTitle ? ` from "${videoTitle}"` : ''}:
+
+"${detail.text}"${additionalDetails}`;
+
+      const extra = detail.metadata?.extra as Record<string, unknown> | undefined;
+      const fullTakeawayText = typeof extra?.fullTakeawayText === 'string'
+        ? extra.fullTakeawayText.trim()
+        : '';
+
+      if (
+        detail.source === 'takeaways' &&
+        fullTakeawayText &&
+        fullTakeawayText.toLowerCase() !== detail.text.trim().toLowerCase()
+      ) {
+        prompt += `
+
+Full takeaway context: "${fullTakeawayText}"`;
+      }
 
       sendMessage(prompt);
     };
@@ -249,43 +287,156 @@ Additional details:
     }
   }, [messages, sendMessage]);
 
+  const findSegmentByTime = useCallback((seconds: number) => {
+    if (!transcript || transcript.length === 0) {
+      return null;
+    }
+
+    for (let i = 0; i < transcript.length; i++) {
+      const segment = transcript[i];
+      const segmentEnd = segment.start + segment.duration;
+      if (seconds >= segment.start && seconds <= segmentEnd) {
+        return { segment, index: i };
+      }
+    }
+
+    let closestIndex = 0;
+    let minDiff = Math.abs(transcript[0].start - seconds);
+    for (let i = 1; i < transcript.length; i++) {
+      const diff = Math.abs(transcript[i].start - seconds);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestIndex = i;
+      }
+    }
+
+    const fallbackSegment = transcript[closestIndex];
+    return fallbackSegment ? { segment: fallbackSegment, index: closestIndex } : null;
+  }, [transcript]);
+
+  const getTakeawayMetadata = useCallback((range: Range) => {
+    const container = takeawaysContainerRef.current;
+    if (!container) {
+      return undefined;
+    }
+
+    const startNode = range.startContainer instanceof Element
+      ? range.startContainer
+      : range.startContainer?.parentElement ?? null;
+
+    if (!startNode || !container.contains(startNode)) {
+      return undefined;
+    }
+
+    const listItem = startNode.closest('li');
+    if (!listItem) {
+      return undefined;
+    }
+
+    const metadata: NoteMetadata = {};
+    const strongLabel = listItem.querySelector('strong');
+    if (strongLabel?.textContent) {
+      metadata.selectionContext = strongLabel.textContent.trim();
+    }
+
+    const textContent = listItem.textContent?.trim() ?? '';
+    if (textContent) {
+      const timestampMatches = Array.from(textContent.matchAll(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g));
+      const timestampSeconds: number[] = [];
+      const timestampLabels: string[] = [];
+
+      for (const match of timestampMatches) {
+        const tsString = match[0];
+        const seconds = parseTimestamp(tsString);
+        if (seconds !== null) {
+          timestampSeconds.push(seconds);
+          timestampLabels.push(formatDuration(seconds));
+        }
+      }
+
+      if (timestampLabels.length > 0) {
+        metadata.timestampLabel = timestampLabels.join(', ');
+        const firstSeconds = timestampSeconds[0];
+        const segmentInfo = findSegmentByTime(firstSeconds);
+        if (segmentInfo) {
+          metadata.transcript = {
+            start: segmentInfo.segment.start,
+            end: segmentInfo.segment.start + segmentInfo.segment.duration,
+            segmentIndex: segmentInfo.index,
+          };
+        }
+        metadata.extra = {
+          ...(metadata.extra || {}),
+          takeawayTimestamps: timestampSeconds,
+          fullTakeawayText: textContent,
+        };
+      } else {
+        metadata.extra = {
+          ...(metadata.extra || {}),
+          fullTakeawayText: textContent,
+        };
+      }
+    }
+
+    return metadata;
+  }, [findSegmentByTime]);
+
 
   return (
     <TooltipProvider delayDuration={0} skipDelayDuration={0} disableHoverableContent={false}>
       <div className="w-full h-full flex flex-col">
         <ScrollArea className="flex-1 px-6" ref={scrollRef}>
           <div className="space-y-3.5" ref={chatContainerRef}>
-            <SelectionActions
-              containerRef={chatViewportRef as unknown as React.RefObject<HTMLElement | null>}
-              onExplain={(payload) => {
-                triggerExplainSelection({
-                  ...payload,
-                  source: 'chat'
-                });
-              }}
-              onTakeNote={(payload) => {
-                onTakeNoteFromSelection?.({
-                  ...payload,
-                  source: 'chat'
-                });
-              }}
-              source="chat"
-            />
             {pinnedContent && (
-              <div className="space-y-2.5">
+              <div className="space-y-2.5" ref={takeawaysContainerRef}>
+                <SelectionActions
+                  containerRef={takeawaysContainerRef as unknown as RefObject<HTMLElement | null>}
+                  onExplain={(payload) => {
+                    triggerExplainSelection({
+                      ...payload,
+                      source: 'takeaways'
+                    });
+                  }}
+                  onTakeNote={(payload) => {
+                    onTakeNoteFromSelection?.({
+                      ...payload,
+                      source: 'takeaways'
+                    });
+                  }}
+                  getMetadata={getTakeawayMetadata}
+                  source="takeaways"
+                />
                 {pinnedContent}
               </div>
             )}
-            {messages.map((message) => (
-            <ChatMessageComponent
-              key={message.id}
-              message={message}
-              onCitationClick={onCitationClick}
-              onTimestampClick={onTimestampClick}
-              onRetry={message.role === 'assistant' ? handleRetry : undefined}
-              onSaveNote={message.role === 'assistant' ? onSaveNote : undefined}
-            />
-            ))}
+            <div ref={chatMessagesContainerRef}>
+              <SelectionActions
+                containerRef={chatMessagesContainerRef as unknown as RefObject<HTMLElement | null>}
+                onExplain={(payload) => {
+                  triggerExplainSelection({
+                    ...payload,
+                    source: 'chat'
+                  });
+                }}
+                onTakeNote={(payload) => {
+                  onTakeNoteFromSelection?.({
+                    ...payload,
+                    source: 'chat'
+                  });
+                }}
+                source="chat"
+              />
+              {messages.map((message) => (
+              <ChatMessageComponent
+                key={message.id}
+                message={message}
+                onCitationClick={onCitationClick}
+                onTimestampClick={onTimestampClick}
+                onRetry={message.role === 'assistant' ? handleRetry : undefined}
+                onSaveNote={message.role === 'assistant' ? onSaveNote : undefined}
+              />
+              ))}
+            </div>
 
             {isLoading && (
               <div className="flex items-center gap-2 mb-3">

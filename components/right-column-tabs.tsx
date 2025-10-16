@@ -5,7 +5,7 @@ import { TranscriptViewer } from "@/components/transcript-viewer";
 import { AIChat } from "@/components/ai-chat";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { FileText, Sparkles, Loader2, StickyNote } from "lucide-react";
+import { FileText, Lightbulb, Loader2, PenLine } from "lucide-react";
 import { TranscriptSegment, Topic, Citation, Note, NoteSource, NoteMetadata } from "@/lib/types";
 import { SelectionActionPayload } from "@/components/selection-actions";
 import { NotesPanel } from "@/components/notes-panel";
@@ -125,6 +125,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
           collapsibleSections={false}
           onRetry={onRetryTakeaways}
           showActions={true}
+          onSaveNote={onSaveNote}
         />
       );
     }
@@ -134,7 +135,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
         Takeaways will appear here once ready.
       </p>
     );
-  }, [showTakeawaysTab, isGeneratingTakeaways, takeawaysError, takeawaysContent, onTakeawayTimestampClick, onTimestampClick]);
+  }, [showTakeawaysTab, isGeneratingTakeaways, takeawaysError, takeawaysContent, onTakeawayTimestampClick, onTimestampClick, onRetryTakeaways, onSaveNote]);
 
   return (
     <Card className="h-full flex flex-col overflow-hidden p-0 gap-0">
@@ -154,7 +155,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
             {isGeneratingTakeaways ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <Sparkles className="h-4 w-4" />
+              <Lightbulb className="h-4 w-4" />
             )}
             Takeaways
           </Button>
@@ -185,7 +186,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
             notes?.length ? undefined : "opacity-75"
           )}
         >
-          <StickyNote className="h-4 w-4" />
+          <PenLine className="h-4 w-4" />
           Notes
         </Button>
       </div>

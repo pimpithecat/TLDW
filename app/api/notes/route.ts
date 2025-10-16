@@ -49,15 +49,18 @@ async function handler(req: NextRequest) {
     try {
       const { youtubeId: validatedYoutubeId } = getNotesQuerySchema.parse({ youtubeId });
 
-      const { data: video, error: videoError } = await supabase
+      const { data: videos, error: videoError } = await supabase
         .from('video_analyses')
         .select('id')
         .eq('youtube_id', validatedYoutubeId)
-        .single();
+        .order('created_at', { ascending: false })
+        .limit(1);
 
-      if (videoError && videoError.code !== 'PGRST116') {
+      if (videoError) {
         throw videoError;
       }
+
+      const video = videos?.[0];
 
       if (!video?.id) {
         return NextResponse.json({ notes: [] });
@@ -196,4 +199,3 @@ async function handler(req: NextRequest) {
 export const GET = withSecurity(handler, SECURITY_PRESETS.AUTHENTICATED);
 export const POST = withSecurity(handler, SECURITY_PRESETS.AUTHENTICATED);
 export const DELETE = withSecurity(handler, SECURITY_PRESETS.AUTHENTICATED);
-
