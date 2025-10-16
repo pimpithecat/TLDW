@@ -190,7 +190,7 @@ export function ThemeSelector({
         <div
           ref={scrollContainerRef}
           className={cn(
-            "flex items-center gap-2 overflow-x-auto overflow-y-visible scrollbar-hide flex-1 transition-all duration-200 bg-transparent",
+            "flex items-center gap-2 overflow-x-auto overflow-y-visible scrollbar-hide flex-1 transition-all duration-200 bg-transparent py-6 my-[-24px]",
             showCustomInput && "blur-sm opacity-50 pointer-events-none"
           )}
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
