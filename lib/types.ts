@@ -89,6 +89,16 @@ export interface Note {
   updatedAt: string;
 }
 
+export interface NoteWithVideo extends Note {
+  video: {
+    youtubeId: string;
+    title: string;
+    author: string;
+    thumbnailUrl: string;
+    duration: number;
+  } | null;
+}
+
 export interface VideoInfo {
   videoId: string;
   title: string;
