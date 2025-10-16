@@ -43,52 +43,58 @@ function getSourceColor(source: NoteSource) {
 }
 
 const markdownComponents = {
-  p: ({ children }: { children: ReactNode }) => (
+  p: ({ children }: any) => (
     <p className="mb-2 last:mb-0 whitespace-pre-wrap">{children}</p>
   ),
-  ul: ({ children }: { children: ReactNode }) => (
+  ul: ({ children }: any) => (
     <ul className="list-disc list-inside space-y-1 mb-2 last:mb-0">{children}</ul>
   ),
-  ol: ({ children }: { children: ReactNode }) => (
+  ol: ({ children }: any) => (
     <ol className="list-decimal list-inside space-y-1 mb-2 last:mb-0">{children}</ol>
   ),
-  li: ({ children }: { children: ReactNode }) => (
+  li: ({ children }: any) => (
     <li className="whitespace-pre-wrap">{children}</li>
   ),
-  a: ({ children, href }: { children: ReactNode; href?: string }) => (
+  a: ({ children, href, ...props }: any) => (
     <a
       href={href}
       className="text-primary hover:text-primary/80 underline decoration-1 underline-offset-2"
       target="_blank"
       rel="noopener noreferrer"
+      {...props}
     >
       {children}
     </a>
   ),
-  code: ({ children }: { children: ReactNode }) => (
-    <code className="bg-background/80 px-1 py-0.5 rounded text-xs">{children}</code>
+  code: ({ inline, className, children, ...props }: any) => (
+    inline ? (
+      <code className="bg-background/80 px-1 py-0.5 rounded text-xs" {...props}>
+        {children}
+      </code>
+    ) : (
+      <pre className="bg-background/70 p-3 rounded-lg overflow-x-auto text-xs space-y-2">
+        <code className={className} {...props}>
+          {children}
+        </code>
+      </pre>
+    )
   ),
-  pre: ({ children }: { children: ReactNode }) => (
-    <pre className="bg-background/70 p-3 rounded-lg overflow-x-auto text-xs space-y-2">
-      {children}
-    </pre>
-  ),
-  blockquote: ({ children }: { children: ReactNode }) => (
+  blockquote: ({ children }: any) => (
     <blockquote className="border-l-4 border-muted-foreground/30 pl-4 italic">{children}</blockquote>
   ),
-  strong: ({ children }: { children: ReactNode }) => (
+  strong: ({ children }: any) => (
     <strong className="font-semibold">{children}</strong>
   ),
-  em: ({ children }: { children: ReactNode }) => (
+  em: ({ children }: any) => (
     <em className="italic">{children}</em>
   ),
-  h1: ({ children }: { children: ReactNode }) => (
+  h1: ({ children }: any) => (
     <h1 className="text-base font-semibold mb-2">{children}</h1>
   ),
-  h2: ({ children }: { children: ReactNode }) => (
+  h2: ({ children }: any) => (
     <h2 className="text-sm font-semibold mb-1">{children}</h2>
   ),
-  h3: ({ children }: { children: ReactNode }) => (
+  h3: ({ children }: any) => (
     <h3 className="text-sm font-medium mb-1">{children}</h3>
   ),
 };
