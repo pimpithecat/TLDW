@@ -477,7 +477,7 @@ export function TranscriptViewer({
             }}
             onTakeNote={(payload) => {
               onTakeNoteFromSelection?.({
-                ...payload,
+                text: payload.text,
                 source: 'transcript'
               });
             }}

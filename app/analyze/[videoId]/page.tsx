@@ -1334,10 +1334,10 @@ export default function AnalyzePage() {
     // Switch to notes tab
     rightColumnTabsRef.current?.switchToNotes();
 
-    // Set editing state with selected text, metadata, and source
+    // Set editing state with selected text and source only
     setEditingNote({
       text: payload.text,
-      metadata: payload.metadata ?? null,
+      metadata: null,
       source: payload.source,
     });
   }, []);
@@ -1349,17 +1349,12 @@ export default function AnalyzePage() {
     let source: NoteSource = "custom";
     if (editingNote.source) {
       source = editingNote.source as NoteSource;
-    } else if (editingNote.metadata?.chat) {
-      source = "chat";
-    } else if (editingNote.metadata?.transcript) {
-      source = "transcript";
     }
 
     await handleSaveNote({
       text: noteText,
       source,
-      sourceId: editingNote.metadata?.chat?.messageId ?? null,
-      metadata: editingNote.metadata,
+      sourceId: null,
     });
 
     // Clear editing state

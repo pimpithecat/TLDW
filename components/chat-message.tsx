@@ -360,14 +360,7 @@ const findMatchingCitation = useCallback((seconds: number): Citation | null => {
                     onClick={() => onSaveNote({
                       text: message.content,
                       source: 'chat',
-                      sourceId: message.id,
-                      metadata: {
-                        chat: {
-                          messageId: message.id,
-                          role: message.role,
-                          timestamp: message.timestamp?.toISOString()
-                        }
-                      }
+                      sourceId: null,
                     })}
                     className="h-7 px-2 text-muted-foreground hover:text-foreground"
                   >

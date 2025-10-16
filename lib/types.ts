@@ -70,6 +70,7 @@ export interface NoteMetadata {
     role: 'user' | 'assistant';
     timestamp?: string;
   };
+  selectedText?: string;
   selectionContext?: string;
   timestampLabel?: string;
   extra?: Record<string, unknown>;

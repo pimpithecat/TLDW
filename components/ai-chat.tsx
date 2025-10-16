@@ -183,64 +183,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
         return;
       }
 
-      const origin =
-        detail.source === 'transcript'
-          ? 'transcript excerpt'
-          : detail.source === 'takeaways'
-            ? 'takeaway insight'
-            : 'text';
-
-      const contextLines: string[] = [];
-
-      if (detail.source === 'takeaways') {
-        contextLines.push('Source: Key takeaways summary (paraphrased from the transcript)');
-      }
-
-      if (detail.metadata?.timestampLabel) {
-        contextLines.push(`Timestamp: ${detail.metadata.timestampLabel}`);
-      }
-
-      if (detail.metadata?.transcript?.start !== undefined) {
-        const transcriptStart = detail.metadata.transcript.start;
-        const transcriptEnd = detail.metadata.transcript.end ?? transcriptStart;
-        const startLabel = formatDuration(transcriptStart);
-        const endLabel = formatDuration(transcriptEnd);
-        contextLines.push(
-          transcriptEnd === transcriptStart
-            ? `Transcript reference: ${startLabel}`
-            : `Transcript window: ${startLabel} - ${endLabel}`
-        );
-      }
-
-      if (detail.metadata?.selectionContext && detail.metadata.selectionContext !== videoTitle) {
-        contextLines.push(`Context: ${detail.metadata.selectionContext}`);
-      }
-
-      const additionalDetails = contextLines.length
-        ? `
-
-Additional details:
-- ${contextLines.join('\n- ')}`
-        : '';
-
-      let prompt = `Explain the following ${origin}${videoTitle ? ` from "${videoTitle}"` : ''}:
-
-"${detail.text}"${additionalDetails}`;
-
-      const extra = detail.metadata?.extra as Record<string, unknown> | undefined;
-      const fullTakeawayText = typeof extra?.fullTakeawayText === 'string'
-        ? extra.fullTakeawayText.trim()
-        : '';
-
-      if (
-        detail.source === 'takeaways' &&
-        fullTakeawayText &&
-        fullTakeawayText.toLowerCase() !== detail.text.trim().toLowerCase()
-      ) {
-        prompt += `
-
-Full takeaway context: "${fullTakeawayText}"`;
-      }
+      const prompt = `Explain "${detail.text.trim()}"`;
 
       sendMessage(prompt);
     };
@@ -402,10 +345,10 @@ Full takeaway context: "${fullTakeawayText}"`;
                     });
                   }}
                   onTakeNote={(payload) => {
-                    onTakeNoteFromSelection?.({
-                      ...payload,
-                      source: 'takeaways'
-                    });
+                onTakeNoteFromSelection?.({
+                  text: payload.text,
+                  source: 'takeaways'
+                });
                   }}
                   getMetadata={getTakeawayMetadata}
                   source="takeaways"
@@ -424,7 +367,7 @@ Full takeaway context: "${fullTakeawayText}"`;
                 }}
                 onTakeNote={(payload) => {
                   onTakeNoteFromSelection?.({
-                    ...payload,
+                    text: payload.text,
                     source: 'chat'
                   });
                 }}

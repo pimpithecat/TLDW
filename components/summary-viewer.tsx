@@ -39,6 +39,7 @@ export function SummaryViewer({ content, onTimestampClick, collapsibleSections =
     void onSaveNote({
       text: content,
       source: "takeaways",
+      sourceId: null,
     });
   }, [onSaveNote, content]);
 
