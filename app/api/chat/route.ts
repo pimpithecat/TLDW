@@ -19,6 +19,36 @@ function formatTranscriptForContext(segments: TranscriptSegment[]): string {
   }).join('\n');
 }
 
+function stripCodeFences(raw: string): string {
+  const trimmed = raw.trim();
+  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  return fenceMatch ? fenceMatch[1].trim() : trimmed;
+}
+
+function recoverPartialResponse(raw: string): { answer: string; timestamps?: string[] } | null {
+  const answerMatch = raw.match(/"answer"\s*:\s*"([\s\S]*?)"/);
+  if (!answerMatch) {
+    return null;
+  }
+
+  const answerValue = answerMatch[1];
+  let decodedAnswer = answerValue;
+  try {
+    decodedAnswer = JSON.parse(
+      `"${answerValue.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+    );
+  } catch {
+    decodedAnswer = answerValue.replace(/\\"/g, '"');
+  }
+
+  const timestampMatches = raw.match(/\b\d{2}:\d{2}(?::\d{2})?\b/g) ?? [];
+  const uniqueTimestamps = Array.from(new Set(timestampMatches)).slice(0, 5);
+
+  return uniqueTimestamps.length > 0
+    ? { answer: decodedAnswer, timestamps: uniqueTimestamps }
+    : { answer: decodedAnswer };
+}
+
 function findClosestSegment(transcript: TranscriptSegment[], targetSeconds: number): { segment: TranscriptSegment; index: number } | null {
   if (!transcript || transcript.length === 0) return null;
   
@@ -176,10 +206,38 @@ ${message}
       console.log('Error:', e);
       console.log('Response that failed to parse:', response);
       console.log('=== END PARSING ERROR ===');
-      return NextResponse.json({
-        content: "I couldn't generate a valid response. Please try again.",
-        citations: [],
-      });
+      const fallbackContent = stripCodeFences(response);
+      if (fallbackContent) {
+        try {
+          const fallbackJson = JSON.parse(fallbackContent);
+          parsedResponse = chatResponseSchema.parse(fallbackJson);
+          console.log('Recovered response via fallback JSON parsing.');
+        } catch (fallbackError) {
+          console.log('Fallback JSON parsing failed:', fallbackError);
+          const recovered = recoverPartialResponse(fallbackContent);
+          if (recovered) {
+            parsedResponse = chatResponseSchema.parse(recovered);
+            console.log('Recovered response via partial extraction.');
+          } else {
+            console.log('Unable to recover partial response.');
+            return NextResponse.json({
+              content: "I couldn't generate a valid response. Please try again.",
+              citations: [],
+            });
+          }
+        }
+      } else {
+        const recovered = recoverPartialResponse(response);
+        if (recovered) {
+          parsedResponse = chatResponseSchema.parse(recovered);
+          console.log('Recovered response via direct partial extraction.');
+        } else {
+          return NextResponse.json({
+            content: "I couldn't generate a valid response. Please try again.",
+            citations: [],
+          });
+        }
+      }
     }
 
     const { answer, timestamps } = parsedResponse;
