@@ -44,21 +44,57 @@ export function getTopicColor(index: number): { bg: string; border: string; text
   return colors[index % colors.length];
 }
 
+// Custom color palette - Soft Pastels (converted from hex to HSL)
+const TOPIC_COLORS = [
+  '214 48% 65%',  // #7C9DD1 - Soft Blue
+  '267 44% 71%',  // #B497D6 - Lavender
+  '158 35% 65%',  // #86C5AC - Mint Green
+  '15 85% 74%',   // #F4A582 - Coral
+  '43 100% 74%',  // #FFD97D - Soft Yellow
+  '320 53% 80%',  // #E8B4D4 - Rose Pink
+  '192 49% 71%',  // #94CED8 - Sky Blue
+];
+
+// Simple hash function for deterministic randomization
+function simpleHash(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return Math.abs(hash);
+}
+
+// Seeded random number generator
+function seededRandom(seed: number): number {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
+}
+
+// Deterministic shuffle based on seed
+function seededShuffle(array: string[], seed: string): string[] {
+  const shuffled = [...array];
+  const hashValue = simpleHash(seed);
+  
+  // Fisher-Yates shuffle with seeded random
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(seededRandom(hashValue + i) * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  
+  return shuffled;
+}
+
+// Get shuffled colors for a specific video
+export function getShuffledTopicColors(videoId: string): string[] {
+  return seededShuffle(TOPIC_COLORS, videoId);
+}
+
 // Get HSL color for dynamic theming
-export function getTopicHSLColor(index: number): string {
-  const hslColors = [
-    '217 91% 60%', // blue
-    '262 83% 58%', // purple  
-    '142 76% 36%', // green
-    '25 95% 53%',  // orange
-    '340 82% 59%', // pink
-    '173 80% 40%', // teal
-    '239 84% 67%', // indigo
-    '0 72% 51%',   // red
-    '43 96% 56%',  // yellow
-    '192 91% 36%', // cyan
-  ];
-  return hslColors[index % hslColors.length];
+export function getTopicHSLColor(index: number, videoId?: string): string {
+  const colors = videoId ? getShuffledTopicColors(videoId) : TOPIC_COLORS;
+  return colors[index % colors.length];
 }
 
 // Re-export parseTimestamp from timestamp-utils for backward compatibility

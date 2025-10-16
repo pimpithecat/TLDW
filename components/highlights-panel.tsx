@@ -20,6 +20,7 @@ interface HighlightsPanelProps {
   videoDuration: number;
   transcript?: TranscriptSegment[];
   isLoadingThemeTopics?: boolean;
+  videoId?: string;
 }
 
 export function HighlightsPanel({
@@ -35,6 +36,7 @@ export function HighlightsPanel({
   videoDuration,
   transcript = [],
   isLoadingThemeTopics = false,
+  videoId,
 }: HighlightsPanelProps) {
   return (
     <Card className="overflow-hidden p-0 border-0 relative">
@@ -52,6 +54,7 @@ export function HighlightsPanel({
           onPlayTopic={onPlayTopic}
           transcript={transcript}
           isLoadingThemeTopics={isLoadingThemeTopics}
+          videoId={videoId}
         />
 
         <div className="mt-3 flex items-center justify-between">

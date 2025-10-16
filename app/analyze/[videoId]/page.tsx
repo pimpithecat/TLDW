@@ -1539,6 +1539,7 @@ export default function AnalyzePage() {
                   videoDuration={videoDuration}
                   transcript={transcript}
                   isLoadingThemeTopics={isLoadingThemeTopics}
+                  videoId={videoId ?? undefined}
                 />
               </div>
             </div>

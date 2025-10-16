@@ -10,10 +10,11 @@ interface TopicCardProps {
   onClick: () => void;
   topicIndex: number;
   onPlayTopic?: () => void;
+  videoId?: string;
 }
 
-export function TopicCard({ topic, isSelected, onClick, topicIndex, onPlayTopic }: TopicCardProps) {
-  const topicColor = getTopicHSLColor(topicIndex);
+export function TopicCard({ topic, isSelected, onClick, topicIndex, onPlayTopic, videoId }: TopicCardProps) {
+  const topicColor = getTopicHSLColor(topicIndex, videoId);
   
   const handleClick = () => {
     onClick();
@@ -31,10 +32,9 @@ export function TopicCard({ topic, isSelected, onClick, topicIndex, onPlayTopic 
         "transition-all duration-200",
         "hover:scale-[1.01] hover:shadow-[0px_0px_11px_0px_rgba(0,0,0,0.1)]",
         "text-left",
-        isSelected ? "border-[2px] scale-[1.01] shadow-[0px_0px_11px_0px_rgba(0,0,0,0.1)]" : "border",
+        isSelected && "scale-[1.01] shadow-[0px_0px_11px_0px_rgba(0,0,0,0.1)]",
       )}
       style={{
-        borderColor: `hsl(${topicColor})`,
         backgroundColor: isSelected
           ? `hsl(${topicColor} / 0.15)`
           : `hsl(${topicColor} / 0.08)`,

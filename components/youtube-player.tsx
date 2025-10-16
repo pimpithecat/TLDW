@@ -423,6 +423,7 @@ export function YouTubePlayer({
                 onTopicSelect={onTopicSelect}
                 onPlayTopic={playTopic}
                 transcript={transcript}
+                videoId={videoId}
               />
             )}
 

@@ -75,13 +75,13 @@ export function UserMenu() {
         <DropdownMenuItem asChild>
           <Link href="/my-videos" className="cursor-pointer">
             <Video className="mr-2 h-4 w-4" />
-            <span>My Videos</span>
+            <span>Videos</span>
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link href="/all-notes" className="cursor-pointer">
             <NotebookPen className="mr-2 h-4 w-4" />
-            <span>My Notes</span>
+            <span>Notes</span>
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>

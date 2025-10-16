@@ -16,6 +16,7 @@ interface VideoProgressBarProps {
   onPlayTopic?: (topic: Topic) => void;
   transcript?: TranscriptSegment[];
   isLoadingThemeTopics?: boolean;
+  videoId?: string;
 }
 
 export function VideoProgressBar({
@@ -28,6 +29,7 @@ export function VideoProgressBar({
   onPlayTopic,
   transcript,
   isLoadingThemeTopics = false,
+  videoId,
 }: VideoProgressBarProps) {
   const progressBarRef = useRef<HTMLDivElement>(null);
   const hasDuration = videoDuration > 0;
@@ -139,7 +141,7 @@ export function VideoProgressBar({
                   style={{
                     left,
                     width,
-                    backgroundColor: `hsl(${getTopicHSLColor(topicIndex)})`,
+                    backgroundColor: `hsl(${getTopicHSLColor(topicIndex, videoId)})`,
                     opacity: isSelected ? 1 : 0.7,
                   }}
                   onClick={(e) => handleTopicClick(e, topic)}
@@ -174,6 +176,7 @@ export function VideoProgressBar({
                 onClick={() => onTopicSelect?.(topic)}
                 topicIndex={index}
                 onPlayTopic={() => onPlayTopic?.(topic)}
+                videoId={videoId}
               />
             );
           })}
