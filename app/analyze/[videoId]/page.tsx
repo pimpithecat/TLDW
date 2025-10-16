@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { UrlInput } from "@/components/url-input";
+import { UrlInputWithBranding } from "@/components/url-input-with-branding";
 import { RightColumnTabs, type RightColumnTabsHandle } from "@/components/right-column-tabs";
 import { YouTubePlayer } from "@/components/youtube-player";
 import { HighlightsPanel } from "@/components/highlights-panel";
@@ -16,6 +16,7 @@ import { Topic, TranscriptSegment, VideoInfo, Citation, PlaybackCommand, Note, N
 import { hydrateTopicsWithTranscript, normalizeTranscript } from "@/lib/topic-utils";
 import { SelectionActionPayload } from "@/components/selection-actions";
 import { fetchNotes, saveNote, deleteNote } from "@/lib/notes-client";
+import { EditingNote } from "@/components/notes-panel";
 
 // Playback context for tracking what's currently playing
 interface PlaybackContext {
@@ -1282,6 +1283,7 @@ export default function AnalyzePage() {
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
+  const [editingNote, setEditingNote] = useState<EditingNote | null>(null);
 
   useEffect(() => {
     if (!videoId || !user) {
@@ -1328,33 +1330,51 @@ export default function AnalyzePage() {
     }
   }, []);
 
-  const handleTakeNoteFromSelection = useCallback(async (payload: SelectionActionPayload) => {
-    await handleSaveNote({
+  const handleTakeNoteFromSelection = useCallback((payload: SelectionActionPayload) => {
+    // Switch to notes tab
+    rightColumnTabsRef.current?.switchToNotes();
+
+    // Set editing state with selected text, metadata, and source
+    setEditingNote({
       text: payload.text,
-      source: (payload.source as NoteSource) ?? "transcript",
-      sourceId: payload.metadata?.chat?.messageId,
-      metadata: payload.metadata ?? undefined,
+      metadata: payload.metadata ?? null,
+      source: payload.source,
     });
-  }, [handleSaveNote]);
+  }, []);
+
+  const handleSaveEditingNote = useCallback(async (noteText: string) => {
+    if (!editingNote || !videoId) return;
+
+    // Use source from editing note or determine from metadata
+    let source: NoteSource = "custom";
+    if (editingNote.source) {
+      source = editingNote.source as NoteSource;
+    } else if (editingNote.metadata?.chat) {
+      source = "chat";
+    } else if (editingNote.metadata?.transcript) {
+      source = "transcript";
+    }
+
+    await handleSaveNote({
+      text: noteText,
+      source,
+      sourceId: editingNote.metadata?.chat?.messageId ?? null,
+      metadata: editingNote.metadata,
+    });
+
+    // Clear editing state
+    setEditingNote(null);
+  }, [editingNote, videoId, handleSaveNote]);
+
+  const handleCancelEditing = useCallback(() => {
+    setEditingNote(null);
+  }, []);
 
   return (
     <div className="min-h-screen bg-white">
       <header className="bg-white">
-        <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-center gap-3.5 px-5 py-5 lg:flex-row">
-          <Link href="/" className="flex items-center gap-2.5" aria-label="Go to TLDW home">
-            <Image
-              src="/Video_Play.svg"
-              alt="TLDW logo"
-              width={29}
-              height={29}
-              className="h-7 w-7"
-              priority
-            />
-            <p className="text-sm font-semibold text-slate-800">TLDW</p>
-          </Link>
-          <div className="w-full max-w-xl">
-            <UrlInput onSubmit={handleUrlSubmit} isLoading={pageState !== 'IDLE'} />
-          </div>
+        <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-center px-5 py-5">
+          <UrlInputWithBranding onSubmit={handleUrlSubmit} isLoading={pageState !== 'IDLE'} />
         </div>
         {error && (
           <div className="border-t border-red-100 bg-red-50/80">
@@ -1487,6 +1507,9 @@ export default function AnalyzePage() {
                   onSaveNote={handleSaveNote}
                   onDeleteNote={handleDeleteNote}
                   onTakeNoteFromSelection={handleTakeNoteFromSelection}
+                  editingNote={editingNote}
+                  onSaveEditingNote={handleSaveEditingNote}
+                  onCancelEditing={handleCancelEditing}
                 />
               </div>
             </div>
