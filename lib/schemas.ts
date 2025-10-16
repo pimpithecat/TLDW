@@ -18,7 +18,7 @@ export const suggestedQuestionsSchema = z.array(z.string());
 
 export const chatResponseSchema = z.object({
   answer: z.string(),
-  timestamps: z.array(z.string()).optional()
+  timestamps: z.array(z.string().regex(timestampPattern)).max(5).optional()
 });
 
 export const summaryTakeawaySchema = z.object({

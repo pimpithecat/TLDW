@@ -148,6 +148,7 @@ export const noteMetadataSchema = z.object({
     role: z.enum(['user', 'assistant']),
     timestamp: z.string().optional()
   }).optional(),
+  selectedText: z.string().min(1).max(10000).optional(),
   selectionContext: z.string().optional(),
   timestampLabel: z.string().optional(),
   extra: z.record(z.string(), z.unknown()).optional()

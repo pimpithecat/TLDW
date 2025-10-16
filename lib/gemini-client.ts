@@ -79,14 +79,27 @@ function convertToGeminiSchema(jsonSchema: any): any {
   }
 
   if (jsonSchema.type === 'array') {
-    return {
+    const arraySchema: Record<string, any> = {
       type: SchemaType.ARRAY,
       items: jsonSchema.items ? convertToGeminiSchema(jsonSchema.items) : { type: SchemaType.STRING }
     };
+
+    if (typeof jsonSchema.minItems === 'number') {
+      arraySchema.minItems = jsonSchema.minItems;
+    }
+    if (typeof jsonSchema.maxItems === 'number') {
+      arraySchema.maxItems = jsonSchema.maxItems;
+    }
+
+    return arraySchema;
   }
 
   if (jsonSchema.type === 'string') {
-    return { type: SchemaType.STRING };
+    const stringSchema: Record<string, any> = { type: SchemaType.STRING };
+    if (typeof jsonSchema.pattern === 'string') {
+      stringSchema.pattern = jsonSchema.pattern;
+    }
+    return stringSchema;
   }
 
   if (jsonSchema.type === 'number' || jsonSchema.type === 'integer') {

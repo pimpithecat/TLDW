@@ -70,6 +70,7 @@ export interface NoteMetadata {
     role: 'user' | 'assistant';
     timestamp?: string;
   };
+  selectedText?: string;
   selectionContext?: string;
   timestampLabel?: string;
   extra?: Record<string, unknown>;
@@ -86,6 +87,16 @@ export interface Note {
   metadata?: NoteMetadata | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface NoteWithVideo extends Note {
+  video: {
+    youtubeId: string;
+    title: string;
+    author: string;
+    thumbnailUrl: string;
+    duration: number;
+  } | null;
 }
 
 export interface VideoInfo {

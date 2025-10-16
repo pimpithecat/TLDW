@@ -1,5 +1,5 @@
 import { csrfFetch } from '@/lib/csrf-client';
-import { Note, NoteMetadata, NoteSource } from '@/lib/types';
+import { Note, NoteMetadata, NoteSource, NoteWithVideo } from '@/lib/types';
 
 interface SaveNotePayload {
   youtubeId: string;
@@ -48,3 +48,13 @@ export async function deleteNote(noteId: string): Promise<void> {
   }
 }
 
+export async function fetchAllNotes(): Promise<NoteWithVideo[]> {
+  const response = await csrfFetch.get('/api/notes/all');
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch all notes');
+  }
+
+  const data = await response.json();
+  return (data.notes || []) as NoteWithVideo[];
+}
