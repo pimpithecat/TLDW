@@ -35,16 +35,20 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [askedQuestions, setAskedQuestions] = useState<Set<string>>(new Set());
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const chatContainerRef = useRef<HTMLDivElement>(null);
   const takeawaysContainerRef = useRef<HTMLDivElement | null>(null);
   const chatMessagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const node = messagesEndRef.current;
+    if (!node) {
+      return;
     }
-  }, [messages]);
+    node.scrollIntoView({
+      block: "end",
+      behavior: messages.length <= 1 ? "auto" : "smooth",
+    });
+  }, [messages, isLoading]);
 
   // Reset questions when video changes
   useEffect(() => {
@@ -385,8 +389,8 @@ Full takeaway context: "${fullTakeawayText}"`;
   return (
     <TooltipProvider delayDuration={0} skipDelayDuration={0} disableHoverableContent={false}>
       <div className="w-full h-full flex flex-col">
-        <ScrollArea className="flex-1 px-6" ref={scrollRef}>
-          <div className="space-y-3.5" ref={chatContainerRef}>
+        <ScrollArea className="flex-1 px-6">
+          <div className="space-y-3.5">
             {pinnedContent && (
               <div className="space-y-2.5" ref={takeawaysContainerRef}>
                 <SelectionActions
@@ -444,6 +448,7 @@ Full takeaway context: "${fullTakeawayText}"`;
                 <p className="text-xs text-muted-foreground">Thinking...</p>
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
 
