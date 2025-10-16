@@ -148,7 +148,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   }, [showTakeawaysTab, isGeneratingTakeaways, takeawaysError, takeawaysContent, onTakeawayTimestampClick, onTimestampClick, onRetryTakeaways, onSaveNote]);
 
   return (
-    <Card className="h-full flex flex-col overflow-hidden p-0 gap-0">
+    <Card className="h-full flex flex-col overflow-hidden p-0 gap-0 border-0">
       <div className="flex items-center gap-2 p-2 rounded-t-3xl border-b">
         {showTakeawaysTab && (
           <Button

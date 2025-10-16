@@ -1,10 +1,10 @@
 "use client";
 
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { Loader2, Plus, X } from "lucide-react";
+import { ArrowUp, ChevronLeft, ChevronRight, Loader2, Plus, X } from "lucide-react";
 
 interface ThemeSelectorProps {
   themes: string[];
@@ -28,6 +28,9 @@ export function ThemeSelector({
   const [validationError, setValidationError] = useState<string | null>(null);
   const [showCustomInput, setShowCustomInput] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [showLeftScroll, setShowLeftScroll] = useState(false);
+  const [showRightScroll, setShowRightScroll] = useState(false);
 
   const trimmedValue = customThemeInput.trim();
   const isSubmitDisabled = trimmedValue.length === 0 || isLoading;
@@ -88,55 +91,70 @@ export function ThemeSelector({
     onSelect(trimmedValue);
   };
 
+  // Check if scroll is needed
+  const checkScrollNeeded = () => {
+    if (scrollContainerRef.current) {
+      const { scrollWidth, clientWidth, scrollLeft } = scrollContainerRef.current;
+      const canScrollLeft = scrollLeft > 0;
+      const canScrollRight = scrollLeft < scrollWidth - clientWidth - 1; // -1 for rounding
+      
+      setShowLeftScroll(canScrollLeft);
+      setShowRightScroll(canScrollRight);
+    }
+  };
+
+  // Scroll handlers
+  const handleScrollLeft = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({
+        left: -200,
+        behavior: "smooth",
+      });
+      // Recheck after scroll completes
+      setTimeout(checkScrollNeeded, 300);
+    }
+  };
+
+  const handleScrollRight = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({
+        left: 200,
+        behavior: "smooth",
+      });
+      // Recheck after scroll completes
+      setTimeout(checkScrollNeeded, 300);
+    }
+  };
+
+  // Check scroll on mount and when themes change
+  useEffect(() => {
+    checkScrollNeeded();
+    window.addEventListener("resize", checkScrollNeeded);
+    
+    const scrollContainer = scrollContainerRef.current;
+    if (scrollContainer) {
+      scrollContainer.addEventListener("scroll", checkScrollNeeded);
+    }
+    
+    return () => {
+      window.removeEventListener("resize", checkScrollNeeded);
+      if (scrollContainer) {
+        scrollContainer.removeEventListener("scroll", checkScrollNeeded);
+      }
+    };
+  }, [displayThemes, isCustomSelection, selectedTheme, showCustomInput]);
+
   return (
     <div className="flex w-full flex-col items-stretch gap-3">
-      <div className="flex flex-wrap items-center justify-start gap-2">
-        {showCustomInput ? (
-          <form className="flex items-center gap-2" onSubmit={handleSubmit}>
-            <Input
-              ref={inputRef}
-              value={customThemeInput}
-              onChange={(event) => {
-                if (validationError) {
-                  setValidationError(null);
-                }
-                setCustomThemeInput(event.target.value);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  event.preventDefault();
-                  closeCustomInput();
-                }
-              }}
-              placeholder="Focus on leadership, design..."
-              disabled={isLoading}
-              className="h-8 w-44 rounded-full px-3 text-sm"
-            />
-            <Button
-              type="submit"
-              size="sm"
-              className="rounded-full"
-              disabled={isSubmitDisabled}
-            >
-              Apply
-            </Button>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 rounded-full text-muted-foreground"
-              onClick={closeCustomInput}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </form>
-        ) : (
+      <div className="relative flex items-center gap-2 pe-[72px]">
+        {/* Your Topic button - hidden when custom input is shown */}
+        {!showCustomInput && (
           <Button
             type="button"
             size="sm"
             className={cn(
               buttonClasses(showCustomInput || isCustomSelection),
-              "flex items-center gap-1.5"
+              "flex items-center gap-1.5 transition-all duration-200 flex-shrink-0"
             )}
             onClick={openCustomInput}
             disabled={isLoading}
@@ -146,37 +164,128 @@ export function ThemeSelector({
           </Button>
         )}
 
-        <Button
-          type="button"
-          size="sm"
-          className={buttonClasses(isOverallSelected)}
-          onClick={() => onSelect(null)}
+        {/* Scrollable container for theme buttons - always rendered */}
+        <div
+          ref={scrollContainerRef}
+          className={cn(
+            "flex items-center gap-2 overflow-x-auto overflow-y-visible scrollbar-hide flex-1 transition-all duration-200 bg-transparent",
+            showCustomInput && "blur-sm opacity-50 pointer-events-none"
+          )}
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
-          Overall highlights
-        </Button>
-        {hasThemes && displayThemes.map((theme) => (
-          <Button
-            key={theme}
-            type="button"
-            size="sm"
-            className={buttonClasses(selectedTheme === theme)}
-            onClick={() => onSelect(selectedTheme === theme ? null : theme)}
-          >
-            {theme}
-          </Button>
-        ))}
-        {isCustomSelection && selectedTheme && !showCustomInput && (
           <Button
             type="button"
             size="sm"
-            className={buttonClasses(true)}
-            onClick={openCustomInput}
+            className={cn(buttonClasses(isOverallSelected), "transition-all duration-200 flex-shrink-0")}
+            onClick={() => onSelect(null)}
+            tabIndex={showCustomInput ? -1 : 0}
           >
-            {selectedTheme}
+            Overall highlights
           </Button>
+          {hasThemes && displayThemes.map((theme) => (
+            <Button
+              key={theme}
+              type="button"
+              size="sm"
+              className={cn(buttonClasses(selectedTheme === theme), "transition-all duration-200 flex-shrink-0")}
+              onClick={() => onSelect(selectedTheme === theme ? null : theme)}
+              tabIndex={showCustomInput ? -1 : 0}
+            >
+              {theme}
+            </Button>
+          ))}
+          {isCustomSelection && selectedTheme && (
+            <Button
+              type="button"
+              size="sm"
+              className={cn(buttonClasses(!showCustomInput), "transition-all duration-200 flex-shrink-0")}
+              onClick={openCustomInput}
+              tabIndex={showCustomInput ? -1 : 0}
+            >
+              {selectedTheme}
+            </Button>
+          )}
+          {isLoading && (
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground flex-shrink-0" aria-hidden="true" />
+          )}
+        </div>
+        
+        {/* Combined scroll button - absolutely positioned on right edge */}
+        {(showLeftScroll || showRightScroll) && !showCustomInput && (
+          <div className="absolute right-0 top-0 flex items-center z-[5]">
+            {/* Gradient fade overlay */}
+            <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-r from-transparent via-background/50 to-background pointer-events-none" />
+            
+            {/* Combined scroll button */}
+            <div className="relative flex items-center justify-center flex-shrink-0 backdrop-blur-sm bg-white rounded-full p-0.5 shadow-[-1px_4px_21.8px_0_rgba(0,0,0,0.25)]">
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                onClick={handleScrollLeft}
+                className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                onClick={handleScrollRight}
+                className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
         )}
-        {isLoading && (
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
+
+        {/* Overlay for custom input - absolute positioned */}
+        {showCustomInput && (
+          <div className="absolute left-0 top-0 flex items-center gap-2 z-10 bg-background">
+            {/* X button - external on the left */}
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 rounded-full text-muted-foreground transition-all duration-200"
+              onClick={closeCustomInput}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+            
+            {/* Form with expanded textbox and inline arrow button */}
+            <form className="relative" onSubmit={handleSubmit}>
+              <Input
+                ref={inputRef}
+                value={customThemeInput}
+                onChange={(event) => {
+                  if (validationError) {
+                    setValidationError(null);
+                  }
+                  setCustomThemeInput(event.target.value);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    closeCustomInput();
+                  }
+                }}
+                placeholder="Input your topics"
+                disabled={isLoading}
+                className="h-8 w-[300px] rounded-full px-3 pr-10 text-sm transition-all duration-300 ease-in-out"
+              />
+              <Button
+                type="submit"
+                size="icon"
+                variant="ghost"
+                disabled={isSubmitDisabled}
+                className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 rounded-full text-muted-foreground hover:text-foreground disabled:opacity-40"
+              >
+                <ArrowUp className="h-4 w-4" />
+              </Button>
+            </form>
+          </div>
         )}
       </div>
 

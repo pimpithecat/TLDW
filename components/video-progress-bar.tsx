@@ -4,12 +4,6 @@ import { useRef } from "react";
 import { Topic, TranscriptSegment } from "@/lib/types";
 import { getTopicHSLColor } from "@/lib/utils";
 import { TopicCard } from "@/components/topic-card";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 interface VideoProgressBarProps {
@@ -106,92 +100,83 @@ export function VideoProgressBar({
   };
 
   return (
-    <TooltipProvider>
-      <div className="relative w-full space-y-2">
-        {/* Main progress bar - Click to navigate */}
-        {hasDuration && (
-          <Tooltip>
-            <TooltipTrigger asChild>
+    <div className="relative w-full space-y-2">
+      {/* Main progress bar - Click to navigate */}
+      {hasDuration && (
+        <div
+          ref={progressBarRef}
+          className="relative h-12 bg-muted rounded-lg overflow-hidden cursor-pointer group transition-all hover:ring-2 hover:ring-primary/50"
+          onClick={handleBackgroundClick}
+        >
+          {/* Heatmap background */}
+          <div className="absolute inset-0 flex pointer-events-none">
+            {density.map((d, i) => (
               <div
-                ref={progressBarRef}
-                className="relative h-12 bg-muted rounded-lg overflow-hidden cursor-pointer group transition-all hover:ring-2 hover:ring-primary/50"
-                onClick={handleBackgroundClick}
-              >
-                {/* Heatmap background */}
-                <div className="absolute inset-0 flex pointer-events-none">
-                  {density.map((d, i) => (
-                    <div
-                      key={i}
-                      className="flex-1 h-full transition-opacity"
-                      style={{
-                        backgroundColor: `hsl(var(--primary) / ${d * 0.2})`,
-                      }}
-                    />
-                  ))}
-                </div>
+                key={i}
+                className="flex-1 h-full transition-opacity"
+                style={{
+                  backgroundColor: `hsl(var(--primary) / ${d * 0.2})`,
+                }}
+              />
+            ))}
+          </div>
 
-                {/* Topic segments */}
-                <div className="absolute inset-0 z-20">
-                  {allSegments.map(({ key, topic, topicIndex, segment }) => {
-                    const isSelected = selectedTopic?.id === topic.id;
-                    const { left, width } = getSegmentStyles(segment);
-
-                    return (
-                      <div
-                        key={key}
-                        className={cn(
-                          "absolute top-2 h-8 rounded-md transition-all cursor-pointer hover:opacity-100 hover:scale-105",
-                          isSelected && "z-30 ring-2 ring-white"
-                        )}
-                        style={{
-                          left,
-                          width,
-                          backgroundColor: `hsl(${getTopicHSLColor(topicIndex)})`,
-                          opacity: isSelected ? 1 : 0.7,
-                        }}
-                        onClick={(e) => handleTopicClick(e, topic)}
-                      />
-                    );
-                  })}
-                </div>
-
-                {/* Current time indicator */}
-                <div
-                  className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 pointer-events-none transition-all"
-                  style={{
-                    left: `${(currentTime / videoDuration) * 100}%`,
-                  }}
-                >
-                  <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-3 h-3 bg-red-500 rounded-full" />
-                </div>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Click topics to play, empty space to seek</p>
-            </TooltipContent>
-          </Tooltip>
-        )}
-
-        {/* Topic insights list */}
-        <div className="mt-3">
-          <div className="space-y-2">
-            {topics.map((topic, index) => {
+          {/* Topic segments */}
+          <div className="absolute inset-0 z-20">
+            {allSegments.map(({ key, topic, topicIndex, segment }) => {
               const isSelected = selectedTopic?.id === topic.id;
-            
+              const { left, width } = getSegmentStyles(segment);
+
               return (
-                <TopicCard
-                  key={topic.id}
-                  topic={topic}
-                  isSelected={isSelected}
-                  onClick={() => onTopicSelect?.(topic)}
-                  topicIndex={index}
-                  onPlayTopic={() => onPlayTopic?.(topic)}
+                <div
+                  key={key}
+                  className={cn(
+                    "absolute top-2 h-8 rounded-md transition-all cursor-pointer hover:opacity-100 hover:scale-105",
+                    isSelected && "z-30 ring-2 ring-white"
+                  )}
+                  style={{
+                    left,
+                    width,
+                    backgroundColor: `hsl(${getTopicHSLColor(topicIndex)})`,
+                    opacity: isSelected ? 1 : 0.7,
+                  }}
+                  onClick={(e) => handleTopicClick(e, topic)}
                 />
               );
             })}
           </div>
+
+          {/* Current time indicator */}
+          <div
+            className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 pointer-events-none transition-all"
+            style={{
+              left: `${(currentTime / videoDuration) * 100}%`,
+            }}
+          >
+            <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-3 h-3 bg-red-500 rounded-full" />
+          </div>
+        </div>
+      )}
+
+      {/* Topic insights list */}
+      <div className="mt-3">
+        <div className="space-y-2">
+          {topics.map((topic, index) => {
+            const isSelected = selectedTopic?.id === topic.id;
+
+            return (
+              <TopicCard
+                key={topic.id}
+                topic={topic}
+                isSelected={isSelected}
+                onClick={() => onTopicSelect?.(topic)}
+                topicIndex={index}
+                onPlayTopic={() => onPlayTopic?.(topic)}
+              />
+            );
+          })}
         </div>
       </div>
-    </TooltipProvider>
+    </div>
   );
 }

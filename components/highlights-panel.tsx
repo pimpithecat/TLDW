@@ -35,7 +35,7 @@ export function HighlightsPanel({
   transcript = [],
 }: HighlightsPanelProps) {
   return (
-    <Card className="overflow-hidden p-0">
+    <Card className="overflow-hidden p-0 border-0">
       <div className="p-2.5 bg-background rounded-b-3xl flex-shrink-0">
         <VideoProgressBar
           videoDuration={videoDuration}
