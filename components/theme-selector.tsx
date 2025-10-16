@@ -55,10 +55,10 @@ export function ThemeSelector({
     }
   }, [baseThemes, selectedTheme]);
 
-  const buttonClasses = (isActive: boolean) =>
+  const buttonClasses = (isActive: boolean, forceInactive = false) =>
     cn(
       "rounded-full px-3 py-1 text-sm transition-colors",
-      isActive
+      isActive && !forceInactive
         ? "bg-primary text-primary-foreground shadow-sm"
         : "bg-muted/40 text-muted-foreground hover:text-foreground hover:bg-muted/60"
     );
@@ -169,36 +169,35 @@ export function ThemeSelector({
   return (
     <div className="flex w-full flex-col items-stretch gap-3">
       <div className="relative flex items-center gap-2 pe-[72px]">
-        {/* Your Topic button - hidden when custom input is shown */}
-        {!showCustomInput && (
-          <Button
-            type="button"
-            size="sm"
-            className={cn(
-              buttonClasses(showCustomInput || isCustomThemeSelected),
-              "flex items-center gap-1.5 transition-all duration-200 flex-shrink-0"
-            )}
-            onClick={openCustomInput}
-            disabled={isLoading}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Your Topic
-          </Button>
-        )}
+        {/* Your Topic button - invisible when custom input is shown */}
+        <Button
+          type="button"
+          size="sm"
+          className={cn(
+            buttonClasses(showCustomInput || isCustomThemeSelected),
+            "flex items-center gap-1.5 transition-all duration-200 flex-shrink-0",
+            showCustomInput && "opacity-0 pointer-events-none"
+          )}
+          onClick={openCustomInput}
+          disabled={isLoading}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Your Topic
+        </Button>
 
         {/* Scrollable container for theme buttons - always rendered */}
         <div
           ref={scrollContainerRef}
           className={cn(
             "flex items-center gap-2 overflow-x-auto overflow-y-visible scrollbar-hide flex-1 transition-all duration-200 bg-transparent py-6 my-[-24px]",
-            showCustomInput && "blur-sm opacity-50 pointer-events-none"
+            showCustomInput && "blur-[2px] opacity-50 pointer-events-none"
           )}
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
           <Button
             type="button"
             size="sm"
-            className={cn(buttonClasses(isOverallSelected), "transition-all duration-200 flex-shrink-0")}
+            className={cn(buttonClasses(isOverallSelected, showCustomInput), "transition-all duration-200 flex-shrink-0")}
             onClick={() => onSelect(null)}
             tabIndex={showCustomInput ? -1 : 0}
           >
@@ -209,7 +208,7 @@ export function ThemeSelector({
               key={theme}
               type="button"
               size="sm"
-              className={cn(buttonClasses(selectedTheme === theme), "transition-all duration-200 flex-shrink-0")}
+              className={cn(buttonClasses(selectedTheme === theme, showCustomInput), "transition-all duration-200 flex-shrink-0")}
               onClick={() => onSelect(selectedTheme === theme ? null : theme)}
               tabIndex={showCustomInput ? -1 : 0}
             >
