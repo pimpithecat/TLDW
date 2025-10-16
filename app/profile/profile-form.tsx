@@ -7,10 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { DEFAULT_TOPIC_MODEL, TOPIC_MODEL_OPTIONS, normalizeGeminiModel } from '@/lib/ai-models';
-import type { GeminiModel } from '@/lib/ai-models';
 import { User } from '@supabase/supabase-js';
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -39,15 +36,10 @@ export default function ProfileForm({ user, profile, videoCount }: ProfileFormPr
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [defaultTopicModel, setDefaultTopicModel] = useState<GeminiModel>(
-    normalizeGeminiModel(user.user_metadata?.defaultTopicModel as string | undefined)
-  );
 
   const [loading, setLoading] = useState(false);
   const [profileMessage, setProfileMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [modelMessage, setModelMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [modelLoading, setModelLoading] = useState(false);
 
   const handleUpdateProfile = async () => {
     setLoading(true);
@@ -101,27 +93,6 @@ export default function ProfileForm({ user, profile, videoCount }: ProfileFormPr
     setLoading(false);
   };
 
-  const handleUpdateModel = async () => {
-    setModelLoading(true);
-    setModelMessage(null);
-
-    const { error } = await supabase.auth.updateUser({
-      data: {
-        ...(user.user_metadata ?? {}),
-        defaultTopicModel,
-      },
-    });
-
-    if (error) {
-      setModelMessage({ type: 'error', text: error.message });
-    } else {
-      setModelMessage({ type: 'success', text: 'Default model updated!' });
-      router.refresh();
-    }
-
-    setModelLoading(false);
-  };
-
   return (
     <div className="space-y-6">
       <Card>
@@ -173,60 +144,6 @@ export default function ProfileForm({ user, profile, videoCount }: ProfileFormPr
               </>
             ) : (
               'Update Profile'
-            )}
-          </Button>
-        </CardFooter>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>AI Settings</CardTitle>
-          <CardDescription>Choose the default model for highlight reel generation</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="defaultTopicModel">Topic generation model</Label>
-            <Select
-              value={defaultTopicModel}
-              onValueChange={(value) => setDefaultTopicModel(normalizeGeminiModel(value))}
-              disabled={modelLoading}
-            >
-              <SelectTrigger className="w-full justify-between">
-                <SelectValue placeholder="Select a model" />
-              </SelectTrigger>
-              <SelectContent>
-                {TOPIC_MODEL_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              {TOPIC_MODEL_OPTIONS.find((option) => option.value === defaultTopicModel)?.description}
-            </p>
-          </div>
-
-          {modelMessage && (
-            <Alert variant={modelMessage.type === 'error' ? 'destructive' : 'default'}>
-              {modelMessage.type === 'success' ? (
-                <CheckCircle className="h-4 w-4" />
-              ) : (
-                <AlertCircle className="h-4 w-4" />
-              )}
-              <AlertDescription>{modelMessage.text}</AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
-        <CardFooter>
-          <Button onClick={handleUpdateModel} disabled={modelLoading}>
-            {modelLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              'Save Model Preference'
             )}
           </Button>
         </CardFooter>

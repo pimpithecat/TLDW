@@ -13,7 +13,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Send, Loader2 } from "lucide-react";
 import { parseTimestamp } from "@/lib/timestamp-utils";
 import { formatDuration } from "@/lib/utils";
-import { DEFAULT_FAST_MODEL } from "@/lib/ai-models";
 
 interface AIChatProps {
   transcript: TranscriptSegment[];
@@ -119,7 +118,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
           topics,
           videoId,
           chatHistory: messages,
-          model: DEFAULT_FAST_MODEL,
+          model: 'gemini-2.5-flash-lite',
         }),
         signal: controller.signal,
       });

@@ -52,7 +52,7 @@ npm start            # Start production server
 - **Segment Mapping**: Maps text matches back to precise segment boundaries with character offsets
 
 #### AI Processing with Gemini (`lib/gemini-client.ts`)
-- **Model Cascade**: Automatically falls back through `gemini-2.5-pro-latest` → `gemini-2.5-flash-latest` → `gemini-2.5-flash-lite-latest`
+- **Model Cascade**: Automatically falls back through `gemini-2.5-flash-lite` → `gemini-2.5-flash` → `gemini-2.5-pro`
 - **Structured Output**: Converts Zod schemas to Gemini's schema format for type-safe responses
 - **Retry Logic**: Detects overload/rate limit errors (503, 429) and tries next model
 - **Timeout Handling**: Optional timeout support with graceful error handling

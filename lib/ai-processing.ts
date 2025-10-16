@@ -8,7 +8,6 @@ import {
 import { generateWithFallback } from '@/lib/gemini-client';
 import { topicGenerationSchema } from '@/lib/schemas';
 import { z } from 'zod';
-import { DEFAULT_FAST_MODEL, DEFAULT_TOPIC_MODEL, normalizeGeminiModel } from '@/lib/ai-models';
 
 interface ParsedTopic {
   title: string;
@@ -410,7 +409,6 @@ async function runSinglePassTopicGeneration(
   model: string,
   theme?: string
 ): Promise<ParsedTopic[]> {
-  const normalizedModel = normalizeGeminiModel(model);
   const themeGuidance = theme
     ? `<themeAlignment>
   <criterion name="ThemeRelevance">Every highlight must directly reinforce the theme "${theme}". Discard compelling ideas if they are off-theme.</criterion>
@@ -459,7 +457,7 @@ ${transcriptWithTimestamps}
 
   try {
     const response = await generateWithFallback(prompt, {
-      preferredModel: normalizedModel,
+      preferredModel: model,
       generationConfig: {
         temperature: 0.7,
       },
@@ -644,27 +642,24 @@ async function findExactQuotes(
 /**
  * Generate highlight reel topics from a video transcript using AI
  * @param transcript The video transcript segments
- * @param model The AI model to use (default: gemini-2.5-pro-latest)
+ * @param model The AI model to use (default: gemini-2.5-flash)
  * @returns Array of topics with segments and quotes
  */
 export async function generateTopicsFromTranscript(
   transcript: TranscriptSegment[],
-  _model: string = DEFAULT_TOPIC_MODEL,
+  _model: string = 'gemini-2.5-flash',
   options: GenerateTopicsOptions = {}
 ): Promise<{ topics: Topic[]; candidates?: TopicCandidate[] }> {
   const {
     videoInfo,
     chunkDurationSeconds = DEFAULT_CHUNK_DURATION_SECONDS,
     chunkOverlapSeconds = DEFAULT_CHUNK_OVERLAP_SECONDS,
-    fastModel,
+    fastModel = 'gemini-2.5-flash-lite',
     maxTopics = 5,
     theme,
     excludeTopicKeys,
     includeCandidatePool
   } = options;
-
-  const primaryModel = normalizeGeminiModel(_model);
-  const workingModel = fastModel ? normalizeGeminiModel(fastModel) : primaryModel;
 
   const requestedTopics = Math.max(1, Math.min(maxTopics, 5));
   const fullText = combineTranscript(transcript);
@@ -683,7 +678,7 @@ export async function generateTopicsFromTranscript(
 
           try {
             const response = await generateWithFallback(chunkPrompt, {
-              preferredModel: workingModel,
+              preferredModel: fastModel,
               generationConfig: { temperature: 0.6 },
               zodSchema: topicGenerationSchema
             });
@@ -810,7 +805,7 @@ export async function generateTopicsFromTranscript(
       reduceCandidateSubset(segment.candidates, {
         minTopics: Math.max(1, segment.minTopics),
         maxTopics: segment.maxTopics,
-        fastModel: workingModel,
+        fastModel,
         videoInfo,
         segmentLabel: segment.label
       })
@@ -874,7 +869,7 @@ export async function generateTopicsFromTranscript(
       transcript,
       transcriptWithTimestamps,
       fullText,
-      primaryModel,
+      fastModel,
       theme
     );
     topicsArray = singlePassTopics.filter(topic => {
@@ -1060,7 +1055,7 @@ function sanitizeThemeList(themes: string[]): string[] {
 export async function generateThemesFromTranscript(
   transcript: TranscriptSegment[],
   videoInfo?: Partial<VideoInfo>,
-  model: string = DEFAULT_FAST_MODEL
+  model: string = 'gemini-2.5-flash-lite'
 ): Promise<string[]> {
   if (!transcript || transcript.length === 0) {
     return [];
@@ -1068,7 +1063,6 @@ export async function generateThemesFromTranscript(
 
   const transcriptWithTimestamps = formatTranscriptWithTimestamps(transcript);
   const videoInfoBlock = formatVideoInfoForPrompt(videoInfo);
-  const normalizedModel = normalizeGeminiModel(model);
 
   const prompt = `## Persona
 You are an expert content analyst and a specialist in semantic keyword extraction. Your goal is to distill complex information into its most essential conceptual components for easy discovery.
@@ -1099,7 +1093,7 @@ ${videoInfoBlock ? `${videoInfoBlock}\n\n` : ''}${transcriptWithTimestamps}`;
 
   try {
     const response = await generateWithFallback(prompt, {
-      preferredModel: normalizedModel,
+      preferredModel: model,
       generationConfig: { temperature: 0.3 }
     });
 

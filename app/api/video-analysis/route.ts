@@ -5,8 +5,6 @@ import { RateLimiter, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limiter'
 import { z } from 'zod';
 import { withSecurity, SECURITY_PRESETS } from '@/lib/security-middleware';
 import { generateTopicsFromTranscript, generateThemesFromTranscript } from '@/lib/ai-processing';
-import { DEFAULT_TOPIC_MODEL, normalizeGeminiModel } from '@/lib/ai-models';
-import type { User } from '@supabase/supabase-js';
 
 async function handler(req: NextRequest) {
   try {
@@ -38,41 +36,9 @@ async function handler(req: NextRequest) {
       theme
     } = validatedData;
 
-    type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
-    let supabaseClient: SupabaseServerClient | null = null;
-    let cachedUser: User | null = null;
-
-    const ensureSupabase = async () => {
-      if (!supabaseClient) {
-        supabaseClient = await createClient();
-        const { data: { user }, error } = await supabaseClient.auth.getUser();
-        if (error) {
-          console.warn('Failed to load authenticated user:', error);
-        }
-        cachedUser = user ?? null;
-      }
-      return { supabase: supabaseClient!, user: cachedUser };
-    };
-
-    let resolvedModel = normalizeGeminiModel(model ?? DEFAULT_TOPIC_MODEL);
-
-    if (!model) {
-      try {
-        const { user } = await ensureSupabase();
-        const preferredModel = typeof user?.user_metadata?.defaultTopicModel === 'string'
-          ? user.user_metadata.defaultTopicModel
-          : undefined;
-        if (preferredModel) {
-          resolvedModel = normalizeGeminiModel(preferredModel);
-        }
-      } catch (prefError) {
-        console.warn('Unable to load user model preference:', prefError);
-      }
-    }
-
     if (theme) {
       try {
-        const { topics: themedTopics } = await generateTopicsFromTranscript(transcript, resolvedModel, {
+        const { topics: themedTopics } = await generateTopicsFromTranscript(transcript, model, {
           videoInfo,
           theme,
           excludeTopicKeys: new Set(validatedData.excludeTopicKeys ?? []),
@@ -94,7 +60,10 @@ async function handler(req: NextRequest) {
       }
     }
 
-    const { supabase, user } = await ensureSupabase();
+    const supabase = await createClient();
+
+    // Get current user if logged in
+    const { data: { user } } = await supabase.auth.getUser();
 
     // Check for cached analysis FIRST (before consuming rate limit)
     if (!forceRegenerate) {
@@ -158,7 +127,7 @@ async function handler(req: NextRequest) {
       );
     }
 
-    const generationResult = await generateTopicsFromTranscript(transcript, resolvedModel, {
+    const generationResult = await generateTopicsFromTranscript(transcript, model, {
       videoInfo,
       includeCandidatePool: validatedData.includeCandidatePool,
       excludeTopicKeys: new Set(validatedData.excludeTopicKeys ?? []),

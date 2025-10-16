@@ -12,9 +12,6 @@ const QUOTE_MATCH_CONFIG = {
   CONTEXT_EXTENSION: 5, // seconds to add before/after
 } as const;
 
-const PUNCTUATION_REGEX = /[.,?"'!—…–]/;
-const WHITESPACE_REGEX = /\s/;
-
 // Text normalization utilities
 export function normalizeWhitespace(text: string): string {
   return text
@@ -23,59 +20,14 @@ export function normalizeWhitespace(text: string): string {
     .trim();
 }
 
-interface NormalizedIndexEntry {
-  segmentIdx: number;
-  charOffset: number;
-  isBoundary?: boolean;
-  nextSegmentIdx?: number;
-}
-
-function normalizeTextAndMap(text: string): { normalized: string; map: number[] } {
-  const normalizedChars: string[] = [];
-  const charMap: number[] = [];
-  let pendingSpace = false;
-  let pendingSpaceIndex = -1;
-
-  for (let i = 0; i < text.length; i++) {
-    const rawChar = text[i];
-    if (WHITESPACE_REGEX.test(rawChar)) {
-      if (normalizedChars.length === 0) continue; // skip leading whitespace entirely
-      if (!pendingSpace) {
-        pendingSpace = true;
-        pendingSpaceIndex = i;
-      }
-      continue;
-    }
-
-    const lowerChar = rawChar.toLowerCase();
-    if (PUNCTUATION_REGEX.test(lowerChar)) {
-      continue;
-    }
-
-    if (pendingSpace) {
-      normalizedChars.push(' ');
-      charMap.push(pendingSpaceIndex);
-      pendingSpace = false;
-      pendingSpaceIndex = -1;
-    }
-
-    normalizedChars.push(lowerChar);
-    charMap.push(i);
-  }
-
-  if (normalizedChars.length > 0 && normalizedChars[normalizedChars.length - 1] === ' ') {
-    normalizedChars.pop();
-    charMap.pop();
-  }
-
-  return {
-    normalized: normalizedChars.join(''),
-    map: charMap
-  };
-}
-
 export function normalizeForMatching(text: string): string {
-  return normalizeTextAndMap(text).normalized;
+  return text
+    .toLowerCase()
+    // Remove most punctuation. This makes the match robust to missing commas, etc.
+    .replace(/[.,?"""''!—…–]/g, '')
+    // Normalize whitespace
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 // Fast n-gram based similarity (0-1)
@@ -152,12 +104,9 @@ export interface TranscriptIndex {
     endPos: number;
     text: string;
     normalizedText: string;
-    normalizedStartPos: number;
-    normalizedEndPos: number;
   }>;
   wordIndex: Map<string, number[]>; // word -> [positions]
   ngramIndex: Map<string, Set<number>>; // 3-gram -> segment indices
-  normalizedIndexMap: NormalizedIndexEntry[];
 }
 
 export function buildTranscriptIndex(transcript: TranscriptSegment[]): TranscriptIndex {
@@ -167,8 +116,6 @@ export function buildTranscriptIndex(transcript: TranscriptSegment[]): Transcrip
     endPos: number;
     text: string;
     normalizedText: string;
-    normalizedStartPos: number;
-    normalizedEndPos: number;
   }> = [];
   
   let fullTextSpace = '';
@@ -176,40 +123,25 @@ export function buildTranscriptIndex(transcript: TranscriptSegment[]): Transcrip
   let normalizedText = '';
   const wordIndex = new Map<string, number[]>();
   const ngramIndex = new Map<string, Set<number>>();
-  const normalizedIndexMap: NormalizedIndexEntry[] = [];
   
   transcript.forEach((segment, idx) => {
     if (idx > 0) {
       fullTextSpace += ' ';
       fullTextNewline += '\n';
       normalizedText += ' ';
-      normalizedIndexMap.push({
-        segmentIdx: idx - 1,
-        charOffset: transcript[idx - 1]?.text.length ?? 0,
-        isBoundary: true,
-        nextSegmentIdx: idx
-      });
     }
     
     const segmentStartPos = fullTextSpace.length;
     const normalizedStartPos = normalizedText.length;
-    const segmentNormalizedData = normalizeTextAndMap(segment.text);
-    const segmentNormalized = segmentNormalizedData.normalized;
+    const segmentNormalized = normalizeForMatching(segment.text);
     
     fullTextSpace += segment.text;
     fullTextNewline += segment.text;
     normalizedText += segmentNormalized;
     
-    for (let charIdx = 0; charIdx < segmentNormalized.length; charIdx++) {
-      normalizedIndexMap.push({
-        segmentIdx: idx,
-        charOffset: segmentNormalizedData.map[charIdx]
-      });
-    }
-    
     // Build word index for this segment
     const words = segmentNormalized.split(/\s+/);
-    words.forEach((word) => {
+    words.forEach((word, wordIdx) => {
       if (word.length > 2) {
         const positions = wordIndex.get(word) || [];
         positions.push(idx);
@@ -232,9 +164,7 @@ export function buildTranscriptIndex(transcript: TranscriptSegment[]): Transcrip
       startPos: segmentStartPos,
       endPos: fullTextSpace.length,
       text: segment.text,
-      normalizedText: segmentNormalized,
-      normalizedStartPos,
-      normalizedEndPos: normalizedText.length
+      normalizedText: segmentNormalized
     };
     segmentBoundaries.push(boundary);
   });
@@ -245,149 +175,7 @@ export function buildTranscriptIndex(transcript: TranscriptSegment[]): Transcrip
     normalizedText,
     segmentBoundaries,
     wordIndex,
-    ngramIndex,
-    normalizedIndexMap
-  };
-}
-
-interface RefinedMatchResult {
-  startSegmentIdx: number;
-  endSegmentIdx: number;
-  startCharOffset: number;
-  endCharOffset: number;
-  similarity: number;
-}
-
-// After n-gram window selection, re-run a localized search over the normalized transcript to
-// pinpoint the best-matching substring. This keeps the fast fuzzy search but returns precise offsets.
-function refineMatchInWindow(
-  index: TranscriptIndex,
-  startSegmentIdx: number,
-  endSegmentIdx: number,
-  targetText: string,
-  minimumScore = 0.6
-): RefinedMatchResult | null {
-  if (!Number.isFinite(startSegmentIdx) || !Number.isFinite(endSegmentIdx)) {
-    return null;
-  }
-
-  if (startSegmentIdx < 0 || endSegmentIdx < startSegmentIdx || endSegmentIdx >= index.segmentBoundaries.length) {
-    return null;
-  }
-
-  const targetNormalized = normalizeForMatching(targetText);
-  const targetLen = targetNormalized.length;
-  if (targetLen === 0) {
-    return null;
-  }
-
-  const startBoundary = index.segmentBoundaries[startSegmentIdx];
-  const endBoundary = index.segmentBoundaries[endSegmentIdx];
-  if (!startBoundary || !endBoundary) {
-    return null;
-  }
-
-  const windowStartNorm = startBoundary.normalizedStartPos;
-  const windowEndNorm = endBoundary.normalizedEndPos;
-  if (windowEndNorm <= windowStartNorm) {
-    return null;
-  }
-
-  const normalizedSlice = index.normalizedText.slice(windowStartNorm, windowEndNorm);
-  if (normalizedSlice.length === 0) {
-    return null;
-  }
-
-  const sliceLength = normalizedSlice.length;
-
-  const candidateLengths = new Set<number>();
-  candidateLengths.add(Math.min(targetLen, sliceLength));
-  const tolerance = Math.max(2, Math.floor(targetLen * 0.3));
-  for (let offset = 1; offset <= tolerance; offset++) {
-    const shorter = targetLen - offset;
-    const longer = targetLen + offset;
-    if (shorter >= 2) candidateLengths.add(Math.min(shorter, sliceLength));
-    if (longer <= sliceLength) candidateLengths.add(longer);
-  }
-  candidateLengths.add(Math.min(sliceLength, targetLen + tolerance));
-
-  const lengths = Array.from(candidateLengths)
-    .filter(len => len > 0 && len <= sliceLength)
-    .sort((a, b) => a - b);
-
-  let bestScore = 0;
-  let bestSimilarity = 0;
-  let bestStart = -1;
-  let bestEnd = -1;
-
-  for (let start = 0; start < sliceLength; start++) {
-    for (const len of lengths) {
-      const end = start + len;
-      if (end > sliceLength) continue;
-      const candidate = normalizedSlice.slice(start, end);
-      if (candidate.length === 0) continue;
-
-      const similarity = calculateNgramSimilarity(targetNormalized, candidate);
-      if (similarity < minimumScore) continue;
-
-      const lengthPenalty = 1 - Math.min(Math.abs(len - targetLen) / Math.max(targetLen, 1), 1);
-      const compositeScore = similarity * 0.85 + lengthPenalty * 0.15;
-
-      if (compositeScore > bestScore) {
-        bestScore = compositeScore;
-        bestSimilarity = similarity;
-        bestStart = start;
-        bestEnd = end;
-        if (bestSimilarity >= 0.99) break;
-      }
-    }
-  }
-
-  if (bestStart === -1 || bestEnd === -1) {
-    return null;
-  }
-
-  const globalStartIdx = windowStartNorm + bestStart;
-  const globalEndIdx = windowStartNorm + bestEnd - 1;
-  const startEntry = index.normalizedIndexMap[globalStartIdx];
-  const endEntry = index.normalizedIndexMap[globalEndIdx];
-  if (!startEntry || !endEntry) {
-    return null;
-  }
-
-  let refinedStartSegment = startEntry.segmentIdx;
-  let refinedStartOffset = startEntry.charOffset;
-  if (startEntry.isBoundary && startEntry.nextSegmentIdx !== undefined) {
-    refinedStartSegment = startEntry.nextSegmentIdx;
-    refinedStartOffset = 0;
-  }
-
-  let refinedEndSegment = endEntry.segmentIdx;
-  let refinedEndOffset = endEntry.charOffset + 1;
-  if (endEntry.isBoundary) {
-    refinedEndOffset = index.segmentBoundaries[refinedEndSegment]?.text.length ?? refinedEndOffset;
-  } else {
-    const endSegmentTextLength = index.segmentBoundaries[refinedEndSegment]?.text.length ?? refinedEndOffset;
-    refinedEndOffset = Math.min(endSegmentTextLength, refinedEndOffset);
-  }
-
-  if (refinedEndSegment < refinedStartSegment) {
-    return null;
-  }
-
-  const startSegmentTextLength = index.segmentBoundaries[refinedStartSegment]?.text.length ?? 0;
-  refinedStartOffset = Math.max(0, Math.min(startSegmentTextLength, refinedStartOffset));
-
-  if (refinedEndSegment === refinedStartSegment) {
-    refinedEndOffset = Math.max(refinedStartOffset + 1, refinedEndOffset);
-  }
-
-  return {
-    startSegmentIdx: refinedStartSegment,
-    endSegmentIdx: refinedEndSegment,
-    startCharOffset: refinedStartOffset,
-    endCharOffset: refinedEndOffset,
-    similarity: bestSimilarity
+    ngramIndex
   };
 }
 
@@ -434,13 +222,13 @@ export function findTextInTranscript(
   }
   
   // Try normalized match
-  const whitespaceNormalizedTarget = normalizeWhitespace(targetText);
-  const normalizedMatch = boyerMooreSearch(index.normalizedText, whitespaceNormalizedTarget);
+  const normalizedTarget = normalizeWhitespace(targetText);
+  const normalizedMatch = boyerMooreSearch(index.normalizedText, normalizedTarget);
   if (normalizedMatch !== -1) {
     // Map back to original segments
     const result = mapNormalizedMatchToSegments(
       normalizedMatch,
-      whitespaceNormalizedTarget,
+      normalizedTarget,
       index,
       targetText
     );
@@ -455,14 +243,7 @@ export function findTextInTranscript(
   }
   
   // Use word index for intelligent fuzzy matching
-  const normalizedTarget = normalizeForMatching(targetText);
-  const targetWords = normalizedTarget.split(/\s+/).filter(w => w.length > 2);
-  let fallbackMatch: {
-    startSegmentIdx: number;
-    endSegmentIdx: number;
-    similarity: number;
-    confidence: number;
-  } | null = null;
+  const targetWords = normalizeForMatching(targetText).split(/\s+/).filter(w => w.length > 2);
   if (targetWords.length > 0) {
     // Find segments containing the most target words
     const segmentScores = new Map<number, number>();
@@ -492,54 +273,24 @@ export function findTextInTranscript(
         combinedText += transcript[i].text;
         
         const normalizedCombined = normalizeForMatching(combinedText);
-        const similarity = calculateNgramSimilarity(normalizedTarget, normalizedCombined);
+        const similarity = calculateNgramSimilarity(normalizeForMatching(targetText), normalizedCombined);
         
         if (similarity >= minSimilarity) {
-          const refined = refineMatchInWindow(index, windowStart, i, targetText, Math.min(similarity, minSimilarity));
-          if (refined) {
-            const wordCoverage = score / Math.max(targetWords.length, 1);
-            const confidence = Math.max(refined.similarity, wordCoverage);
-            return {
-              found: true,
-              startSegmentIdx: refined.startSegmentIdx,
-              endSegmentIdx: refined.endSegmentIdx,
-              startCharOffset: refined.startCharOffset,
-              endCharOffset: refined.endCharOffset,
-              matchStrategy: 'fuzzy-ngram',
-              similarity: refined.similarity,
-              confidence: Math.min(1, confidence)
-            };
-          } else {
-            const wordCoverage = score / Math.max(targetWords.length, 1);
-            const confidence = Math.max(similarity, wordCoverage);
-            if (!fallbackMatch || similarity > fallbackMatch.similarity) {
-              fallbackMatch = {
-                startSegmentIdx: windowStart,
-                endSegmentIdx: i,
-                similarity,
-                confidence: Math.min(1, confidence)
-              };
-            }
-          }
+          return {
+            found: true,
+            startSegmentIdx: windowStart,
+            endSegmentIdx: i,
+            startCharOffset: 0,
+            endCharOffset: transcript[i].text.length,
+            matchStrategy: 'fuzzy-ngram',
+            similarity,
+            confidence: score / targetWords.length // Ratio of matched words
+          };
         }
       }
     }
   }
   
-  if (fallbackMatch) {
-    const endSegment = transcript[fallbackMatch.endSegmentIdx];
-    return {
-      found: true,
-      startSegmentIdx: fallbackMatch.startSegmentIdx,
-      endSegmentIdx: fallbackMatch.endSegmentIdx,
-      startCharOffset: 0,
-      endCharOffset: endSegment ? endSegment.text.length : 0,
-      matchStrategy: 'fuzzy-ngram',
-      similarity: fallbackMatch.similarity,
-      confidence: fallbackMatch.confidence
-    };
-  }
-
   return null;
 }
 
@@ -597,7 +348,7 @@ export function mapNormalizedMatchToSegments(
   normalizedMatchIdx: number,
   normalizedTargetText: string,
   index: TranscriptIndex,
-  _originalTargetText: string
+  originalTargetText: string
 ): {
   found: boolean;
   startSegmentIdx: number;
@@ -605,47 +356,46 @@ export function mapNormalizedMatchToSegments(
   startCharOffset: number;
   endCharOffset: number;
 } | null {
-  const length = normalizedTargetText.length;
-  if (length === 0) {
-    return null;
+  // Since we have normalized text in our index, find which segment contains the match
+  const matchEnd = normalizedMatchIdx + normalizedTargetText.length;
+  let currentNormPos = 0;
+  let startSegmentIdx = -1;
+  let endSegmentIdx = -1;
+  let startCharOffset = 0;
+  let endCharOffset = 0;
+  
+  for (const boundary of index.segmentBoundaries) {
+    const segmentNormLength = boundary.normalizedText.length;
+    const segmentNormEnd = currentNormPos + segmentNormLength;
+    
+    // Find start segment
+    if (startSegmentIdx === -1 && normalizedMatchIdx >= currentNormPos && normalizedMatchIdx < segmentNormEnd) {
+      startSegmentIdx = boundary.segmentIdx;
+      // Approximate char offset in original text
+      const normOffsetInSegment = normalizedMatchIdx - currentNormPos;
+      startCharOffset = Math.min(normOffsetInSegment, boundary.text.length - 1);
+    }
+    
+    // Find end segment
+    if (matchEnd > currentNormPos && matchEnd <= segmentNormEnd) {
+      endSegmentIdx = boundary.segmentIdx;
+      const normOffsetInSegment = matchEnd - currentNormPos;
+      endCharOffset = Math.min(normOffsetInSegment, boundary.text.length);
+      break;
+    }
+    
+    currentNormPos = segmentNormEnd + 1; // Account for space between segments
   }
-
-  const startEntry = index.normalizedIndexMap[normalizedMatchIdx];
-  const endEntry = index.normalizedIndexMap[normalizedMatchIdx + length - 1];
-
-  if (!startEntry || !endEntry) {
-    return null;
+  
+  if (startSegmentIdx !== -1 && endSegmentIdx !== -1) {
+    return {
+      found: true,
+      startSegmentIdx,
+      endSegmentIdx,
+      startCharOffset,
+      endCharOffset
+    };
   }
-
-  let startSegmentIdx = startEntry.segmentIdx;
-  let startCharOffset = startEntry.charOffset;
-  if (startEntry.isBoundary && startEntry.nextSegmentIdx !== undefined) {
-    startSegmentIdx = startEntry.nextSegmentIdx;
-    startCharOffset = 0;
-  } else {
-    const startSegmentLength = index.segmentBoundaries[startSegmentIdx]?.text.length ?? 0;
-    startCharOffset = Math.max(0, Math.min(startSegmentLength, startCharOffset));
-  }
-
-  let endSegmentIdx = endEntry.segmentIdx;
-  let endCharOffset = endEntry.charOffset + 1;
-  if (endEntry.isBoundary) {
-    const segmentLength = index.segmentBoundaries[endSegmentIdx]?.text.length ?? 0;
-    endCharOffset = segmentLength;
-  } else {
-    const segmentLength = index.segmentBoundaries[endSegmentIdx]?.text.length ?? 0;
-    endCharOffset = Math.min(segmentLength, endCharOffset);
-  }
-
-  if (endSegmentIdx === startSegmentIdx) {
-    endCharOffset = Math.max(startCharOffset + 1, endCharOffset);
-  }
-
-  return {
-    found: true,
-    startSegmentIdx,
-    endSegmentIdx,
-    startCharOffset,
-    endCharOffset
-  };
+  
+  return null;
 }

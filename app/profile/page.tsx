@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import ProfileForm from './profile-form';
 
-export default async function SettingsPage() {
+export default async function ProfilePage() {
   const supabase = await createClient();
 
   const { data: { user }, error } = await supabase.auth.getUser();
@@ -26,7 +26,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl">
-      <h1 className="text-3xl font-bold mb-8">Settings</h1>
+      <h1 className="text-3xl font-bold mb-8">Profile Settings</h1>
       <ProfileForm user={user} profile={profile} videoCount={videoCount || 0} />
     </div>
   );

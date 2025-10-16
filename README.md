@@ -32,7 +32,7 @@ TLDW transforms long YouTube videos into topic-driven learning experiences. Usin
 
   - **Framework**: [Next.js](https://nextjs.org/) 15 (with Turbopack)
   - **UI**: [React](https://react.dev/) 19, [TypeScript](https://www.typescriptlang.org/), [Tailwind CSS](https://tailwindcss.com/), [shadcn/ui](https://ui.shadcn.com/)
-  - **AI**: [Google Gemini API](https://ai.google.dev/) (Gemini 2.5 Pro — latest alias)
+  - **AI**: [Google Gemini API](https://ai.google.dev/) (Gemini 2.5 Flash)
   - **APIs**: [Supadata](https://supadata.ai/) (Transcripts), YouTube oEmbed API
   - **Deployment**: [Vercel](https://vercel.com/)
 

@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Video, LogOut, Loader2, Home, NotebookPen, Settings } from 'lucide-react'
+import { User, Video, LogOut, Loader2, Home, NotebookPen } from 'lucide-react'
 import Link from 'next/link'
 import { AuthModal } from '@/components/auth-modal'
 
@@ -86,8 +86,8 @@ export function UserMenu() {
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link href="/profile" className="cursor-pointer">
-            <Settings className="mr-2 h-4 w-4" />
-            <span>Settings</span>
+            <User className="mr-2 h-4 w-4" />
+            <span>Profile</span>
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>

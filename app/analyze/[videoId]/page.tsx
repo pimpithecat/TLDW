@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { UrlInputWithBranding } from "@/components/url-input-with-branding";
 import { RightColumnTabs, type RightColumnTabsHandle } from "@/components/right-column-tabs";
 import { YouTubePlayer } from "@/components/youtube-player";
@@ -38,7 +38,6 @@ import { Card } from "@/components/ui/card";
 import { AuthModal } from "@/components/auth-modal";
 import { useAuth } from "@/contexts/auth-context";
 import { backgroundOperation, AbortManager } from "@/lib/promise-utils";
-import { normalizeGeminiModel } from "@/lib/ai-models";
 import { toast } from "sonner";
 
 function buildApiErrorMessage(errorData: unknown, fallback: string): string {
@@ -137,10 +136,6 @@ export default function AnalyzePage() {
 
   // Auth and generation limit state
   const { user } = useAuth();
-  const preferredTopicModel = useMemo(
-    () => normalizeGeminiModel(user?.user_metadata?.defaultTopicModel as string | undefined),
-    [user?.user_metadata?.defaultTopicModel]
-  );
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [rateLimitInfo, setRateLimitInfo] = useState<{
     remaining: number;
@@ -540,7 +535,7 @@ export default function AnalyzePage() {
                   videoId: extractedVideoId,
                   videoInfo: cacheData.videoInfo,
                   transcript: sanitizedTranscript,
-                  model: preferredTopicModel,
+                  model: 'gemini-2.5-flash',
                   includeCandidatePool: true
                 }),
               });
@@ -736,7 +731,7 @@ export default function AnalyzePage() {
           videoId: extractedVideoId,
           videoInfo: fetchedVideoInfo,
           transcript: normalizedTranscriptData,
-          model: preferredTopicModel
+          model: 'gemini-2.5-flash'
         }),
         signal: topicsController.signal,
       }).catch(err => {
@@ -868,7 +863,7 @@ export default function AnalyzePage() {
               transcript: normalizedTranscriptData,
               topics: generatedTopics,
               summary: generatedTakeaways,
-              model: preferredTopicModel
+              model: 'gemini-2.5-flash'
             }),
           });
 
@@ -1240,7 +1235,7 @@ export default function AnalyzePage() {
             videoId,
             videoInfo,
             transcript,
-            model: preferredTopicModel,
+            model: 'gemini-2.5-flash',
             theme: normalizedTheme,
             excludeTopicKeys: exclusionKeys
           }),
@@ -1317,8 +1312,7 @@ export default function AnalyzePage() {
     usedTopicKeys,
     abortManager,
     setIsPlayingAll,
-    setPlayAllIndex,
-    preferredTopicModel
+    setPlayAllIndex
   ]);
 
   // Dynamically adjust right column height to match video container
