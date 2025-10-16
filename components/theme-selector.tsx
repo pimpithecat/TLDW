@@ -21,7 +21,12 @@ export function ThemeSelector({
   isLoading = false,
   error = null,
 }: ThemeSelectorProps) {
-  const displayThemes = themes.slice(0, 3);
+  const [customThemes, setCustomThemes] = useState<string[]>([]);
+  const baseThemes = useMemo(() => themes.slice(0, 3), [themes]);
+  const displayThemes = useMemo(() => {
+    const additionalThemes = customThemes.filter((theme) => !baseThemes.includes(theme));
+    return [...baseThemes, ...additionalThemes];
+  }, [baseThemes, customThemes]);
   const hasThemes = displayThemes.length > 0;
   const isOverallSelected = selectedTheme === null;
   const [customThemeInput, setCustomThemeInput] = useState("");
@@ -35,9 +40,20 @@ export function ThemeSelector({
   const trimmedValue = customThemeInput.trim();
   const isSubmitDisabled = trimmedValue.length === 0 || isLoading;
 
-  const isCustomSelection = useMemo(() => {
-    return selectedTheme !== null && !displayThemes.includes(selectedTheme);
-  }, [selectedTheme, displayThemes]);
+  const isCustomThemeSelected = useMemo(() => {
+    return selectedTheme !== null && customThemes.includes(selectedTheme);
+  }, [customThemes, selectedTheme]);
+
+  useEffect(() => {
+    if (selectedTheme && !baseThemes.includes(selectedTheme)) {
+      setCustomThemes((prev) => {
+        if (prev.includes(selectedTheme)) {
+          return prev;
+        }
+        return [...prev, selectedTheme];
+      });
+    }
+  }, [baseThemes, selectedTheme]);
 
   const buttonClasses = (isActive: boolean) =>
     cn(
@@ -51,7 +67,7 @@ export function ThemeSelector({
     if (isLoading) return;
     setShowCustomInput(true);
     setValidationError(null);
-    if (isCustomSelection && selectedTheme) {
+    if (isCustomThemeSelected && selectedTheme) {
       setCustomThemeInput(selectedTheme);
     } else {
       setCustomThemeInput("");
@@ -85,6 +101,12 @@ export function ThemeSelector({
       return;
     }
 
+    setCustomThemes((prev) => {
+      if (baseThemes.includes(trimmedValue) || prev.includes(trimmedValue)) {
+        return prev;
+      }
+      return [...prev, trimmedValue];
+    });
     setShowCustomInput(false);
     setCustomThemeInput("");
     setValidationError(null);
@@ -142,7 +164,7 @@ export function ThemeSelector({
         scrollContainer.removeEventListener("scroll", checkScrollNeeded);
       }
     };
-  }, [displayThemes, isCustomSelection, selectedTheme, showCustomInput]);
+  }, [displayThemes, isCustomThemeSelected, selectedTheme, showCustomInput]);
 
   return (
     <div className="flex w-full flex-col items-stretch gap-3">
@@ -153,7 +175,7 @@ export function ThemeSelector({
             type="button"
             size="sm"
             className={cn(
-              buttonClasses(showCustomInput || isCustomSelection),
+              buttonClasses(showCustomInput || isCustomThemeSelected),
               "flex items-center gap-1.5 transition-all duration-200 flex-shrink-0"
             )}
             onClick={openCustomInput}
@@ -194,17 +216,6 @@ export function ThemeSelector({
               {theme}
             </Button>
           ))}
-          {isCustomSelection && selectedTheme && (
-            <Button
-              type="button"
-              size="sm"
-              className={cn(buttonClasses(!showCustomInput), "transition-all duration-200 flex-shrink-0")}
-              onClick={openCustomInput}
-              tabIndex={showCustomInput ? -1 : 0}
-            >
-              {selectedTheme}
-            </Button>
-          )}
           {isLoading && (
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground flex-shrink-0" aria-hidden="true" />
           )}
