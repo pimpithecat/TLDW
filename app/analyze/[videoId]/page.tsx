@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { UrlInput } from "@/components/url-input";
+import { UrlInputWithBranding } from "@/components/url-input-with-branding";
 import { RightColumnTabs, type RightColumnTabsHandle } from "@/components/right-column-tabs";
 import { YouTubePlayer } from "@/components/youtube-player";
 import { HighlightsPanel } from "@/components/highlights-panel";
@@ -12,8 +12,11 @@ import { VideoSkeleton } from "@/components/video-skeleton";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
-import { Topic, TranscriptSegment, VideoInfo, Citation, PlaybackCommand } from "@/lib/types";
+import { Topic, TranscriptSegment, VideoInfo, Citation, PlaybackCommand, Note, NoteSource, NoteMetadata } from "@/lib/types";
 import { hydrateTopicsWithTranscript, normalizeTranscript } from "@/lib/topic-utils";
+import { SelectionActionPayload } from "@/components/selection-actions";
+import { fetchNotes, saveNote, deleteNote } from "@/lib/notes-client";
+import { EditingNote } from "@/components/notes-panel";
 
 // Playback context for tracking what's currently playing
 interface PlaybackContext {
@@ -35,6 +38,36 @@ import { AuthModal } from "@/components/auth-modal";
 import { useAuth } from "@/contexts/auth-context";
 import { backgroundOperation, AbortManager } from "@/lib/promise-utils";
 import { toast } from "sonner";
+
+function buildApiErrorMessage(errorData: unknown, fallback: string): string {
+  if (!errorData || typeof errorData !== "object") {
+    return fallback;
+  }
+
+  const record = errorData as Record<string, unknown>;
+  const errorText =
+    typeof record.error === "string" && record.error.trim().length > 0
+      ? record.error.trim()
+      : "";
+  const detailsText =
+    typeof record.details === "string" && record.details.trim().length > 0
+      ? record.details.trim()
+      : "";
+
+  if (errorText && detailsText) {
+    return `${errorText}: ${detailsText}`;
+  }
+
+  if (detailsText) {
+    return detailsText;
+  }
+
+  if (errorText) {
+    return errorText;
+  }
+
+  return fallback;
+}
 
 export default function AnalyzePage() {
   const params = useParams<{ videoId: string }>();
@@ -495,7 +528,8 @@ export default function AnalyzePage() {
 
               if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-                throw new Error(errorData.error || "Failed to generate themes");
+                const message = buildApiErrorMessage(errorData, "Failed to generate themes");
+                throw new Error(message);
               }
 
               const data = await response.json();
@@ -548,7 +582,8 @@ export default function AnalyzePage() {
                   return generatedTakeaways;
                 } else {
                   const errorData = await summaryRes.json().catch(() => ({ error: "Unknown error" }));
-                  throw new Error(errorData.error || "Failed to generate takeaways");
+                  const message = buildApiErrorMessage(errorData, "Failed to generate takeaways");
+                  throw new Error(message);
                 }
               },
               (error) => {
@@ -606,7 +641,8 @@ export default function AnalyzePage() {
       // Process transcript response (required)
       if (!transcriptRes || !transcriptRes.ok) {
         const errorData = transcriptRes ? await transcriptRes.json().catch(() => ({ error: "Unknown error" })) : { error: "Failed to fetch transcript" };
-        throw new Error(errorData.error || "Failed to fetch transcript");
+        const message = buildApiErrorMessage(errorData, "Failed to fetch transcript");
+        throw new Error(message);
       }
 
       const { transcript: fetchedTranscript } = await transcriptRes.json();
@@ -720,7 +756,8 @@ export default function AnalyzePage() {
 
         if (!topicsRes.ok) {
           const errorData = await topicsRes.json().catch(() => ({ error: "Unknown error" }));
-          throw new Error(errorData.error || "Failed to generate topics");
+          const message = buildApiErrorMessage(errorData, "Failed to generate topics");
+          throw new Error(message);
         }
 
         const topicsData = await topicsRes.json();
@@ -742,7 +779,7 @@ export default function AnalyzePage() {
           generatedTakeaways = summaryData.summaryContent;
         } else {
           const errorData = await summaryRes.json().catch(() => ({ error: "Unknown error" }));
-          takeawaysGenerationError = errorData.error || "Failed to generate takeaways. Please try again.";
+          takeawaysGenerationError = buildApiErrorMessage(errorData, "Failed to generate takeaways. Please try again.");
         }
       } else {
         const error = takeawaysResult.reason;
@@ -795,7 +832,8 @@ export default function AnalyzePage() {
 
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-            throw new Error(errorData.error || "Failed to save analysis");
+            const message = buildApiErrorMessage(errorData, "Failed to save analysis");
+            throw new Error(message);
           }
         },
         (error) => {
@@ -958,7 +996,8 @@ export default function AnalyzePage() {
         );
       } else {
         const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-        throw new Error(errorData.error || "Failed to generate takeaways");
+        const message = buildApiErrorMessage(errorData, "Failed to generate takeaways");
+        throw new Error(message);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Failed to generate takeaways. Please try again.";
@@ -1161,7 +1200,8 @@ export default function AnalyzePage() {
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-          throw new Error(errorData.error || "Failed to generate themed topics");
+          const message = buildApiErrorMessage(errorData, "Failed to generate themed topics");
+          throw new Error(message);
         }
 
         const data = await response.json();
@@ -1241,24 +1281,100 @@ export default function AnalyzePage() {
     };
   }, [videoId, topics]); // Re-run when video or topics change
 
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [isLoadingNotes, setIsLoadingNotes] = useState(false);
+  const [editingNote, setEditingNote] = useState<EditingNote | null>(null);
+
+  useEffect(() => {
+    if (!videoId || !user) {
+      setNotes([]);
+      return;
+    }
+
+    setIsLoadingNotes(true);
+    fetchNotes({ youtubeId: videoId })
+      .then(setNotes)
+      .catch((error) => {
+        console.error("Failed to load notes", error);
+      })
+      .finally(() => setIsLoadingNotes(false));
+  }, [videoId, user]);
+
+  const handleSaveNote = useCallback(async ({ text, source, sourceId, metadata }: { text: string; source: NoteSource; sourceId?: string | null; metadata?: NoteMetadata | null }) => {
+    if (!videoId) return;
+
+    try {
+      const note = await saveNote({
+        youtubeId: videoId,
+        source,
+        sourceId: sourceId ?? undefined,
+        text,
+        metadata: metadata ?? undefined,
+      });
+      setNotes((prev) => [note, ...prev]);
+      toast.success("Note saved");
+    } catch (error) {
+      console.error("Failed to save note", error);
+      toast.error("Failed to save note");
+    }
+  }, [videoId]);
+
+  const handleDeleteNote = useCallback(async (noteId: string) => {
+    try {
+      await deleteNote(noteId);
+      setNotes((prev) => prev.filter((note) => note.id !== noteId));
+      toast.success("Note deleted");
+    } catch (error) {
+      console.error("Failed to delete note", error);
+      toast.error("Failed to delete note");
+    }
+  }, []);
+
+  const handleTakeNoteFromSelection = useCallback((payload: SelectionActionPayload) => {
+    // Switch to notes tab
+    rightColumnTabsRef.current?.switchToNotes();
+
+    // Set editing state with selected text, metadata, and source
+    setEditingNote({
+      text: payload.text,
+      metadata: payload.metadata ?? null,
+      source: payload.source,
+    });
+  }, []);
+
+  const handleSaveEditingNote = useCallback(async (noteText: string) => {
+    if (!editingNote || !videoId) return;
+
+    // Use source from editing note or determine from metadata
+    let source: NoteSource = "custom";
+    if (editingNote.source) {
+      source = editingNote.source as NoteSource;
+    } else if (editingNote.metadata?.chat) {
+      source = "chat";
+    } else if (editingNote.metadata?.transcript) {
+      source = "transcript";
+    }
+
+    await handleSaveNote({
+      text: noteText,
+      source,
+      sourceId: editingNote.metadata?.chat?.messageId ?? null,
+      metadata: editingNote.metadata,
+    });
+
+    // Clear editing state
+    setEditingNote(null);
+  }, [editingNote, videoId, handleSaveNote]);
+
+  const handleCancelEditing = useCallback(() => {
+    setEditingNote(null);
+  }, []);
+
   return (
     <div className="min-h-screen bg-white">
       <header className="bg-white">
-        <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-center gap-3.5 px-5 py-5 lg:flex-row">
-          <Link href="/" className="flex items-center gap-2.5" aria-label="Go to TLDW home">
-            <Image
-              src="/Video_Play.svg"
-              alt="TLDW logo"
-              width={29}
-              height={29}
-              className="h-7 w-7"
-              priority
-            />
-            <p className="text-sm font-semibold text-slate-800">TLDW</p>
-          </Link>
-          <div className="w-full max-w-xl">
-            <UrlInput onSubmit={handleUrlSubmit} isLoading={pageState !== 'IDLE'} />
-          </div>
+        <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-center px-5 py-5">
+          <UrlInputWithBranding onSubmit={handleUrlSubmit} isLoading={pageState !== 'IDLE'} />
         </div>
         {error && (
           <div className="border-t border-red-100 bg-red-50/80">
@@ -1387,6 +1503,13 @@ export default function AnalyzePage() {
                   showTakeawaysTab={showTakeawaysTab}
                   cachedSuggestedQuestions={cachedSuggestedQuestions}
                   onRetryTakeaways={handleRetryTakeaways}
+                  notes={notes}
+                  onSaveNote={handleSaveNote}
+                  onDeleteNote={handleDeleteNote}
+                  onTakeNoteFromSelection={handleTakeNoteFromSelection}
+                  editingNote={editingNote}
+                  onSaveEditingNote={handleSaveEditingNote}
+                  onCancelEditing={handleCancelEditing}
                 />
               </div>
             </div>

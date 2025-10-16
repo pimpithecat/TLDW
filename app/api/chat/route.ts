@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { TranscriptSegment, Topic, ChatMessage, Citation } from '@/lib/types';
-import { buildTranscriptIndex, findTextInTranscript } from '@/lib/quote-matcher';
-import { TIMESTAMP_REGEX, parseTimestamp } from '@/lib/timestamp-utils';
+import { normalizeTimestampSources } from '@/lib/timestamp-normalization';
+import { extractTimestamps, parseTimestamp } from '@/lib/timestamp-utils';
 import { chatRequestSchema, formatValidationError } from '@/lib/validation';
 import { RateLimiter, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limiter';
 import { z } from 'zod';
@@ -100,22 +100,22 @@ ${chatHistoryContext || 'No prior conversation'}
     <item>Use the transcript as the sole source of truth.</item>
     <item>If the answer is missing, explicitly state that it is not in the transcript and return an empty quotes array.</item>
   </step>
-  <step name="AnswerFormatting">
-    <item>Respond in complete sentences, weaving in numbered citation markers like [1] immediately after the supported statement.</item>
-    <item>The number of citation markers must match the number of quotes you provide.</item>
+  <step name="Timestamping">
+    <item>Whenever you make a factual claim, append the exact supporting timestamp from the transcript in brackets like [MM:SS] or [HH:MM:SS].</item>
+    <item>List the same timestamps in the timestamps array, zero-padded and in the order they appear in your answer.</item>
+    <item>Provide no more than five unique timestamps and never use numeric citation markers like [1].</item>
   </step>
-  <step name="QuoteSelection">
-    <item>Include only verbatim, character-for-character passages from the transcript.</item>
-    <item>Select complete sentences that stand on their own and directly justify the cited claim.</item>
-    <item>Avoid redundant or overlapping quotes.</item>
+  <step name="AnswerFormatting">
+    <item>Respond in concise, complete sentences that mirror the transcript's language.</item>
+    <item>If the transcript lacks the requested information, state that clearly and return an empty timestamps array.</item>
   </step>
 </instructions>
 <validationChecklist>
-  <item>Does every factual statement in the answer have a matching citation?</item>
-  <item>Are all quotes exact matches from the transcript with no edits?</item>
-  <item>If information is absent, did you say so and leave quotes empty?</item>
+  <item>Does every factual statement have a supporting timestamp in brackets?</item>
+  <item>Are all timestamps valid moments within the transcript?</item>
+  <item>If information is absent, did you say so and leave timestamps empty?</item>
 </validationChecklist>
-<outputFormat>Return strict JSON object: {"answer":"string","quotes":[{"text":"string"}]}. No extra commentary.</outputFormat>
+<outputFormat>Return strict JSON object: {"answer":"string","timestamps":["MM:SS"]}. No extra commentary.</outputFormat>
 <transcript><![CDATA[
 ${transcriptContext}
 ]]></transcript>
@@ -181,150 +181,91 @@ ${message}
       });
     }
 
-    const { answer, quotes } = parsedResponse;
+    const { answer, timestamps } = parsedResponse;
 
     console.log('=== EXTRACTED DATA ===');
     console.log('Answer:', answer);
-    console.log('Quotes:', quotes);
-    console.log('Quotes is array:', Array.isArray(quotes));
+    console.log('Timestamps:', timestamps);
+    console.log('Timestamps is array:', Array.isArray(timestamps));
     console.log('=== END EXTRACTED DATA ===');
 
-    if (!answer || !quotes || !Array.isArray(quotes)) {
+    if (!answer || typeof answer !== 'string') {
       console.log('=== VALIDATION FAILED ===');
       console.log('Answer exists:', !!answer);
-      console.log('Quotes exists:', !!quotes);
-      console.log('Quotes is array:', Array.isArray(quotes));
       console.log('=== END VALIDATION FAILED ===');
       return NextResponse.json({
-        content: answer || "I found some information, but couldn't format it correctly.",
+        content: "I found some information, but couldn't format it correctly.",
         citations: [],
       });
     }
 
-    // Build transcript index for efficient quote matching
-    const transcriptIndex = buildTranscriptIndex(transcript);
-    const citations: Omit<Citation, 'context'>[] = [];
+    let normalizedTimestamps = Array.isArray(timestamps)
+      ? normalizeTimestampSources(timestamps, { limit: 5 })
+      : [];
 
-    // Process each quote to find its location in the transcript
-    await Promise.all(quotes.map(async (quote: { text: string }, index: number) => {
-      if (typeof quote.text !== 'string' || !quote.text.trim()) return;
+    if (normalizedTimestamps.length === 0) {
+      const extracted = extractTimestamps(answer);
+      normalizedTimestamps = normalizeTimestampSources(
+        extracted.map(item => item.text),
+        { limit: 5 }
+      );
+    }
 
-      // First attempt with a stricter similarity threshold
-      let match = findTextInTranscript(transcript, quote.text, transcriptIndex, {
-        strategy: 'all',
-        minSimilarity: 0.75,
+    console.log('Normalized timestamps:', normalizedTimestamps);
+
+    const citationCandidates: Array<{
+      timestamp: string;
+      seconds: number;
+      segment: TranscriptSegment;
+      index: number;
+    }> = [];
+
+    const seenKeys = new Set<string>();
+
+    for (const timestamp of normalizedTimestamps) {
+      const seconds = parseTimestamp(timestamp);
+      if (seconds === null) continue;
+
+      const closest = findClosestSegment(transcript, seconds);
+      if (!closest) continue;
+
+      const key = `${closest.index}|${timestamp}`;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+
+      citationCandidates.push({
+        timestamp,
+        seconds,
+        segment: closest.segment,
+        index: closest.index,
       });
+    }
 
-      // Fallback with more lenient settings if the first attempt fails
-      if (!match) {
-        match = findTextInTranscript(transcript, quote.text, transcriptIndex, {
-          strategy: 'all',
-          minSimilarity: 0.60, // Lower threshold to catch paraphrasing
-          maxSegmentWindow: 40,  // Widen search window for longer quotes
-        });
-      }
+    citationCandidates.sort((a, b) => a.seconds - b.seconds);
 
-      if (match) {
-        const startSegment = transcript[match.startSegmentIdx];
-        const endSegment = transcript[match.endSegmentIdx];
-        citations.push({
-          number: index + 1,
-          text: quote.text,
-          start: startSegment.start,
-          end: endSegment.start + endSegment.duration,
-          startSegmentIdx: match.startSegmentIdx,
-          endSegmentIdx: match.endSegmentIdx,
-          startCharOffset: match.startCharOffset,
-          endCharOffset: match.endCharOffset,
-        });
-      }
+    const citations: Omit<Citation, 'context'>[] = citationCandidates.map((candidate, idx) => ({
+      number: idx + 1,
+      text: candidate.segment.text,
+      start: candidate.segment.start,
+      end: candidate.segment.start + candidate.segment.duration,
+      startSegmentIdx: candidate.index,
+      endSegmentIdx: candidate.index,
+      startCharOffset: 0,
+      endCharOffset: candidate.segment.text.length,
     }));
 
-    // Sort citations by number
-    citations.sort((a, b) => a.number - b.number);
-
-    // Post-process to convert raw timestamps in answer to proper citations
-    let processedAnswer = answer;
-    const additionalCitations: Omit<Citation, 'context'>[] = [];
-    let nextCitationNumber = citations.length + 1;
-    
-    // Find all raw timestamps in the answer using a more comprehensive regex
-    // This matches timestamps in various formats: [MM:SS], (MM:SS), MM:SS, [HH:MM:SS], etc.
-    const timestampPatterns = [
-      /\[(\d{1,2}:\d{2}(?::\d{2})?)\]/g,  // [MM:SS] or [HH:MM:SS]
-      /\((\d{1,2}:\d{2}(?::\d{2})?)\)/g,  // (MM:SS) or (HH:MM:SS)
-      /(?:^|\s)(\d{1,2}:\d{2}(?::\d{2})?)(?=\s|$|[,.])/g,  // Bare timestamps
-    ];
-    
-    const timestampReplacements: Array<{ original: string; replacement: string; citation: Omit<Citation, 'context'> }> = [];
-    
-    for (const pattern of timestampPatterns) {
-      let match;
-      while ((match = pattern.exec(answer)) !== null) {
-        const fullMatch = match[0];
-        const timestampStr = match[1];
-        const seconds = parseTimestamp(timestampStr);
-        
-        if (seconds !== null) {
-          // Check if this timestamp is already covered by existing citations
-          const alreadyCited = citations.some(c => 
-            Math.abs(c.start - seconds) < 5 // Within 5 seconds
-          );
-          
-          if (!alreadyCited) {
-            // Find the closest segment in the transcript
-            const closest = findClosestSegment(transcript, seconds);
-            
-            if (closest) {
-              const citation: Omit<Citation, 'context'> = {
-                number: nextCitationNumber,
-                text: closest.segment.text,
-                start: closest.segment.start,
-                end: closest.segment.start + closest.segment.duration,
-                startSegmentIdx: closest.index,
-                endSegmentIdx: closest.index,
-                startCharOffset: 0,
-                endCharOffset: closest.segment.text.length,
-              };
-              
-              timestampReplacements.push({
-                original: fullMatch,
-                replacement: fullMatch.replace(timestampStr, `[${nextCitationNumber}]`),
-                citation
-              });
-              
-              nextCitationNumber++;
-            }
-          }
-        }
-      }
-    }
-    
-    // Apply replacements in reverse order to maintain string positions
-    timestampReplacements.sort((a, b) => b.original.length - a.original.length);
-    
-    for (const { original, replacement, citation } of timestampReplacements) {
-      // Only replace if not already a numbered citation
-      if (!/\[\d+\]/.test(original)) {
-        processedAnswer = processedAnswer.replace(original, replacement);
-        additionalCitations.push(citation);
-      }
-    }
-    
-    // Combine original and additional citations
-    const allCitations = [...citations, ...additionalCitations];
-    allCitations.sort((a, b) => a.number - b.number);
+    const processedAnswer = answer.trim();
 
     console.log('=== FINAL RESPONSE ===');
     console.log('Final answer:', processedAnswer);
-    console.log('Final citations count:', allCitations.length);
-    console.log('Final citations:', JSON.stringify(allCitations, null, 2));
-    console.log('Raw timestamps found and converted:', additionalCitations.length);
+    console.log('Final timestamps:', normalizedTimestamps);
+    console.log('Final citations count:', citations.length);
+    console.log('Final citations:', JSON.stringify(citations, null, 2));
     console.log('=== END FINAL RESPONSE ===');
 
     return NextResponse.json({ 
       content: processedAnswer,
-      citations: allCitations,
+      citations,
     });
   } catch (error) {
     return NextResponse.json(

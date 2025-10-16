@@ -56,6 +56,38 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
+export type NoteSource = 'chat' | 'takeaways' | 'transcript' | 'custom';
+
+export interface NoteMetadata {
+  transcript?: {
+    start: number;
+    end?: number;
+    segmentIndex?: number;
+    topicId?: string;
+  };
+  chat?: {
+    messageId: string;
+    role: 'user' | 'assistant';
+    timestamp?: string;
+  };
+  selectionContext?: string;
+  timestampLabel?: string;
+  extra?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface Note {
+  id: string;
+  userId: string;
+  videoId: string;
+  source: NoteSource;
+  sourceId?: string | null;
+  text: string;
+  metadata?: NoteMetadata | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface VideoInfo {
   videoId: string;
   title: string;

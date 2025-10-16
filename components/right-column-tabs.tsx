@@ -5,11 +5,14 @@ import { TranscriptViewer } from "@/components/transcript-viewer";
 import { AIChat } from "@/components/ai-chat";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { FileText, Sparkles, Loader2 } from "lucide-react";
-import { TranscriptSegment, Topic, Citation } from "@/lib/types";
+import { FileText, Lightbulb, Loader2, PenLine } from "lucide-react";
+import { TranscriptSegment, Topic, Citation, Note, NoteSource, NoteMetadata } from "@/lib/types";
+import { SelectionActionPayload } from "@/components/selection-actions";
+import { NotesPanel, EditingNote } from "@/components/notes-panel";
 import { cn } from "@/lib/utils";
 import { SummaryViewer } from "@/components/summary-viewer";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 interface RightColumnTabsProps {
   transcript: TranscriptSegment[];
@@ -29,11 +32,19 @@ interface RightColumnTabsProps {
   showTakeawaysTab?: boolean;
   cachedSuggestedQuestions?: string[] | null;
   onRetryTakeaways?: () => void;
+  notes?: Note[];
+  onSaveNote?: (payload: { text: string; source: NoteSource; sourceId?: string | null; metadata?: NoteMetadata | null }) => Promise<void>;
+  onDeleteNote?: (noteId: string) => Promise<void>;
+  onTakeNoteFromSelection?: (payload: SelectionActionPayload) => void;
+  editingNote?: EditingNote | null;
+  onSaveEditingNote?: (noteText: string) => void;
+  onCancelEditing?: () => void;
 }
 
 export interface RightColumnTabsHandle {
   switchToTranscript: () => void;
   switchToTakeaways?: () => void;
+  switchToNotes: () => void;
 }
 
 export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabsProps>(({
@@ -54,8 +65,15 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   showTakeawaysTab,
   cachedSuggestedQuestions,
   onRetryTakeaways,
+  notes,
+  onSaveNote,
+  onDeleteNote,
+  onTakeNoteFromSelection,
+  editingNote,
+  onSaveEditingNote,
+  onCancelEditing,
 }, ref) => {
-  const [activeTab, setActiveTab] = useState<"transcript" | "takeaways">(showTakeawaysTab ? "takeaways" : "transcript");
+  const [activeTab, setActiveTab] = useState<"transcript" | "takeaways" | "notes">(showTakeawaysTab ? "takeaways" : "transcript");
   const [hasShownTakeaways, setHasShownTakeaways] = useState<boolean>(!!showTakeawaysTab);
 
   // Expose methods to parent to switch tabs
@@ -67,6 +85,9 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
       if (showTakeawaysTab) {
         setActiveTab("takeaways");
       }
+    },
+    switchToNotes: () => {
+      setActiveTab("notes");
     }
   }));
 
@@ -114,6 +135,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
           collapsibleSections={false}
           onRetry={onRetryTakeaways}
           showActions={true}
+          onSaveNote={onSaveNote}
         />
       );
     }
@@ -123,7 +145,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
         Takeaways will appear here once ready.
       </p>
     );
-  }, [showTakeawaysTab, isGeneratingTakeaways, takeawaysError, takeawaysContent, onTakeawayTimestampClick, onTimestampClick]);
+  }, [showTakeawaysTab, isGeneratingTakeaways, takeawaysError, takeawaysContent, onTakeawayTimestampClick, onTimestampClick, onRetryTakeaways, onSaveNote]);
 
   return (
     <Card className="h-full flex flex-col overflow-hidden p-0 gap-0">
@@ -143,7 +165,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
             {isGeneratingTakeaways ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <Sparkles className="h-4 w-4" />
+              <Lightbulb className="h-4 w-4" />
             )}
             Takeaways
           </Button>
@@ -162,6 +184,21 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
           <FileText className="h-4 w-4" />
           Transcript
         </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setActiveTab("notes")}
+          className={cn(
+            "flex-1 justify-center gap-2 rounded-2xl",
+            activeTab === "notes"
+              ? "bg-neutral-100 text-foreground"
+              : "text-muted-foreground hover:text-foreground hover:bg-white/50",
+            notes?.length ? undefined : "opacity-75"
+          )}
+        >
+          <PenLine className="h-4 w-4" />
+          Notes
+        </Button>
       </div>
       
       <div className="flex-1 overflow-hidden relative">
@@ -174,6 +211,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
             currentTime={currentTime}
             topics={topics}
             citationHighlight={citationHighlight}
+            onTakeNoteFromSelection={onTakeNoteFromSelection}
           />
         </div>
         <div className={cn("absolute inset-0", (activeTab !== "takeaways" || !showTakeawaysTab) && "hidden")}>
@@ -187,7 +225,21 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
             onPlayAllCitations={onPlayAllCitations}
             cachedSuggestedQuestions={cachedSuggestedQuestions}
             pinnedContent={takeawaysSection}
+            onSaveNote={onSaveNote}
+            onTakeNoteFromSelection={onTakeNoteFromSelection}
           />
+        </div>
+        <div className={cn("absolute inset-0", activeTab !== "notes" && "hidden")}
+        >
+          <TooltipProvider delayDuration={0}>
+            <NotesPanel
+              notes={notes}
+              onDeleteNote={onDeleteNote}
+              editingNote={editingNote}
+              onSaveEditingNote={onSaveEditingNote}
+              onCancelEditing={onCancelEditing}
+            />
+          </TooltipProvider>
         </div>
       </div>
     </Card>

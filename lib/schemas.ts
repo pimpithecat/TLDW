@@ -16,13 +16,9 @@ export const topicGenerationSchema = z.array(
 
 export const suggestedQuestionsSchema = z.array(z.string());
 
-export const chatQuoteSchema = z.object({
-  text: z.string()
-});
-
 export const chatResponseSchema = z.object({
   answer: z.string(),
-  quotes: z.array(chatQuoteSchema)
+  timestamps: z.array(z.string()).optional()
 });
 
 export const summaryTakeawaySchema = z.object({

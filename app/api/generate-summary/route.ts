@@ -4,6 +4,7 @@ import { withSecurity } from '@/lib/security-middleware';
 import { RATE_LIMITS } from '@/lib/rate-limiter';
 import { generateWithFallback } from '@/lib/gemini-client';
 import { summaryTakeawaysSchema } from '@/lib/schemas';
+import { normalizeTimestampSources } from '@/lib/timestamp-normalization';
 
 type StructuredTakeaway = {
   label: string;
@@ -12,77 +13,6 @@ type StructuredTakeaway = {
 };
 
 const TAKEAWAYS_HEADING = '## Key takeaways';
-
-function formatTimestampFromParts(hours: number, minutes: number, seconds: number): string {
-  const totalSeconds = Math.max(0, Math.floor(hours * 3600 + minutes * 60 + seconds));
-  const normalizedHours = Math.floor(totalSeconds / 3600);
-  const normalizedMinutes = Math.floor((totalSeconds % 3600) / 60);
-  const normalizedSeconds = totalSeconds % 60;
-
-  if (normalizedHours > 0) {
-    return [
-      normalizedHours.toString().padStart(2, '0'),
-      normalizedMinutes.toString().padStart(2, '0'),
-      normalizedSeconds.toString().padStart(2, '0')
-    ].join(':');
-  }
-
-  return [
-    normalizedMinutes.toString().padStart(2, '0'),
-    normalizedSeconds.toString().padStart(2, '0')
-  ].join(':');
-}
-
-function sanitizeTimestamp(value: string): string | null {
-  if (!value) return null;
-
-  const cleaned = value
-    .replace(/[\[\](){}【】]/g, ' ')
-    .replace(/[-–]|to/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  const directMatch = cleaned.match(/(\d{1,2}:\d{2}:\d{2}|\d{1,2}:\d{2})/);
-  if (directMatch) {
-    const parts = directMatch[1].split(':').map(part => parseInt(part, 10));
-    if (parts.some(Number.isNaN)) {
-      return null;
-    }
-
-    if (parts.length === 3) {
-      return formatTimestampFromParts(parts[0], parts[1], parts[2]);
-    }
-
-    if (parts.length === 2) {
-      return formatTimestampFromParts(0, parts[0], parts[1]);
-    }
-  }
-
-  const hmsMatch = cleaned.match(/(?:(\d{1,2})h)?\s*(\d{1,2})m\s*(\d{1,2})s/i);
-  if (hmsMatch) {
-    const hours = parseInt(hmsMatch[1] || '0', 10);
-    const minutes = parseInt(hmsMatch[2] || '0', 10);
-    const seconds = parseInt(hmsMatch[3] || '0', 10);
-
-    if ([hours, minutes, seconds].some(Number.isNaN)) {
-      return null;
-    }
-
-    return formatTimestampFromParts(hours, minutes, seconds);
-  }
-
-  const msMatch = cleaned.match(/(\d{1,2})m\s*(\d{1,2})s/i);
-  if (msMatch) {
-    const minutes = parseInt(msMatch[1], 10);
-    const seconds = parseInt(msMatch[2], 10);
-    if ([minutes, seconds].some(Number.isNaN)) {
-      return null;
-    }
-    return formatTimestampFromParts(0, minutes, seconds);
-  }
-
-  return null;
-}
 
 function extractJsonPayload(raw: string): string {
   const trimmed = raw.trim();
@@ -152,84 +82,7 @@ function normalizeTakeawaysPayload(payload: unknown): StructuredTakeaway[] {
       timestampSources.push((item as any).time);
     }
 
-    const sanitizedTimestamps = timestampSources
-      .flatMap(source => {
-        if (typeof source === 'string') {
-          return source
-            .split(/[,/;]|and|\s+(?=\d)/i)
-            .map(part => part.trim())
-            .filter(Boolean);
-        }
-        if (typeof source === 'number') {
-          const seconds = Number.isFinite(source) ? Math.max(0, Math.floor(source)) : 0;
-          return [
-            formatTimestampFromParts(
-              Math.floor(seconds / 3600),
-              Math.floor((seconds % 3600) / 60),
-              seconds % 60
-            )
-          ];
-        }
-        if (Array.isArray(source)) {
-          return source.flatMap(part => {
-            if (typeof part === 'string') {
-              return [part];
-            }
-            if (typeof part === 'number') {
-              const seconds = Number.isFinite(part) ? Math.max(0, Math.floor(part)) : 0;
-              return [
-                formatTimestampFromParts(
-                  Math.floor(seconds / 3600),
-                  Math.floor((seconds % 3600) / 60),
-                  seconds % 60
-                )
-              ];
-            }
-            if (part && typeof part === 'object') {
-              if (typeof (part as any).time === 'string') {
-                return [(part as any).time];
-              }
-              if (typeof (part as any).timestamp === 'string') {
-                return [(part as any).timestamp];
-              }
-              if (typeof (part as any).start === 'number') {
-                const seconds = Math.max(0, Math.floor((part as any).start));
-                return [
-                  formatTimestampFromParts(
-                    Math.floor(seconds / 3600),
-                    Math.floor((seconds % 3600) / 60),
-                    seconds % 60
-                  )
-                ];
-              }
-            }
-            return [];
-          });
-        }
-        if (source && typeof source === 'object') {
-          if (typeof (source as any).time === 'string') {
-            return [(source as any).time];
-          }
-          if (typeof (source as any).timestamp === 'string') {
-            return [(source as any).timestamp];
-          }
-          if (typeof (source as any).start === 'number') {
-            const seconds = Math.max(0, Math.floor((source as any).start));
-            return [
-              formatTimestampFromParts(
-                Math.floor(seconds / 3600),
-                Math.floor((seconds % 3600) / 60),
-                seconds % 60
-              )
-            ];
-          }
-        }
-        return [];
-      })
-      .map(value => sanitizeTimestamp(value))
-      .filter((value): value is string => Boolean(value));
-
-    const uniqueTimestamps = Array.from(new Set(sanitizedTimestamps)).slice(0, 2);
+    const uniqueTimestamps = normalizeTimestampSources(timestampSources, { limit: 2 });
 
     const label = rawLabel.trim();
     const insight = rawInsight.trim();

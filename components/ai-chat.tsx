@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect, ReactNode, useCallback } from "react";
-import { ChatMessage, TranscriptSegment, Topic, Citation } from "@/lib/types";
+import { useState, useRef, useEffect, ReactNode, useCallback, RefObject } from "react";
+import { ChatMessage, TranscriptSegment, Topic, Citation, NoteSource, NoteMetadata } from "@/lib/types";
+import { SelectionActions, SelectionActionPayload, triggerExplainSelection, EXPLAIN_SELECTION_EVENT } from "@/components/selection-actions";
 import { ChatMessageComponent } from "./chat-message";
 import { SuggestedQuestions } from "./suggested-questions";
 import { Card } from "@/components/ui/card";
@@ -10,6 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Send, Loader2 } from "lucide-react";
+import { parseTimestamp } from "@/lib/timestamp-utils";
+import { formatDuration } from "@/lib/utils";
 
 interface AIChatProps {
   transcript: TranscriptSegment[];
@@ -21,22 +24,31 @@ interface AIChatProps {
   onPlayAllCitations?: (citations: Citation[]) => void;
   cachedSuggestedQuestions?: string[] | null;
   pinnedContent?: ReactNode;
+  onSaveNote?: (payload: { text: string; source: NoteSource; sourceId?: string | null; metadata?: NoteMetadata | null }) => Promise<void>;
+  onTakeNoteFromSelection?: (payload: SelectionActionPayload) => void;
 }
 
-export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClick, onTimestampClick, onPlayAllCitations, cachedSuggestedQuestions, pinnedContent }: AIChatProps) {
+export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClick, onTimestampClick, onPlayAllCitations, cachedSuggestedQuestions, pinnedContent, onSaveNote, onTakeNoteFromSelection }: AIChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [askedQuestions, setAskedQuestions] = useState<Set<string>>(new Set());
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const takeawaysContainerRef = useRef<HTMLDivElement | null>(null);
+  const chatMessagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const node = messagesEndRef.current;
+    if (!node) {
+      return;
     }
-  }, [messages]);
+    node.scrollIntoView({
+      block: "end",
+      behavior: messages.length <= 1 ? "auto" : "smooth",
+    });
+  }, [messages, isLoading]);
 
   // Reset questions when video changes
   useEffect(() => {
@@ -57,26 +69,6 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
       fetchSuggestedQuestions();
     }
   }, [transcript, cachedSuggestedQuestions]);
-
-
-  const fetchSuggestedQuestions = async () => {
-    setLoadingQuestions(true);
-    try {
-      const response = await fetch("/api/suggested-questions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript, topics, videoTitle }),
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setSuggestedQuestions(data.questions || []);
-      }
-    } catch (error) {
-    } finally {
-      setLoadingQuestions(false);
-    }
-  };
 
   const sendMessage = useCallback(async (messageText?: string, retryCount = 0) => {
     const text = messageText || input.trim();
@@ -183,6 +175,102 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
     }
   }, [input, isLoading, messages, transcript, topics, videoId]);
 
+  useEffect(() => {
+    const handleExplain = (event: Event) => {
+      const custom = event as CustomEvent<SelectionActionPayload>;
+      const detail = custom.detail;
+      if (!detail?.text?.trim()) {
+        return;
+      }
+
+      const origin =
+        detail.source === 'transcript'
+          ? 'transcript excerpt'
+          : detail.source === 'takeaways'
+            ? 'takeaway insight'
+            : 'text';
+
+      const contextLines: string[] = [];
+
+      if (detail.source === 'takeaways') {
+        contextLines.push('Source: Key takeaways summary (paraphrased from the transcript)');
+      }
+
+      if (detail.metadata?.timestampLabel) {
+        contextLines.push(`Timestamp: ${detail.metadata.timestampLabel}`);
+      }
+
+      if (detail.metadata?.transcript?.start !== undefined) {
+        const transcriptStart = detail.metadata.transcript.start;
+        const transcriptEnd = detail.metadata.transcript.end ?? transcriptStart;
+        const startLabel = formatDuration(transcriptStart);
+        const endLabel = formatDuration(transcriptEnd);
+        contextLines.push(
+          transcriptEnd === transcriptStart
+            ? `Transcript reference: ${startLabel}`
+            : `Transcript window: ${startLabel} - ${endLabel}`
+        );
+      }
+
+      if (detail.metadata?.selectionContext && detail.metadata.selectionContext !== videoTitle) {
+        contextLines.push(`Context: ${detail.metadata.selectionContext}`);
+      }
+
+      const additionalDetails = contextLines.length
+        ? `
+
+Additional details:
+- ${contextLines.join('\n- ')}`
+        : '';
+
+      let prompt = `Explain the following ${origin}${videoTitle ? ` from "${videoTitle}"` : ''}:
+
+"${detail.text}"${additionalDetails}`;
+
+      const extra = detail.metadata?.extra as Record<string, unknown> | undefined;
+      const fullTakeawayText = typeof extra?.fullTakeawayText === 'string'
+        ? extra.fullTakeawayText.trim()
+        : '';
+
+      if (
+        detail.source === 'takeaways' &&
+        fullTakeawayText &&
+        fullTakeawayText.toLowerCase() !== detail.text.trim().toLowerCase()
+      ) {
+        prompt += `
+
+Full takeaway context: "${fullTakeawayText}"`;
+      }
+
+      sendMessage(prompt);
+    };
+
+    window.addEventListener(EXPLAIN_SELECTION_EVENT, handleExplain as EventListener);
+    return () => {
+      window.removeEventListener(EXPLAIN_SELECTION_EVENT, handleExplain as EventListener);
+    };
+  }, [sendMessage, videoTitle]);
+
+
+  const fetchSuggestedQuestions = async () => {
+    setLoadingQuestions(true);
+    try {
+      const response = await fetch("/api/suggested-questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcript, topics, videoTitle }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setSuggestedQuestions(data.questions || []);
+      }
+    } catch (error) {
+    } finally {
+      setLoadingQuestions(false);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -203,25 +291,156 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
     }
   }, [messages, sendMessage]);
 
+  const findSegmentByTime = useCallback((seconds: number) => {
+    if (!transcript || transcript.length === 0) {
+      return null;
+    }
+
+    for (let i = 0; i < transcript.length; i++) {
+      const segment = transcript[i];
+      const segmentEnd = segment.start + segment.duration;
+      if (seconds >= segment.start && seconds <= segmentEnd) {
+        return { segment, index: i };
+      }
+    }
+
+    let closestIndex = 0;
+    let minDiff = Math.abs(transcript[0].start - seconds);
+    for (let i = 1; i < transcript.length; i++) {
+      const diff = Math.abs(transcript[i].start - seconds);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestIndex = i;
+      }
+    }
+
+    const fallbackSegment = transcript[closestIndex];
+    return fallbackSegment ? { segment: fallbackSegment, index: closestIndex } : null;
+  }, [transcript]);
+
+  const getTakeawayMetadata = useCallback((range: Range) => {
+    const container = takeawaysContainerRef.current;
+    if (!container) {
+      return undefined;
+    }
+
+    const startNode = range.startContainer instanceof Element
+      ? range.startContainer
+      : range.startContainer?.parentElement ?? null;
+
+    if (!startNode || !container.contains(startNode)) {
+      return undefined;
+    }
+
+    const listItem = startNode.closest('li');
+    if (!listItem) {
+      return undefined;
+    }
+
+    const metadata: NoteMetadata = {};
+    const strongLabel = listItem.querySelector('strong');
+    if (strongLabel?.textContent) {
+      metadata.selectionContext = strongLabel.textContent.trim();
+    }
+
+    const textContent = listItem.textContent?.trim() ?? '';
+    if (textContent) {
+      const timestampMatches = Array.from(textContent.matchAll(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g));
+      const timestampSeconds: number[] = [];
+      const timestampLabels: string[] = [];
+
+      for (const match of timestampMatches) {
+        const tsString = match[0];
+        const seconds = parseTimestamp(tsString);
+        if (seconds !== null) {
+          timestampSeconds.push(seconds);
+          timestampLabels.push(formatDuration(seconds));
+        }
+      }
+
+      if (timestampLabels.length > 0) {
+        metadata.timestampLabel = timestampLabels.join(', ');
+        const firstSeconds = timestampSeconds[0];
+        const segmentInfo = findSegmentByTime(firstSeconds);
+        if (segmentInfo) {
+          metadata.transcript = {
+            start: segmentInfo.segment.start,
+            end: segmentInfo.segment.start + segmentInfo.segment.duration,
+            segmentIndex: segmentInfo.index,
+          };
+        }
+        metadata.extra = {
+          ...(metadata.extra || {}),
+          takeawayTimestamps: timestampSeconds,
+          fullTakeawayText: textContent,
+        };
+      } else {
+        metadata.extra = {
+          ...(metadata.extra || {}),
+          fullTakeawayText: textContent,
+        };
+      }
+    }
+
+    return metadata;
+  }, [findSegmentByTime]);
+
+
   return (
     <TooltipProvider delayDuration={0} skipDelayDuration={0} disableHoverableContent={false}>
       <div className="w-full h-full flex flex-col">
-        <ScrollArea className="flex-1 px-6" ref={scrollRef}>
+        <ScrollArea className="flex-1 px-6">
           <div className="space-y-3.5">
             {pinnedContent && (
-              <div className="space-y-2.5">
+              <div className="space-y-2.5" ref={takeawaysContainerRef}>
+                <SelectionActions
+                  containerRef={takeawaysContainerRef as unknown as RefObject<HTMLElement | null>}
+                  onExplain={(payload) => {
+                    triggerExplainSelection({
+                      ...payload,
+                      source: 'takeaways'
+                    });
+                  }}
+                  onTakeNote={(payload) => {
+                    onTakeNoteFromSelection?.({
+                      ...payload,
+                      source: 'takeaways'
+                    });
+                  }}
+                  getMetadata={getTakeawayMetadata}
+                  source="takeaways"
+                />
                 {pinnedContent}
               </div>
             )}
-            {messages.map((message) => (
+            <div ref={chatMessagesContainerRef}>
+              <SelectionActions
+                containerRef={chatMessagesContainerRef as unknown as RefObject<HTMLElement | null>}
+                onExplain={(payload) => {
+                  triggerExplainSelection({
+                    ...payload,
+                    source: 'chat'
+                  });
+                }}
+                onTakeNote={(payload) => {
+                  onTakeNoteFromSelection?.({
+                    ...payload,
+                    source: 'chat'
+                  });
+                }}
+                source="chat"
+              />
+              {messages.map((message) => (
               <ChatMessageComponent
                 key={message.id}
                 message={message}
                 onCitationClick={onCitationClick}
                 onTimestampClick={onTimestampClick}
                 onRetry={message.role === 'assistant' ? handleRetry : undefined}
+                onSaveNote={message.role === 'assistant' ? onSaveNote : undefined}
               />
-            ))}
+              ))}
+            </div>
 
             {isLoading && (
               <div className="flex items-center gap-2 mb-3">
@@ -229,6 +448,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, onCitationClic
                 <p className="text-xs text-muted-foreground">Thinking...</p>
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
 

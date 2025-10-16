@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Sparkles, Check } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface SuggestedQuestionsProps {
@@ -26,33 +26,27 @@ export function SuggestedQuestions({ questions, onQuestionClick, isLoading, aske
     return null;
   }
 
+  // Filter out questions that have already been asked
+  const unaskedQuestions = questions.filter(question => !askedQuestions.has(question));
+
+  // Don't render if all questions have been asked
+  if (unaskedQuestions.length === 0) {
+    return null;
+  }
+
   return (
     <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 -mx-6 px-6">
-      {questions.map((question, idx) => {
-        const isAsked = askedQuestions.has(question);
-        return (
-          <Button
-            key={idx}
-            variant="pill"
-            size="sm"
-            className={cn(
-              "h-auto py-2 px-4 whitespace-nowrap transition-all text-sm flex-shrink-0",
-              "hover:bg-neutral-100",
-              isAsked && "opacity-60 border-muted-foreground/30"
-            )}
-            onClick={() => onQuestionClick(question)}
-          >
-            <span className="flex items-center gap-2">
-              {isAsked && (
-                <Check className="w-3 h-3 text-green-600 dark:text-green-400 flex-shrink-0" />
-              )}
-              <span className={cn(isAsked && "line-through opacity-80")}>
-                {question}
-              </span>
-            </span>
-          </Button>
-        );
-      })}
+      {unaskedQuestions.map((question, idx) => (
+        <Button
+          key={idx}
+          variant="pill"
+          size="sm"
+          className="h-auto py-2 px-4 whitespace-nowrap transition-all text-sm flex-shrink-0 hover:bg-neutral-100"
+          onClick={() => onQuestionClick(question)}
+        >
+          {question}
+        </Button>
+      ))}
     </div>
   );
 }
