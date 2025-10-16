@@ -1,4 +1,4 @@
-import { TranscriptSegment, Topic, VideoInfo } from '@/lib/types';
+import { TranscriptSegment, Topic, TopicCandidate, VideoInfo } from '@/lib/types';
 import {
   normalizeWhitespace,
   buildTranscriptIndex,
@@ -24,6 +24,8 @@ interface GenerateTopicsOptions {
   fastModel?: string;
   maxTopics?: number;
   theme?: string;
+  excludeTopicKeys?: Set<string>;
+  includeCandidatePool?: boolean;
 }
 
 interface TranscriptChunk {
@@ -647,14 +649,16 @@ export async function generateTopicsFromTranscript(
   transcript: TranscriptSegment[],
   _model: string = 'gemini-2.5-flash',
   options: GenerateTopicsOptions = {}
-): Promise<Topic[]> {
+): Promise<{ topics: Topic[]; candidates?: TopicCandidate[] }> {
   const {
     videoInfo,
     chunkDurationSeconds = DEFAULT_CHUNK_DURATION_SECONDS,
     chunkOverlapSeconds = DEFAULT_CHUNK_OVERLAP_SECONDS,
     fastModel = 'gemini-2.5-flash-lite',
     maxTopics = 5,
-    theme
+    theme,
+    excludeTopicKeys,
+    includeCandidatePool
   } = options;
 
   const requestedTopics = Math.max(1, Math.min(maxTopics, 5));
@@ -663,6 +667,7 @@ export async function generateTopicsFromTranscript(
 
   let topicsArray: ParsedTopic[] = [];
   let candidateTopics: CandidateTopic[] = [];
+  const excludedKeys = excludeTopicKeys ?? new Set<string>();
 
   if (transcript.length > 0) {
     try {
@@ -718,6 +723,13 @@ export async function generateTopicsFromTranscript(
 
   if (candidateTopics.length > 0) {
     candidateTopics = dedupeCandidates(candidateTopics);
+    if (excludedKeys.size > 0) {
+      candidateTopics = candidateTopics.filter(candidate => {
+        if (!candidate.quote?.timestamp || !candidate.quote.text) return false;
+        const key = `${candidate.quote.timestamp}|${normalizeWhitespace(candidate.quote.text)}`;
+        return !excludedKeys.has(key);
+      });
+    }
 
     const videoDuration = transcript.length > 0
       ? transcript[transcript.length - 1].start + transcript[transcript.length - 1].duration
@@ -822,6 +834,9 @@ export async function generateTopicsFromTranscript(
           .filter((quote): quote is { timestamp: string; text: string } => !!quote?.timestamp && !!quote.text)
           .map(quote => `${quote.timestamp}|${normalizeWhitespace(quote.text)}`)
       );
+      for (const key of excludedKeys) {
+        usedKeys.add(key);
+      }
 
       for (const candidate of candidateTopics) {
         if (!candidate.quote?.timestamp || !candidate.quote.text) continue;
@@ -857,11 +872,20 @@ export async function generateTopicsFromTranscript(
       fastModel,
       theme
     );
-    topicsArray = singlePassTopics;
+    topicsArray = singlePassTopics.filter(topic => {
+      if (!topic.quote?.timestamp || !topic.quote.text) return false;
+      const key = `${topic.quote.timestamp}|${normalizeWhitespace(topic.quote.text)}`;
+      return !excludedKeys.has(key);
+    });
   }
 
   if (topicsArray.length === 0) {
-    topicsArray = buildFallbackTopics(transcript, requestedTopics, fullText, theme);
+    const fallbackTopics = buildFallbackTopics(transcript, requestedTopics, fullText, theme);
+    topicsArray = fallbackTopics.filter(topic => {
+      if (!topic.quote?.timestamp || !topic.quote.text) return false;
+      const key = `${topic.quote.timestamp}|${normalizeWhitespace(topic.quote.text)}`;
+      return !excludedKeys.has(key);
+    }).slice(0, requestedTopics);
   }
 
   topicsArray = topicsArray
@@ -869,7 +893,7 @@ export async function generateTopicsFromTranscript(
     .slice(0, requestedTopics);
 
   if (topicsArray.length === 0) {
-    return [];
+    return { topics: [], candidates: includeCandidatePool ? [] : undefined };
   }
 
   const transcriptIndex = buildTranscriptIndex(transcript);
@@ -928,7 +952,42 @@ export async function generateTopicsFromTranscript(
     return 0;
   });
 
-  return topics;
+  let candidates: TopicCandidate[] | undefined;
+  if (includeCandidatePool) {
+    const sourceCandidates = candidateTopics.length > 0 ? candidateTopics : [];
+    const candidateMap = new Map<string, TopicCandidate>();
+    for (const candidate of sourceCandidates) {
+      if (!candidate.quote?.timestamp || !candidate.quote.text) continue;
+      const key = `${candidate.quote.timestamp}|${normalizeWhitespace(candidate.quote.text)}`;
+      if (candidateMap.has(key) || excludedKeys.has(key)) continue;
+      candidateMap.set(key, {
+        key,
+        title: candidate.title,
+        quote: {
+          timestamp: candidate.quote.timestamp,
+          text: candidate.quote.text
+        }
+      });
+    }
+
+    for (const topic of topics) {
+      if (!topic.quote?.timestamp || !topic.quote.text) continue;
+      const key = `${topic.quote.timestamp}|${normalizeWhitespace(topic.quote.text)}`;
+      if (candidateMap.has(key)) continue;
+      candidateMap.set(key, {
+        key,
+        title: topic.title,
+        quote: {
+          timestamp: topic.quote.timestamp,
+          text: topic.quote.text
+        }
+      });
+    }
+
+    candidates = Array.from(candidateMap.values());
+  }
+
+  return { topics, candidates };
 }
 
 function getTopicStartTime(topic: {

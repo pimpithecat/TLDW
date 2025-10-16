@@ -27,12 +27,19 @@ async function handler(request: NextRequest) {
       throw error;
     }
 
-    const { transcript, model } = validatedData;
+    const { transcript, model, includeCandidatePool, excludeTopicKeys, videoInfo } = validatedData;
 
     // Use the shared function to generate topics
-    const topics = await generateTopicsFromTranscript(transcript, model);
+    const { topics, candidates } = await generateTopicsFromTranscript(transcript, model, {
+      videoInfo,
+      includeCandidatePool,
+      excludeTopicKeys: new Set(excludeTopicKeys ?? [])
+    });
 
-    return NextResponse.json({ topics });
+    return NextResponse.json({
+      topics,
+      topicCandidates: includeCandidatePool ? candidates ?? [] : undefined
+    });
   } catch (error) {
     // Log error details server-side only
     console.error('Error generating topics:', error);

@@ -107,13 +107,18 @@ export const videoAnalysisRequestSchema = z.object({
   model: modelSchema.default('gemini-2.5-flash'),
   forceRegenerate: z.boolean().default(false),
   theme: z.string().min(1).max(80).optional(),
+  includeCandidatePool: z.boolean().optional(),
+  excludeTopicKeys: z.array(z.string().min(1).max(500)).optional(),
   summary: z.any().nullable().optional(),
   suggestedQuestions: z.any().nullable().optional()
 });
 
 export const generateTopicsRequestSchema = z.object({
   transcript: transcriptSchema,
-  model: modelSchema.optional()
+  model: modelSchema.optional(),
+  includeCandidatePool: z.boolean().optional(),
+  excludeTopicKeys: z.array(z.string().min(1).max(500)).optional(),
+  videoInfo: videoInfoSchema.optional()
 });
 
 export const chatRequestSchema = z.object({

@@ -30,6 +30,15 @@ export interface Topic {
   autoPlay?: boolean; // Flag to indicate auto-play when topic is selected
 }
 
+export interface TopicCandidate {
+  key: string;
+  title: string;
+  quote: {
+    timestamp: string;
+    text: string;
+  };
+}
+
 export interface VideoData {
   videoId: string;
   title: string;

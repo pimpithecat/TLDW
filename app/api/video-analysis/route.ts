@@ -38,15 +38,18 @@ async function handler(req: NextRequest) {
 
     if (theme) {
       try {
-        const themedTopics = await generateTopicsFromTranscript(transcript, model, {
+        const { topics: themedTopics } = await generateTopicsFromTranscript(transcript, model, {
           videoInfo,
-          theme
+          theme,
+          excludeTopicKeys: new Set(validatedData.excludeTopicKeys ?? []),
+          includeCandidatePool: false
         });
 
         return NextResponse.json({
           topics: themedTopics,
           theme,
-          cached: false
+          cached: false,
+          topicCandidates: undefined
         });
       } catch (error) {
         console.error('Error generating theme-specific topics:', error);
@@ -124,19 +127,13 @@ async function handler(req: NextRequest) {
       );
     }
 
-    // Generate new topics using shared function
-    let topics;
-    try {
-      topics = await generateTopicsFromTranscript(transcript, model, {
-        videoInfo
-      });
-    } catch (error) {
-      console.error('Error generating topics:', error);
-      return NextResponse.json(
-        { error: 'Failed to generate topics. Please try again.' },
-        { status: 500 }
-      );
-    }
+    const generationResult = await generateTopicsFromTranscript(transcript, model, {
+      videoInfo,
+      includeCandidatePool: validatedData.includeCandidatePool,
+      excludeTopicKeys: new Set(validatedData.excludeTopicKeys ?? []),
+    });
+    const topics = generationResult.topics;
+    const topicCandidates = generationResult.candidates;
 
     let themes: string[] = [];
     try {
@@ -148,7 +145,8 @@ async function handler(req: NextRequest) {
     return NextResponse.json({
       topics,
       themes,
-      cached: false
+      cached: false,
+      topicCandidates: validatedData.includeCandidatePool ? topicCandidates ?? [] : undefined
     });
 
   } catch (error) {

@@ -12,7 +12,8 @@ import { VideoSkeleton } from "@/components/video-skeleton";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
-import { Topic, TranscriptSegment, VideoInfo, Citation, PlaybackCommand, Note, NoteSource, NoteMetadata } from "@/lib/types";
+import { Topic, TranscriptSegment, VideoInfo, Citation, PlaybackCommand, Note, NoteSource, NoteMetadata, TopicCandidate } from "@/lib/types";
+import { normalizeWhitespace } from "@/lib/quote-matcher";
 import { hydrateTopicsWithTranscript, normalizeTranscript } from "@/lib/topic-utils";
 import { SelectionActionPayload } from "@/components/selection-actions";
 import { fetchNotes, saveNote, deleteNote } from "@/lib/notes-client";
@@ -87,6 +88,8 @@ export default function AnalyzePage() {
   const [themes, setThemes] = useState<string[]>([]);
   const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
   const [themeTopicsMap, setThemeTopicsMap] = useState<Record<string, Topic[]>>({});
+  const [themeCandidateMap, setThemeCandidateMap] = useState<Record<string, TopicCandidate[]>>({});
+  const [usedTopicKeys, setUsedTopicKeys] = useState<Set<string>>(new Set());
   const [isLoadingThemeTopics, setIsLoadingThemeTopics] = useState(false);
   const [themeError, setThemeError] = useState<string | null>(null);
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
@@ -427,6 +430,8 @@ export default function AnalyzePage() {
     setThemes([]);
     setSelectedTheme(null);
     setThemeTopicsMap({});
+    setThemeCandidateMap({});
+    setUsedTopicKeys(new Set());
     setThemeError(null);
     setIsLoadingThemeTopics(false);
     setSelectedTopic(null);
@@ -489,6 +494,14 @@ export default function AnalyzePage() {
           setVideoInfo(cacheData.videoInfo);
           setTopics(hydratedTopics);
           setBaseTopics(hydratedTopics);
+          const initialKeys = new Set<string>();
+          hydratedTopics.forEach(topic => {
+            if (topic.quote?.timestamp && topic.quote.text) {
+              const key = `${topic.quote.timestamp}|${normalizeWhitespace(topic.quote.text)}`;
+              initialKeys.add(key);
+            }
+          });
+          setUsedTopicKeys(initialKeys);
           setSelectedTopic(hydratedTopics.length > 0 ? hydratedTopics[0] : null);
 
           // Set cached takeaways and questions
@@ -522,7 +535,8 @@ export default function AnalyzePage() {
                   videoId: extractedVideoId,
                   videoInfo: cacheData.videoInfo,
                   transcript: sanitizedTranscript,
-                  model: 'gemini-2.5-flash'
+                  model: 'gemini-2.5-flash',
+                  includeCandidatePool: true
                 }),
               });
 
@@ -535,6 +549,12 @@ export default function AnalyzePage() {
               const data = await response.json();
               if (Array.isArray(data.themes)) {
                 setThemes(data.themes);
+              }
+              if (Array.isArray(data.topicCandidates)) {
+                setThemeCandidateMap(prev => ({
+                  ...prev,
+                  __default: data.topicCandidates
+                }));
               }
               return data.themes;
             },
@@ -751,6 +771,7 @@ export default function AnalyzePage() {
       // Process topics result
       let generatedTopics: Topic[] = [];
       let generatedThemes: string[] = [];
+      let generatedCandidates: TopicCandidate[] = [];
       if (topicsResult.status === 'fulfilled') {
         const topicsRes = topicsResult.value;
 
@@ -764,6 +785,11 @@ export default function AnalyzePage() {
         const rawTopics = Array.isArray(topicsData.topics) ? topicsData.topics : [];
         generatedTopics = hydrateTopicsWithTranscript(rawTopics, normalizedTranscriptData);
         generatedThemes = Array.isArray(topicsData.themes) ? topicsData.themes : [];
+        generatedCandidates = Array.isArray(topicsData.topicCandidates) ? topicsData.topicCandidates : [];
+        generatedCandidates = generatedCandidates.map(candidate => ({
+          ...candidate,
+          key: `${candidate.quote.timestamp}|${normalizeWhitespace(candidate.quote.text)}`
+        }));
       } else {
         throw topicsResult.reason;
       }
@@ -793,6 +819,17 @@ export default function AnalyzePage() {
       // Synchronous batch state update - all at once
       setTopics(generatedTopics);
       setBaseTopics(generatedTopics);
+      const initialKeys = new Set<string>();
+      generatedTopics.forEach(topic => {
+        if (topic.quote?.timestamp && topic.quote.text) {
+          initialKeys.add(`${topic.quote.timestamp}|${normalizeWhitespace(topic.quote.text)}`);
+        }
+      });
+      setUsedTopicKeys(initialKeys);
+      setThemeCandidateMap(prev => ({
+        ...prev,
+        __default: generatedCandidates
+      }));
       setSelectedTopic(generatedTopics.length > 0 ? generatedTopics[0] : null);
       setThemes(generatedThemes);
       if (generatedTakeaways) {
@@ -1140,6 +1177,11 @@ export default function AnalyzePage() {
       setSelectedTopic(null);
       setIsPlayingAll(false);
       setPlayAllIndex(0);
+      setUsedTopicKeys(new Set(
+        baseTopics
+          .filter((topic): topic is Topic & { quote: { timestamp: string; text: string } } => !!topic.quote?.timestamp && !!topic.quote.text)
+          .map(topic => `${topic.quote.timestamp}|${normalizeWhitespace(topic.quote.text)}`)
+      ));
     };
 
     if (!themeLabel) {
@@ -1184,6 +1226,7 @@ export default function AnalyzePage() {
 
     if (!themedTopics) {
       const controller = abortManager.current.createController('theme-topics', 60000);
+      const exclusionKeys = Array.from(usedTopicKeys).map((key) => key.slice(0, 500));
       try {
         const response = await fetch("/api/video-analysis", {
           method: "POST",
@@ -1193,7 +1236,8 @@ export default function AnalyzePage() {
             videoInfo,
             transcript,
             model: 'gemini-2.5-flash',
-            theme: normalizedTheme
+            theme: normalizedTheme,
+            excludeTopicKeys: exclusionKeys
           }),
           signal: controller.signal
         });
@@ -1205,7 +1249,20 @@ export default function AnalyzePage() {
         }
 
         const data = await response.json();
-        themedTopics = hydrateTopicsWithTranscript(Array.isArray(data.topics) ? data.topics : [], transcript);
+        const hydratedThemeTopics = hydrateTopicsWithTranscript(Array.isArray(data.topics) ? data.topics : [], transcript);
+        const candidatePool = Array.isArray(data.topicCandidates) ? data.topicCandidates : undefined;
+        setThemeCandidateMap(prev => ({
+          ...prev,
+          [normalizedTheme]: candidatePool ?? []
+        }));
+        const nextUsedKeys = new Set(usedTopicKeys);
+        hydratedThemeTopics.forEach(topic => {
+          if (topic.quote?.timestamp && topic.quote.text) {
+            nextUsedKeys.add(`${topic.quote.timestamp}|${normalizeWhitespace(topic.quote.text)}`);
+          }
+        });
+        setUsedTopicKeys(nextUsedKeys);
+        themedTopics = hydratedThemeTopics;
         setThemeTopicsMap(prev => ({
           ...prev,
           [normalizedTheme]: themedTopics || []
@@ -1228,6 +1285,12 @@ export default function AnalyzePage() {
     }
 
     setTopics(themedTopics);
+    if (themedTopics.length === 0) {
+      setThemeCandidateMap(prev => ({
+        ...prev,
+        [normalizedTheme]: prev[normalizedTheme] ?? []
+      }));
+    }
 
     if (themedTopics.length > 0) {
       setSelectedTopic(themedTopics[0]);
@@ -1245,6 +1308,8 @@ export default function AnalyzePage() {
     selectedTheme,
     baseTopics,
     themeTopicsMap,
+    themeCandidateMap,
+    usedTopicKeys,
     abortManager,
     setIsPlayingAll,
     setPlayAllIndex
@@ -1473,6 +1538,7 @@ export default function AnalyzePage() {
                   currentTime={currentTime}
                   videoDuration={videoDuration}
                   transcript={transcript}
+                  isLoadingThemeTopics={isLoadingThemeTopics}
                 />
               </div>
             </div>
