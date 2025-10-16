@@ -79,7 +79,16 @@ export const topicSchema = z.object({
 });
 
 // Model selection validation
-export const modelSchema = z.enum(['gemini-2.5-flash', 'gemini-2.0-flash-thinking']);
+export const modelSchema = z.enum([
+  'gemini-2.5-pro-latest',
+  'gemini-2.5-flash-latest',
+  'gemini-2.5-flash-lite-latest',
+  'gemini-2.0-flash-thinking-latest',
+  'gemini-2.5-pro',
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-2.0-flash-thinking'
+] as const);
 
 // Chat message validation
 export const chatMessageSchema = z.object({
@@ -104,7 +113,7 @@ export const videoAnalysisRequestSchema = z.object({
   videoId: youtubeIdSchema,
   videoInfo: videoInfoSchema,
   transcript: transcriptSchema,
-  model: modelSchema.default('gemini-2.5-flash'),
+  model: modelSchema.default('gemini-2.5-pro-latest'),
   forceRegenerate: z.boolean().default(false),
   theme: z.string().min(1).max(80).optional(),
   includeCandidatePool: z.boolean().optional(),

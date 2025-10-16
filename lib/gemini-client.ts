@@ -1,15 +1,10 @@
 import { GoogleGenerativeAI, GenerationConfig, SchemaType } from '@google/generative-ai';
 import { z } from 'zod';
+import { GEMINI_MODEL_CASCADE, GEMINI_VALID_MODELS, isValidGeminiModel, normalizeGeminiModel } from '@/lib/ai-models';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
-const MODEL_CASCADE = [
-  'gemini-2.5-flash-lite',
-  'gemini-2.5-flash',
-  'gemini-2.5-pro'
-] as const;
-
-type ValidModel = typeof MODEL_CASCADE[number];
+type ValidModel = typeof GEMINI_VALID_MODELS[number];
 
 interface GeminiModelConfig {
   generationConfig?: GenerationConfig;
@@ -19,7 +14,7 @@ interface GeminiModelConfig {
 }
 
 function isValidModel(model: string): model is ValidModel {
-  return MODEL_CASCADE.includes(model as ValidModel);
+  return isValidGeminiModel(model);
 }
 
 function isRetryableError(error: any): boolean {
@@ -117,13 +112,17 @@ export async function generateWithFallback(
   prompt: string,
   config: GeminiModelConfig = {}
 ): Promise<string> {
-  if (config.preferredModel && !isValidModel(config.preferredModel)) {
+  const preferredModel = config.preferredModel && isValidModel(config.preferredModel)
+    ? normalizeGeminiModel(config.preferredModel)
+    : undefined;
+
+  if (config.preferredModel && !preferredModel) {
     console.warn(`Invalid preferredModel "${config.preferredModel}", using default cascade`);
   }
 
-  const models = config.preferredModel && isValidModel(config.preferredModel)
-    ? [config.preferredModel, ...MODEL_CASCADE.filter(m => m !== config.preferredModel)]
-    : [...MODEL_CASCADE];
+  const models = preferredModel
+    ? [preferredModel, ...GEMINI_MODEL_CASCADE.filter(m => m !== preferredModel)]
+    : [...GEMINI_MODEL_CASCADE];
 
   let lastError: any;
   const attemptedModels: string[] = [];

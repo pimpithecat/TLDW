@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { withSecurity, SECURITY_PRESETS } from '@/lib/security-middleware';
 import { z } from 'zod';
-import { formatValidationError } from '@/lib/validation';
+import { formatValidationError, modelSchema } from '@/lib/validation';
+import { DEFAULT_TOPIC_MODEL, normalizeGeminiModel } from '@/lib/ai-models';
 
 const saveAnalysisSchema = z.object({
   videoId: z.string().min(1, 'Video ID is required'),
@@ -22,7 +23,7 @@ const saveAnalysisSchema = z.object({
   topics: z.array(z.any()),
   summary: z.string().nullable().optional(),
   suggestedQuestions: z.array(z.string()).nullable().optional(),
-  model: z.string().default('gemini-2.5-flash')
+  model: modelSchema.default(DEFAULT_TOPIC_MODEL)
 });
 
 async function handler(req: NextRequest) {
@@ -54,6 +55,7 @@ async function handler(req: NextRequest) {
       suggestedQuestions,
       model
     } = validatedData;
+    const normalizedModel = normalizeGeminiModel(model);
 
     const supabase = await createClient();
 
@@ -70,7 +72,7 @@ async function handler(req: NextRequest) {
         p_topics: topics,
         p_summary: summary || null,
         p_suggested_questions: suggestedQuestions || null,
-        p_model_used: model,
+        p_model_used: normalizedModel,
         p_user_id: user?.id || null
       })
       .single();

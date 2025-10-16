@@ -44,15 +44,15 @@ export function getTopicColor(index: number): { bg: string; border: string; text
   return colors[index % colors.length];
 }
 
-// Custom color palette - Vibrant Accents (converted from hex to HSL)
+// Custom color palette - Soft Pastels (converted from hex to HSL)
 const TOPIC_COLORS = [
-  '218 93% 67%',  // #5B8FF9 - Bright Blue
-  '158 68% 62%',  // #61DDAA - Teal
-  '43 92% 52%',   // #F6BD16 - Golden Yellow
-  '7 77% 61%',    // #E86452 - Warm Red
-  '194 77% 68%',  // #6DC8EC - Cyan
-  '278 38% 55%',  // #945FB9 - Purple
-  '25 100% 65%',  // #FF9D4D - Orange
+  '214 48% 65%',  // #7C9DD1 - Soft Blue
+  '267 44% 71%',  // #B497D6 - Lavender
+  '158 35% 65%',  // #86C5AC - Mint Green
+  '15 85% 74%',   // #F4A582 - Coral
+  '43 100% 74%',  // #FFD97D - Soft Yellow
+  '320 53% 80%',  // #E8B4D4 - Rose Pink
+  '192 49% 71%',  // #94CED8 - Sky Blue
 ];
 
 // Simple hash function for deterministic randomization
