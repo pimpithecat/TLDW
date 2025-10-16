@@ -878,13 +878,20 @@ export async function generateTopicsFromTranscript(
     topicsArray.map(async (topic: ParsedTopic, index: number) => {
       const quotesArray = topic.quote ? [topic.quote] : [];
       const segments = await findExactQuotes(transcript, quotesArray, transcriptIndex);
-      const totalDuration = segments.reduce((sum, seg) => sum + (seg.end - seg.start), 0);
+      const normalizedSegments = segments
+        .filter(segment =>
+          Number.isFinite(segment.start) &&
+          Number.isFinite(segment.end) &&
+          segment.end >= segment.start
+        )
+        .sort((a, b) => a.start - b.start);
+      const totalDuration = normalizedSegments.reduce((sum, seg) => sum + (seg.end - seg.start), 0);
 
       return {
         id: `topic-${index}`,
         title: topic.title,
         duration: Math.round(totalDuration),
-        segments,
+        segments: normalizedSegments,
         quote: topic.quote
       };
     })
@@ -900,12 +907,74 @@ export async function generateTopicsFromTranscript(
     }));
 
   topics.sort((a: any, b: any) => {
-    const startA = a.segments.length > 0 ? a.segments[0].start : Infinity;
-    const startB = b.segments.length > 0 ? b.segments[0].start : Infinity;
-    return startA - startB;
+    const startA = getTopicStartTime(a);
+    const startB = getTopicStartTime(b);
+
+    const hasStartA = Number.isFinite(startA);
+    const hasStartB = Number.isFinite(startB);
+
+    if (hasStartA && hasStartB) {
+      return startA - startB;
+    }
+
+    if (hasStartA) {
+      return -1;
+    }
+
+    if (hasStartB) {
+      return 1;
+    }
+
+    return 0;
   });
 
   return topics;
+}
+
+function getTopicStartTime(topic: {
+  segments: { start: number; end: number }[];
+  quote?: { timestamp?: string } | null;
+}): number {
+  if (Array.isArray(topic.segments) && topic.segments.length > 0) {
+    return topic.segments[0].start;
+  }
+
+  const rawTimestamp = topic.quote?.timestamp;
+  if (!rawTimestamp) {
+    return Infinity;
+  }
+
+  const cleaned = rawTimestamp.replace(/[\[\]]/g, '').trim();
+  if (!cleaned) {
+    return Infinity;
+  }
+
+  const parts = cleaned.split(/-|–|—| to /i);
+  const startPart = parts[0]?.trim();
+  if (!startPart) {
+    return Infinity;
+  }
+
+  const timeSegments = startPart.split(':').map(part => Number(part));
+  if (timeSegments.some(segment => Number.isNaN(segment))) {
+    return Infinity;
+  }
+
+  if (timeSegments.length === 3) {
+    const [hours, minutes, seconds] = timeSegments;
+    return hours * 3600 + minutes * 60 + seconds;
+  }
+
+  if (timeSegments.length === 2) {
+    const [minutes, seconds] = timeSegments;
+    return minutes * 60 + seconds;
+  }
+
+  if (timeSegments.length === 1) {
+    return timeSegments[0];
+  }
+
+  return Infinity;
 }
 
 function sanitizeThemeList(themes: string[]): string[] {
