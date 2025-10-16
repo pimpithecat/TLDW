@@ -1,8 +1,21 @@
 "use client";
 
 import { Topic } from "@/lib/types";
-import { formatDuration, getTopicHSLColor } from "@/lib/utils";
-import { cn } from "@/lib/utils";
+import { cn, formatDuration, getTopicHSLColor } from "@/lib/utils";
+
+const formatTopicTitle = (title: string) => {
+  const trimmed = title.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const [firstWord, ...restWords] = trimmed.split(/\s+/);
+  const normalizedFirstWord =
+    firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase();
+  const normalizedRest = restWords.map((word) => word.toLowerCase());
+
+  return [normalizedFirstWord, ...normalizedRest].join(" ");
+};
 
 interface TopicCardProps {
   topic: Topic;
@@ -50,7 +63,7 @@ export function TopicCard({ topic, isSelected, onClick, topicIndex, onPlayTopic,
           style={{ backgroundColor: `hsl(${topicColor})` }}
         />
         <span className="font-medium text-sm truncate">
-          {topic.title}
+          {formatTopicTitle(topic.title)}
         </span>
       </div>
 
