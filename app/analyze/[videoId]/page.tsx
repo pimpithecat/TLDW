@@ -143,9 +143,12 @@ export default function AnalyzePage() {
   }>({ remaining: -1, resetAt: null });
 
   // Memoize processVideo to prevent infinite loops
-  const processVideoMemo = useCallback((url: string, isCached: boolean = false) => {
-    processVideo(url, isCached);
-  }, []);
+  const processVideoMemo = useCallback(
+    (url: string, isCached: boolean = false) => {
+      processVideo(url, isCached);
+    },
+    []
+  );
 
   const handleUrlSubmit = useCallback((url: string) => {
     const extractedId = extractVideoId(url);
@@ -773,7 +776,7 @@ export default function AnalyzePage() {
       let generatedThemes: string[] = [];
       let generatedCandidates: TopicCandidate[] = [];
       if (topicsResult.status === 'fulfilled') {
-        const topicsRes = topicsResult.value;
+      const topicsRes = topicsResult.value;
 
         if (!topicsRes.ok) {
           const errorData = await topicsRes.json().catch(() => ({ error: "Unknown error" }));

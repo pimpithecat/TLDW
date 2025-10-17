@@ -27,13 +27,14 @@ async function handler(request: NextRequest) {
       throw error;
     }
 
-    const { transcript, model, includeCandidatePool, excludeTopicKeys, videoInfo } = validatedData;
+    const { transcript, model, includeCandidatePool, excludeTopicKeys, videoInfo, mode } = validatedData;
 
     // Use the shared function to generate topics
     const { topics, candidates } = await generateTopicsFromTranscript(transcript, model, {
       videoInfo,
       includeCandidatePool,
-      excludeTopicKeys: new Set(excludeTopicKeys ?? [])
+      excludeTopicKeys: new Set(excludeTopicKeys ?? []),
+      mode
     });
 
     return NextResponse.json({

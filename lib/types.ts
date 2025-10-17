@@ -39,6 +39,8 @@ export interface TopicCandidate {
   };
 }
 
+export type TopicGenerationMode = 'smart' | 'fast';
+
 export interface VideoData {
   videoId: string;
   title: string;

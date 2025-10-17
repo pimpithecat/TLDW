@@ -33,7 +33,8 @@ async function handler(req: NextRequest) {
       transcript,
       model,
       forceRegenerate,
-      theme
+      theme,
+      mode
     } = validatedData;
 
     if (theme) {
@@ -42,7 +43,8 @@ async function handler(req: NextRequest) {
           videoInfo,
           theme,
           excludeTopicKeys: new Set(validatedData.excludeTopicKeys ?? []),
-          includeCandidatePool: false
+          includeCandidatePool: false,
+          mode
         });
 
         return NextResponse.json({
@@ -131,9 +133,11 @@ async function handler(req: NextRequest) {
       videoInfo,
       includeCandidatePool: validatedData.includeCandidatePool,
       excludeTopicKeys: new Set(validatedData.excludeTopicKeys ?? []),
+      mode
     });
     const topics = generationResult.topics;
     const topicCandidates = generationResult.candidates;
+    const modelUsed = generationResult.modelUsed;
 
     let themes: string[] = [];
     try {
@@ -146,7 +150,8 @@ async function handler(req: NextRequest) {
       topics,
       themes,
       cached: false,
-      topicCandidates: validatedData.includeCandidatePool ? topicCandidates ?? [] : undefined
+      topicCandidates: validatedData.includeCandidatePool ? topicCandidates ?? [] : undefined,
+      modelUsed
     });
 
   } catch (error) {

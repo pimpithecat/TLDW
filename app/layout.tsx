@@ -5,7 +5,6 @@ import { AuthProvider } from '@/contexts/auth-context';
 import { UserMenu } from '@/components/user-menu';
 import { ToastProvider } from '@/components/toast-provider';
 import { Footer } from '@/components/footer';
-import Link from 'next/link';
 import "./globals.css";
 
 const geistSans = Geist({
@@ -38,7 +37,7 @@ export default function RootLayout({
       >
         <AuthProvider>
           <div className="min-h-screen flex flex-col">
-            <header className="fixed top-0 right-0 z-50 p-6">
+            <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-end px-6 py-5">
               <UserMenu />
             </header>
             <main className="flex-1">

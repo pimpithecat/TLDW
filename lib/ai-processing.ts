@@ -1,4 +1,4 @@
-import { TranscriptSegment, Topic, TopicCandidate, VideoInfo } from '@/lib/types';
+import { TranscriptSegment, Topic, TopicCandidate, VideoInfo, TopicGenerationMode } from '@/lib/types';
 import {
   normalizeWhitespace,
   buildTranscriptIndex,
@@ -26,6 +26,8 @@ interface GenerateTopicsOptions {
   theme?: string;
   excludeTopicKeys?: Set<string>;
   includeCandidatePool?: boolean;
+  mode?: TopicGenerationMode;
+  proModel?: string;
 }
 
 interface TranscriptChunk {
@@ -649,7 +651,7 @@ export async function generateTopicsFromTranscript(
   transcript: TranscriptSegment[],
   _model: string = 'gemini-2.5-flash',
   options: GenerateTopicsOptions = {}
-): Promise<{ topics: Topic[]; candidates?: TopicCandidate[] }> {
+): Promise<{ topics: Topic[]; candidates?: TopicCandidate[]; modelUsed: string }> {
   const {
     videoInfo,
     chunkDurationSeconds = DEFAULT_CHUNK_DURATION_SECONDS,
@@ -658,18 +660,45 @@ export async function generateTopicsFromTranscript(
     maxTopics = 5,
     theme,
     excludeTopicKeys,
-    includeCandidatePool
+    includeCandidatePool,
+    mode = 'smart',
+    proModel = 'gemini-2.5-pro'
   } = options;
 
   const requestedTopics = Math.max(1, Math.min(maxTopics, 5));
+  const isSmartMode = mode === 'smart';
   const fullText = combineTranscript(transcript);
   const transcriptWithTimestamps = formatTranscriptWithTimestamps(transcript);
 
   let topicsArray: ParsedTopic[] = [];
   let candidateTopics: CandidateTopic[] = [];
   const excludedKeys = excludeTopicKeys ?? new Set<string>();
+  let resolvedModel = isSmartMode ? proModel : fastModel;
 
-  if (transcript.length > 0) {
+  if (isSmartMode) {
+    const smartTopics = await runSinglePassTopicGeneration(
+      transcript,
+      transcriptWithTimestamps,
+      fullText,
+      proModel,
+      theme
+    );
+
+    topicsArray = smartTopics.filter(topic => {
+      if (!topic.quote?.timestamp || !topic.quote.text) return false;
+      const key = `${topic.quote.timestamp}|${normalizeWhitespace(topic.quote.text)}`;
+      return !excludedKeys.has(key);
+    });
+
+    if (topicsArray.length === 0) {
+      // Fallback to fast pipeline if smart fails to produce topics
+      resolvedModel = fastModel;
+    }
+  }
+
+  const shouldRunFastPipeline = !isSmartMode || topicsArray.length === 0;
+
+  if (shouldRunFastPipeline && transcript.length > 0) {
     try {
       const chunks = chunkTranscript(transcript, chunkDurationSeconds, chunkOverlapSeconds);
       const chunkResults = await Promise.all(
@@ -869,7 +898,7 @@ export async function generateTopicsFromTranscript(
       transcript,
       transcriptWithTimestamps,
       fullText,
-      fastModel,
+      isSmartMode ? proModel : fastModel,
       theme
     );
     topicsArray = singlePassTopics.filter(topic => {
@@ -893,7 +922,11 @@ export async function generateTopicsFromTranscript(
     .slice(0, requestedTopics);
 
   if (topicsArray.length === 0) {
-    return { topics: [], candidates: includeCandidatePool ? [] : undefined };
+    return {
+      topics: [],
+      candidates: includeCandidatePool ? [] : undefined,
+      modelUsed: resolvedModel
+    };
   }
 
   const transcriptIndex = buildTranscriptIndex(transcript);
@@ -987,7 +1020,11 @@ export async function generateTopicsFromTranscript(
     candidates = Array.from(candidateMap.values());
   }
 
-  return { topics, candidates };
+  if (topics.length === 0) {
+    resolvedModel = isSmartMode ? proModel : fastModel;
+  }
+
+  return { topics, candidates, modelUsed: resolvedModel };
 }
 
 function getTopicStartTime(topic: {
