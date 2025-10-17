@@ -351,7 +351,7 @@ export default function AllNotesPage() {
               {Object.entries(groupedNotes).map(([videoId, { video, notes: videoNotes }]) => (
                 <Card
                   key={videoId}
-                  className="overflow-hidden border-border/60 shadow-md hover:border-primary/30 hover:shadow-lg transition-all duration-200"
+                  className="overflow-hidden border-border/60 shadow-none hover:shadow-lg transition-shadow duration-200"
                 >
                   {/* Video Header Section */}
                   <Link href={`/analyze/${videoId}`} className="block group">
