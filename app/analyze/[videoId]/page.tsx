@@ -20,16 +20,6 @@ import { fetchNotes, saveNote } from "@/lib/notes-client";
 import { EditingNote } from "@/components/notes-panel";
 import { useModePreference } from "@/lib/hooks/use-mode-preference";
 
-// Playback context for tracking what's currently playing
-interface PlaybackContext {
-  type: 'TOPIC' | 'CITATIONS' | 'PLAY_ALL';
-  endTime: number;
-  topicId?: string;
-  playAllIndex?: number;
-  segments?: { start: number; end: number }[];
-  currentSegmentIndex?: number;
-}
-
 // Page state for better UX
 type PageState = 'IDLE' | 'ANALYZING_NEW' | 'LOADING_CACHED';
 import { extractVideoId } from "@/lib/utils";
@@ -103,13 +93,11 @@ export default function AnalyzePage() {
   // Centralized playback control state
   const [playbackCommand, setPlaybackCommand] = useState<PlaybackCommand | null>(null);
   const [isPlayerReady, setIsPlayerReady] = useState(false);
-  const [playbackContext, setPlaybackContext] = useState<PlaybackContext | null>(null);
   const [transcriptHeight, setTranscriptHeight] = useState<string>("auto");
   const [citationHighlight, setCitationHighlight] = useState<Citation | null>(null);
   const [generationStartTime, setGenerationStartTime] = useState<number | null>(null);
   const [processingStartTime, setProcessingStartTime] = useState<number | null>(null);
   const rightColumnTabsRef = useRef<RightColumnTabsHandle>(null);
-  const lastSeekTimeRef = useRef<number>(0);
   const abortManager = useRef(new AbortManager());
 
   // Play All state (lifted from YouTubePlayer)
@@ -172,25 +160,11 @@ export default function AnalyzePage() {
   // Centralized playback request functions
   const requestSeek = useCallback((time: number) => {
     if (!isPlayerReady) return;
-    // Clear playback context for direct seeks
-    setPlaybackContext(null);
     setPlaybackCommand({ type: 'SEEK', time });
   }, [isPlayerReady]);
 
   const requestPlayTopic = useCallback((topic: Topic) => {
     if (!isPlayerReady) return;
-    // Track that we're initiating a seek
-    lastSeekTimeRef.current = Date.now();
-    // Set playback context for segment-end detection
-    if (topic.segments.length > 0) {
-      setPlaybackContext({
-        type: 'TOPIC',
-        endTime: topic.segments[topic.segments.length - 1].end,
-        topicId: topic.id,
-        segments: topic.segments,
-        currentSegmentIndex: 0
-      });
-    }
     setPlaybackCommand({ type: 'PLAY_TOPIC', topic, autoPlay: true });
   }, [isPlayerReady]);
 
@@ -201,33 +175,14 @@ export default function AnalyzePage() {
 
   const requestPlayCitations = useCallback((citations: Citation[]) => {
     if (!isPlayerReady) return;
-    // Track that we're initiating a seek
-    lastSeekTimeRef.current = Date.now();
-    // Set playback context for citation segments
-    if (citations.length > 0) {
-      setPlaybackContext({
-        type: 'CITATIONS',
-        endTime: citations[citations.length - 1].end,
-        segments: citations.map(c => ({ start: c.start, end: c.end })),
-        currentSegmentIndex: 0
-      });
-    }
     setPlaybackCommand({ type: 'PLAY_CITATIONS', citations, autoPlay: true });
   }, [isPlayerReady]);
 
   const requestPlayAll = useCallback(() => {
     if (!isPlayerReady || topics.length === 0) return;
-    // Track that we're initiating a seek
-    lastSeekTimeRef.current = Date.now();
     // Set Play All state first
     setIsPlayingAll(true);
     setPlayAllIndex(0);
-    // Set playback context for play all mode
-    setPlaybackContext({
-      type: 'PLAY_ALL',
-      endTime: topics[0].segments[0].end,
-      playAllIndex: 0
-    });
     setPlaybackCommand({ type: 'PLAY_ALL', autoPlay: true });
   }, [isPlayerReady, topics]);
 
@@ -1100,74 +1055,11 @@ export default function AnalyzePage() {
     setCurrentTime(seconds);
   }, []);
 
-  // Centralized segment-end detection
-  useEffect(() => {
-    if (!playbackContext || !isPlayerReady) return;
-
-    // Check if we just initiated a seek (within last 1 second)
-    const timeSinceLastSeek = Date.now() - lastSeekTimeRef.current;
-    if (timeSinceLastSeek < 1000) {
-      // Skip segment-end detection immediately after seeking
-      return;
-    }
-
-    // Check if we've reached the end of current segment/topic
-    if (currentTime >= playbackContext.endTime) {
-      if (playbackContext.type === 'PLAY_ALL') {
-        // Handle Play All mode transitions
-        const nextIndex = (playbackContext.playAllIndex || 0) + 1;
-        if (nextIndex < topics.length) {
-          // Move to next topic
-          const nextTopic = topics[nextIndex];
-          lastSeekTimeRef.current = Date.now(); // Track the seek for next topic
-          setPlaybackContext({
-            ...playbackContext,
-            playAllIndex: nextIndex,
-            endTime: nextTopic.segments[0].end
-          });
-          setSelectedTopic(nextTopic);
-          setPlaybackCommand({ type: 'SEEK', time: nextTopic.segments[0].start });
-          setPlayAllIndex(nextIndex);
-        } else {
-          // End of all topics
-          setPlaybackCommand({ type: 'PAUSE' });
-          setPlaybackContext(null);
-          setIsPlayingAll(false);
-          setPlayAllIndex(0);
-        }
-      } else if (playbackContext.type === 'CITATIONS' && playbackContext.segments) {
-        // Handle citation reel transitions
-        const currentSegIdx = playbackContext.currentSegmentIndex || 0;
-        if (currentSegIdx < playbackContext.segments.length - 1) {
-          // Move to next citation segment
-          const nextIdx = currentSegIdx + 1;
-          const nextSegment = playbackContext.segments[nextIdx];
-          lastSeekTimeRef.current = Date.now(); // Track the seek for next segment
-          setPlaybackContext({
-            ...playbackContext,
-            currentSegmentIndex: nextIdx,
-            endTime: nextSegment.end
-          });
-          setPlaybackCommand({ type: 'SEEK', time: nextSegment.start });
-        } else {
-          // End of citations
-          setPlaybackCommand({ type: 'PAUSE' });
-          setPlaybackContext(null);
-        }
-      } else {
-        // Regular topic - just pause
-        setPlaybackCommand({ type: 'PAUSE' });
-        setPlaybackContext(null);
-      }
-    }
-  }, [currentTime, playbackContext, isPlayerReady, topics, setSelectedTopic, setPlayAllIndex, setIsPlayingAll]);
-
   const handleTopicSelect = useCallback((topic: Topic | null, fromPlayAll: boolean = false) => {
     // Reset Play All mode only when manually selecting a topic (not from Play All)
     if (!fromPlayAll && isPlayingAll) {
       setIsPlayingAll(false);
       setPlayAllIndex(0);
-      setPlaybackContext(null);
     }
 
     // Clear citation highlight when selecting a topic
@@ -1177,9 +1069,6 @@ export default function AnalyzePage() {
     // Request to play the topic through centralized command system
     if (topic && !fromPlayAll) {
       requestPlayTopic(topic);
-    } else if (!topic) {
-      // Clear playback context when deselecting
-      setPlaybackContext(null);
     }
   }, [isPlayingAll, requestPlayTopic]);
 
@@ -1206,12 +1095,10 @@ export default function AnalyzePage() {
       // Stop playing all
       setIsPlayingAll(false);
       setPlayAllIndex(0);
-      setPlaybackContext(null);
       setPlaybackCommand({ type: 'PAUSE' });
     } else {
       // Clear any existing selection to start fresh
       setSelectedTopic(null);
-      setPlaybackContext(null);
       // Request to play all topics through centralized command system
       requestPlayAll();
     }

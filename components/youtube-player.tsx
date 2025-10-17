@@ -53,7 +53,6 @@ export function YouTubePlayer({
   const [playerReady, setPlayerReady] = useState(false);
   const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isSeekingRef = useRef(false);
-  const lastSeekTimeRef = useRef<number | undefined>(undefined);
   const isPlayingAllRef = useRef(false);
   const playAllIndexRef = useRef(0);
   const topicsRef = useRef<Topic[]>([]);
@@ -127,20 +126,24 @@ export function YouTubePlayer({
 
                   // Handle Play All mode auto-transitions
                   if (isPlayingAllRef.current && topicsRef.current.length > 0) {
-                    const currentTopic = topicsRef.current[playAllIndexRef.current];
+                    const currentIndex = playAllIndexRef.current;
+                    const currentTopic = topicsRef.current[currentIndex];
                     if (currentTopic && currentTopic.segments.length > 0) {
                       const segment = currentTopic.segments[0];
 
                       // Check if we've reached the end of the current segment
                       if (time >= segment.end) {
-                        // Check if this is the last topic
-                        if (playAllIndexRef.current >= topicsRef.current.length - 1) {
+                        const isLastTopic = currentIndex >= topicsRef.current.length - 1;
+                        if (isLastTopic) {
                           // End Play All mode
                           setIsPlayingAll?.(false);
+                          isPlayingAllRef.current = false;
                           playerRef.current.pauseVideo();
                         } else {
                           // Advance to the next topic
-                          setPlayAllIndex?.(prev => prev + 1);
+                          const nextIndex = currentIndex + 1;
+                          playAllIndexRef.current = nextIndex;
+                          setPlayAllIndex?.(nextIndex);
                         }
                       }
                     }
