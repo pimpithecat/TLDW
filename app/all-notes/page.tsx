@@ -7,14 +7,19 @@ import { fetchAllNotes, deleteNote } from '@/lib/notes-client';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
-import { Search, Trash2, Video, NotebookPen, Loader2 } from 'lucide-react';
+import { Search, Trash2, Video, NotebookPen, Loader2, ArrowUpDown } from 'lucide-react';
 import { formatDuration } from '@/lib/utils';
 import Image from 'next/image';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 function getSourceLabel(source: NoteSource) {
   switch (source) {
@@ -99,6 +104,8 @@ const markdownComponents = {
   ),
 };
 
+type SortOption = 'recent' | 'oldest' | 'video';
+
 export default function AllNotesPage() {
   const router = useRouter();
   const [notes, setNotes] = useState<NoteWithVideo[]>([]);
@@ -106,6 +113,7 @@ export default function AllNotesPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterSource, setFilterSource] = useState<NoteSource | 'all'>('all');
+  const [sortBy, setSortBy] = useState<SortOption>('recent');
 
   useEffect(() => {
     loadNotes();
@@ -140,7 +148,7 @@ export default function AllNotesPage() {
     }
   }
 
-  // Group notes by video
+  // Group notes by video with sorting
   const groupedNotes = useMemo(() => {
     const filtered = notes.filter(note => {
       const matchesSearch = searchQuery.trim() === '' ||
@@ -153,7 +161,21 @@ export default function AllNotesPage() {
       return matchesSearch && matchesSource;
     });
 
-    const grouped = filtered.reduce<Record<string, { video: NoteWithVideo['video'], notes: NoteWithVideo[] }>>((acc, note) => {
+    // Sort notes first
+    const sorted = [...filtered].sort((a, b) => {
+      if (sortBy === 'recent') {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      } else if (sortBy === 'oldest') {
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      } else {
+        // Sort by video title
+        const titleA = a.video?.title || '';
+        const titleB = b.video?.title || '';
+        return titleA.localeCompare(titleB);
+      }
+    });
+
+    const grouped = sorted.reduce<Record<string, { video: NoteWithVideo['video'], notes: NoteWithVideo[] }>>((acc, note) => {
       const videoId = note.video?.youtubeId || 'unknown';
       if (!acc[videoId]) {
         acc[videoId] = {
@@ -166,7 +188,7 @@ export default function AllNotesPage() {
     }, {});
 
     return grouped;
-  }, [notes, searchQuery, filterSource]);
+  }, [notes, searchQuery, filterSource, sortBy]);
 
   if (loading) {
     return (
@@ -194,221 +216,287 @@ export default function AllNotesPage() {
 
   return (
     <TooltipProvider delayDuration={0}>
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
         {/* Header */}
         <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <NotebookPen className="w-8 h-8 text-primary" />
-          <h1 className="text-3xl font-bold">My Notes</h1>
+          <h1 className="text-3xl font-bold mb-2">My Notes</h1>
+          <p className="text-muted-foreground">
+            {totalNotes === 0 ? 'No notes yet' : `${totalNotes} ${totalNotes === 1 ? 'note' : 'notes'} saved from your videos`}
+          </p>
         </div>
-        <p className="text-muted-foreground">
-          All your notes from analyzed videos in one place. {totalNotes} {totalNotes === 1 ? 'note' : 'notes'} total.
-        </p>
-      </div>
 
-      {/* Search and Filter */}
-      {totalNotes > 0 && (
-        <div className="mb-6 flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Search notes or videos..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
+        {/* Search and Filter */}
+        {totalNotes > 0 && (
+          <div className="mb-6 space-y-4">
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search notes or videos..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 h-11 bg-background border-border/60 focus-visible:border-primary/50"
+              />
+            </div>
+
+            {/* Filters and Sort */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {/* Source Filters */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-muted-foreground font-medium mr-1">Filter:</span>
+                <button
+                  onClick={() => setFilterSource('all')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    filterSource === 'all'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setFilterSource('chat')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    filterSource === 'chat'
+                      ? 'bg-blue-500 text-white shadow-sm'
+                      : 'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950 dark:text-blue-300 dark:hover:bg-blue-900'
+                  }`}
+                >
+                  Chat
+                </button>
+                <button
+                  onClick={() => setFilterSource('transcript')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    filterSource === 'transcript'
+                      ? 'bg-purple-500 text-white shadow-sm'
+                      : 'bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-950 dark:text-purple-300 dark:hover:bg-purple-900'
+                  }`}
+                >
+                  Transcript
+                </button>
+                <button
+                  onClick={() => setFilterSource('takeaways')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    filterSource === 'takeaways'
+                      ? 'bg-green-500 text-white shadow-sm'
+                      : 'bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-950 dark:text-green-300 dark:hover:bg-green-900'
+                  }`}
+                >
+                  Takeaways
+                </button>
+              </div>
+
+              {/* Sort Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2 h-9">
+                    <ArrowUpDown className="w-3.5 h-3.5" />
+                    <span className="text-xs">
+                      {sortBy === 'recent' ? 'Most Recent' : sortBy === 'oldest' ? 'Oldest First' : 'By Video'}
+                    </span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-40">
+                  <DropdownMenuItem onClick={() => setSortBy('recent')}>
+                    Most Recent
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSortBy('oldest')}>
+                    Oldest First
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSortBy('video')}>
+                    By Video
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant={filterSource === 'all' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setFilterSource('all')}
-            >
-              All
-            </Button>
-            <Button
-              variant={filterSource === 'chat' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setFilterSource('chat')}
-            >
-              Chat
-            </Button>
-            <Button
-              variant={filterSource === 'transcript' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setFilterSource('transcript')}
-            >
-              Transcript
-            </Button>
-            <Button
-              variant={filterSource === 'takeaways' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setFilterSource('takeaways')}
-            >
-              Takeaways
-            </Button>
-          </div>
-        </div>
-      )}
+        )}
 
       {/* Notes Content */}
       {totalNotes === 0 ? (
-        <div className="text-center py-12">
-          <NotebookPen className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
-          <p className="text-lg text-muted-foreground mb-4">
-            You haven't saved any notes yet.
+        <div className="text-center py-16">
+          <div className="inline-flex p-4 rounded-full bg-muted/50 mb-4">
+            <NotebookPen className="w-12 h-12 text-muted-foreground/50" />
+          </div>
+          <p className="text-lg font-medium text-foreground mb-2">
+            No notes yet
           </p>
-          <p className="text-sm text-muted-foreground mb-6">
+          <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
             Highlight text from transcripts or chat messages to create notes while analyzing videos.
           </p>
           <Link href="/">
-            <Button>
+            <Button className="gap-2">
+              <Video className="w-4 h-4" />
               Analyze a Video
             </Button>
           </Link>
         </div>
       ) : filteredCount === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-lg text-muted-foreground">
-            No notes match your search or filter.
+        <div className="text-center py-16">
+          <div className="inline-flex p-4 rounded-full bg-muted/50 mb-4">
+            <Search className="w-12 h-12 text-muted-foreground/50" />
+          </div>
+          <p className="text-lg font-medium text-foreground mb-2">
+            No results found
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Try adjusting your search or filters
           </p>
         </div>
       ) : (
-        <ScrollArea className="h-[calc(100vh-300px)]">
-          <div className="space-y-8">
-            {Object.entries(groupedNotes).map(([videoId, { video, notes: videoNotes }]) => (
-              <div key={videoId} className="space-y-4">
-                {/* Video Header */}
-                <Link href={`/analyze/${videoId}`}>
-                  <Card className="p-4 hover:bg-accent/50 transition-colors cursor-pointer">
-                    <div className="flex gap-4">
+        /* Padding wrapper to prevent shadow cutoff */
+        <div className="px-1 pb-4">
+          <div className="space-y-6">
+              {Object.entries(groupedNotes).map(([videoId, { video, notes: videoNotes }]) => (
+                <Card
+                  key={videoId}
+                  className="overflow-hidden border-border/60 shadow-md hover:border-primary/30 hover:shadow-lg transition-all duration-200"
+                >
+                  {/* Video Header Section */}
+                  <Link href={`/analyze/${videoId}`} className="block group">
+                    <div className="flex gap-4 p-4 hover:bg-muted/10 transition-colors">
                       {video?.thumbnailUrl && (
-                        <div className="relative w-40 h-24 flex-shrink-0 rounded overflow-hidden bg-muted">
+                        <div className="relative w-28 h-[70px] flex-shrink-0 rounded-md overflow-hidden bg-muted shadow-sm">
                           <Image
                             src={video.thumbnailUrl}
                             alt={video.title}
                             fill
                             className="object-cover"
-                            sizes="160px"
+                            sizes="112px"
                           />
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-lg line-clamp-1 mb-1">
+                        <h3 className="font-semibold text-base line-clamp-1 mb-1 group-hover:text-primary transition-colors">
                           {video?.title || 'Unknown Video'}
                         </h3>
                         <p className="text-sm text-muted-foreground line-clamp-1 mb-2">
                           {video?.author || 'Unknown Author'}
                         </p>
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
                           {video?.duration && (
-                            <span>{formatDuration(video.duration)}</span>
+                            <span className="flex items-center gap-1">
+                              <Video className="w-3 h-3" />
+                              {formatDuration(video.duration)}
+                            </span>
                           )}
-                          <span>{videoNotes.length} {videoNotes.length === 1 ? 'note' : 'notes'}</span>
+                          <span className="flex items-center gap-1">
+                            <NotebookPen className="w-3 h-3" />
+                            {videoNotes.length} {videoNotes.length === 1 ? 'note' : 'notes'}
+                          </span>
                         </div>
                       </div>
                     </div>
-                  </Card>
-                </Link>
+                  </Link>
 
-                {/* Notes List */}
-                <div className="space-y-2.5 pl-4">
-                  {videoNotes.map((note) => {
-                    const selectedText = note.metadata?.selectedText?.trim();
-                    const text = note.text ?? '';
+                  {/* Divider */}
+                  <div className="border-t border-border/50" />
 
-                    let quoteText = '';
-                    let additionalText = '';
+                  {/* Notes List */}
+                  <div className="divide-y divide-border/40">
+                    {videoNotes.map((note, index) => {
+                      const selectedText = note.metadata?.selectedText?.trim();
+                      const text = note.text ?? '';
 
-                    if (selectedText) {
-                      quoteText = selectedText;
-                      if (text.startsWith(selectedText)) {
-                        additionalText = text.slice(selectedText.length).trimStart();
-                      } else if (text !== selectedText) {
-                        additionalText = text;
+                      let quoteText = '';
+                      let additionalText = '';
+
+                      if (selectedText) {
+                        quoteText = selectedText;
+                        if (text.startsWith(selectedText)) {
+                          additionalText = text.slice(selectedText.length).trimStart();
+                        } else if (text !== selectedText) {
+                          additionalText = text;
+                        }
+                      } else {
+                        const parts = text.split(/\n{2,}/);
+                        quoteText = parts[0] ?? '';
+                        additionalText = parts.slice(1).join('\n\n');
                       }
-                    } else {
-                      const parts = text.split(/\n{2,}/);
-                      quoteText = parts[0] ?? '';
-                      additionalText = parts.slice(1).join('\n\n');
-                    }
 
-                    return (
-                      <Card key={note.id} className="group p-3.5 bg-white hover:bg-neutral-50/60 border-none shadow-none transition-colors">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1 space-y-2">
-                            {/* Source Badge */}
-                            <div className="flex items-center gap-2">
-                              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full uppercase tracking-wide ${getSourceColor(note.source)}`}>
-                                {getSourceLabel(note.source)}
-                              </span>
-                              {note.metadata?.timestampLabel && (
-                                <span className="text-[10px] text-muted-foreground">
-                                  {note.metadata.timestampLabel}
+                      return (
+                        <div
+                          key={note.id}
+                          className="group p-4 first:pt-0 last:pb-0 hover:bg-accent/20 transition-colors"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 space-y-2.5">
+                              {/* Source Badge and Timestamp */}
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider ${getSourceColor(note.source)}`}>
+                                  {getSourceLabel(note.source)}
                                 </span>
+                                {note.metadata?.timestampLabel && (
+                                  <span className="text-[10px] font-medium text-muted-foreground bg-muted/50 px-2 py-1 rounded">
+                                    {note.metadata.timestampLabel}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Note Content */}
+                              {quoteText && (
+                                <div className="border-l-2 border-primary/40 pl-3 py-1 rounded-r text-sm text-foreground/90 leading-relaxed">
+                                  <ReactMarkdown
+                                    remarkPlugins={[remarkGfm]}
+                                    components={markdownComponents}
+                                  >
+                                    {quoteText}
+                                  </ReactMarkdown>
+                                </div>
                               )}
+                              {additionalText && (
+                                <div className="text-sm leading-relaxed text-foreground/95 pt-1">
+                                  <ReactMarkdown
+                                    remarkPlugins={[remarkGfm]}
+                                    components={markdownComponents}
+                                  >
+                                    {additionalText}
+                                  </ReactMarkdown>
+                                </div>
+                              )}
+
+                              {/* Created Date */}
+                              <div className="text-[11px] text-muted-foreground/80 font-medium pt-1">
+                                {new Date(note.createdAt).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                })}
+                              </div>
                             </div>
 
-                            {/* Note Content */}
-                            {quoteText && (
-                              <div className="border-l-2 border-primary/40 pl-3 py-1 rounded-r text-sm text-foreground/90 leading-relaxed">
-                                <ReactMarkdown
-                                  remarkPlugins={[remarkGfm]}
-                                  components={markdownComponents}
+                            {/* Delete Button */}
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    handleDeleteNote(note.id);
+                                  }}
+                                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
+                                  aria-label="Delete note"
                                 >
-                                  {quoteText}
-                                </ReactMarkdown>
-                              </div>
-                            )}
-                            {additionalText && (
-                              <div className="text-sm leading-relaxed text-foreground">
-                                <ReactMarkdown
-                                  remarkPlugins={[remarkGfm]}
-                                  components={markdownComponents}
-                                >
-                                  {additionalText}
-                                </ReactMarkdown>
-                              </div>
-                            )}
-
-                            {/* Timestamp */}
-                            <div className="text-[11px] text-muted-foreground">
-                              {new Date(note.createdAt).toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric',
-                                hour: 'numeric',
-                                minute: '2-digit',
-                              })}
-                            </div>
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="left">
+                                <span className="text-xs">Delete note</span>
+                              </TooltipContent>
+                            </Tooltip>
                           </div>
-
-                          {/* Delete Button */}
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDeleteNote(note.id)}
-                                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <span className="text-xs">Delete note</span>
-                            </TooltipContent>
-                          </Tooltip>
                         </div>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+                      );
+                    })}
+                  </div>
+                </Card>
+              ))}
           </div>
-        </ScrollArea>
+        </div>
       )}
       </div>
     </TooltipProvider>

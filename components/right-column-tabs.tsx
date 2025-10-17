@@ -34,7 +34,6 @@ interface RightColumnTabsProps {
   onRetryTakeaways?: () => void;
   notes?: Note[];
   onSaveNote?: (payload: { text: string; source: NoteSource; sourceId?: string | null; metadata?: NoteMetadata | null }) => Promise<void>;
-  onDeleteNote?: (noteId: string) => Promise<void>;
   onTakeNoteFromSelection?: (payload: SelectionActionPayload) => void;
   editingNote?: EditingNote | null;
   onSaveEditingNote?: (noteText: string) => void;
@@ -67,7 +66,6 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   onRetryTakeaways,
   notes,
   onSaveNote,
-  onDeleteNote,
   onTakeNoteFromSelection,
   editingNote,
   onSaveEditingNote,
@@ -234,7 +232,6 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
           <TooltipProvider delayDuration={0}>
             <NotesPanel
               notes={notes}
-              onDeleteNote={onDeleteNote}
               editingNote={editingNote}
               onSaveEditingNote={onSaveEditingNote}
               onCancelEditing={onCancelEditing}

@@ -16,7 +16,7 @@ import { Topic, TranscriptSegment, VideoInfo, Citation, PlaybackCommand, Note, N
 import { normalizeWhitespace } from "@/lib/quote-matcher";
 import { hydrateTopicsWithTranscript, normalizeTranscript } from "@/lib/topic-utils";
 import { SelectionActionPayload, EXPLAIN_SELECTION_EVENT } from "@/components/selection-actions";
-import { fetchNotes, saveNote, deleteNote } from "@/lib/notes-client";
+import { fetchNotes, saveNote } from "@/lib/notes-client";
 import { EditingNote } from "@/components/notes-panel";
 
 // Playback context for tracking what's currently playing
@@ -1400,17 +1400,6 @@ export default function AnalyzePage() {
     }
   }, [videoId]);
 
-  const handleDeleteNote = useCallback(async (noteId: string) => {
-    try {
-      await deleteNote(noteId);
-      setNotes((prev) => prev.filter((note) => note.id !== noteId));
-      toast.success("Note deleted");
-    } catch (error) {
-      console.error("Failed to delete note", error);
-      toast.error("Failed to delete note");
-    }
-  }, []);
-
   const handleTakeNoteFromSelection = useCallback((payload: SelectionActionPayload) => {
     // Switch to notes tab
     rightColumnTabsRef.current?.switchToNotes();
@@ -1588,7 +1577,6 @@ export default function AnalyzePage() {
                   onRetryTakeaways={handleRetryTakeaways}
                   notes={notes}
                   onSaveNote={handleSaveNote}
-                  onDeleteNote={handleDeleteNote}
                   onTakeNoteFromSelection={handleTakeNoteFromSelection}
                   editingNote={editingNote}
                   onSaveEditingNote={handleSaveEditingNote}

@@ -34,7 +34,7 @@ export function NoteEditor({ selectedText, metadata, onSave, onCancel }: NoteEdi
   };
 
   return (
-    <div className="relative rounded-md bg-neutral-100 border border-[#ebecee] p-4 animate-in fade-in duration-200 w-full">
+    <div className="relative rounded-md bg-neutral-100 border border-[#ebecee] p-4 animate-in fade-in duration-200 w-full max-w-full overflow-hidden">
       {/* Quote block inside */}
       <div className="border-l-2 border-primary/40 pl-3 pr-3 py-1.5 rounded-r mb-3">
         <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap break-words">
@@ -48,7 +48,7 @@ export function NoteEditor({ selectedText, metadata, onSave, onCancel }: NoteEdi
         onChange={(e) => setAdditionalText(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder=""
-        className="resize-none text-xs bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 pr-12 min-h-[80px] px-2 py-1"
+        className="resize-none text-xs bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 pr-12 min-h-[80px] px-2 py-1 max-w-full"
         rows={3}
         autoFocus
       />
