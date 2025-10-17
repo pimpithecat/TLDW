@@ -218,7 +218,7 @@ export function NotesPanel({ notes = [], onDeleteNote, editingNote, onSaveEditin
                           <div className="flex flex-wrap items-center gap-3">
                             {inlineMetadata}
                           </div>
-                          {shouldShowSegmentInfo && (
+                          {shouldShowSegmentInfo && note.metadata?.transcript && note.metadata.transcript.segmentIndex !== undefined && (
                             <span className="text-muted-foreground/80">
                               Segment #{note.metadata.transcript.segmentIndex + 1}
                             </span>
