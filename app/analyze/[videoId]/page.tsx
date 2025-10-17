@@ -40,6 +40,8 @@ import { useAuth } from "@/contexts/auth-context";
 import { backgroundOperation, AbortManager } from "@/lib/promise-utils";
 import { toast } from "sonner";
 
+const GUEST_LIMIT_MESSAGE = "You've used today's free analysis. Sign in to keep going.";
+
 function buildApiErrorMessage(errorData: unknown, fallback: string): string {
   if (!errorData || typeof errorData !== "object") {
     return fallback;
@@ -142,6 +144,7 @@ export default function AnalyzePage() {
     resetAt: Date | null;
   }>({ remaining: -1, resetAt: null });
   const [authLimitReached, setAuthLimitReached] = useState(false);
+  const hasRedirectedForLimit = useRef(false);
 
   // Memoize processVideo to prevent infinite loops
   const processVideoMemo = useCallback(
@@ -235,12 +238,47 @@ export default function AnalyzePage() {
   }, []);
 
   // Store current video data in sessionStorage before auth
-  const storeCurrentVideoForAuth = () => {
-    if (videoId && !user) {
-      sessionStorage.setItem('pendingVideoId', videoId);
-      console.log('Stored video for post-auth linking:', videoId);
+  const storeCurrentVideoForAuth = useCallback((id?: string) => {
+    const targetVideoId = id ?? videoId;
+    if (targetVideoId && !user) {
+      try {
+        sessionStorage.setItem('pendingVideoId', targetVideoId);
+        console.log('Stored video for post-auth linking:', targetVideoId);
+      } catch (error) {
+        console.error('Failed to persist pending video ID:', error);
+      }
     }
-  };
+  }, [user, videoId]);
+
+  const redirectToAuthForLimit = useCallback(
+    (message?: string, pendingVideoId?: string) => {
+      if (hasRedirectedForLimit.current) {
+        return;
+      }
+
+      hasRedirectedForLimit.current = true;
+
+      const trimmedMessage = typeof message === "string" && message.trim().length > 0
+        ? message.trim()
+        : GUEST_LIMIT_MESSAGE;
+
+      const targetVideoId = pendingVideoId ?? videoId ?? routeVideoId ?? null;
+      if (targetVideoId) {
+        storeCurrentVideoForAuth(targetVideoId);
+      }
+
+      if (trimmedMessage) {
+        try {
+          sessionStorage.setItem('limitRedirectMessage', trimmedMessage);
+        } catch (error) {
+          console.error('Failed to persist limit redirect message:', error);
+        }
+      }
+
+      router.push('/?auth=limit');
+    },
+    [routeVideoId, router, storeCurrentVideoForAuth, videoId]
+  );
 
   // Check for pending video linking after auth
   const checkPendingVideoLink = async (retryCount = 0) => {
@@ -395,7 +433,7 @@ export default function AnalyzePage() {
   }, [routeVideoId, urlParam, cachedParam, user, processVideoMemo, normalizedUrl]);
 
   // Check if user can generate based on server-side rate limits
-  const checkGenerationLimit = (): boolean => {
+  const checkGenerationLimit = (pendingVideoId?: string): boolean => {
     if (user) {
       if (authLimitReached) {
         toast.error('Daily limit reached. Try again tomorrow!');
@@ -405,72 +443,62 @@ export default function AnalyzePage() {
     }
 
     if (rateLimitInfo.remaining === 0) {
-      // Show auth modal when rate limited
-      setAuthModalOpen(true);
-      toast.error('Daily limit reached. Sign in for more generations!');
+      redirectToAuthForLimit(undefined, pendingVideoId);
       return false;
     }
     return true;
   };
 
   const processVideo = async (url: string, isCached: boolean = false) => {
-    // Check generation limit for anonymous users
-    if (!checkGenerationLimit()) {
-      // Store current video before showing auth modal
-      if (videoId) {
-        storeCurrentVideoForAuth();
-      }
-      return;
-    }
-
-    // Cleanup any pending requests from previous analysis
-    abortManager.current.cleanup();
-
-    // For cached videos, skip the analyzing state and go directly to loading
-    if (isCached) {
-      setPageState('LOADING_CACHED');
-    } else {
-      setPageState('ANALYZING_NEW');
-      setLoadingStage('fetching');
-    }
-
-    setError("");
-    setTopics([]);
-    setBaseTopics([]);
-    setTranscript([]);
-    setThemes([]);
-    setSelectedTheme(null);
-    setThemeTopicsMap({});
-    setThemeCandidateMap({});
-    setUsedTopicKeys(new Set());
-    setThemeError(null);
-    setIsLoadingThemeTopics(false);
-    setSelectedTopic(null);
-    setCurrentTime(0);
-    setVideoDuration(0);
-    setCitationHighlight(null);
-    setVideoInfo(null);
-    setVideoPreview("");
-
-    // Reset takeaways-related states
-    setTakeawaysContent(null);
-    setTakeawaysError("");
-    setShowTakeawaysTab(false);
-
-    // Reset cached suggested questions
-    setCachedSuggestedQuestions(null);
-
     try {
       const extractedVideoId = extractVideoId(url);
       if (!extractedVideoId) {
         throw new Error("Invalid YouTube URL");
       }
 
-      // Store video ID immediately for potential post-auth linking
-      if (!user) {
-        sessionStorage.setItem('pendingVideoId', extractedVideoId);
-        console.log('Stored video ID for potential post-auth linking:', extractedVideoId);
+      if (!checkGenerationLimit(extractedVideoId)) {
+        return;
       }
+
+      // Cleanup any pending requests from previous analysis
+      abortManager.current.cleanup();
+
+      // For cached videos, skip the analyzing state and go directly to loading
+      if (isCached) {
+        setPageState('LOADING_CACHED');
+      } else {
+        setPageState('ANALYZING_NEW');
+        setLoadingStage('fetching');
+      }
+
+      setError("");
+      setTopics([]);
+      setBaseTopics([]);
+      setTranscript([]);
+      setThemes([]);
+      setSelectedTheme(null);
+      setThemeTopicsMap({});
+      setThemeCandidateMap({});
+      setUsedTopicKeys(new Set());
+      setThemeError(null);
+      setIsLoadingThemeTopics(false);
+      setSelectedTopic(null);
+      setCurrentTime(0);
+      setVideoDuration(0);
+      setCitationHighlight(null);
+      setVideoInfo(null);
+      setVideoPreview("");
+
+      // Reset takeaways-related states
+      setTakeawaysContent(null);
+      setTakeawaysError("");
+      setShowTakeawaysTab(false);
+
+      // Reset cached suggested questions
+      setCachedSuggestedQuestions(null);
+
+      // Store video ID immediately for potential post-auth linking
+      storeCurrentVideoForAuth(extractedVideoId);
 
       // Only set videoId if it's different to prevent unnecessary re-renders
       if (videoId !== extractedVideoId) {
@@ -526,10 +554,7 @@ export default function AnalyzePage() {
           }
 
           // Store video ID for potential post-auth linking (for cached videos)
-          if (!user) {
-            sessionStorage.setItem('pendingVideoId', extractedVideoId);
-            console.log('Stored cached video ID for potential post-auth linking:', extractedVideoId);
-          }
+          storeCurrentVideoForAuth(extractedVideoId);
 
           // Set page state back to idle
           setPageState('IDLE');
@@ -788,6 +813,16 @@ export default function AnalyzePage() {
 
         if (!topicsRes.ok) {
           const errorData = await topicsRes.json().catch(() => ({ error: "Unknown error" }));
+          const requiresAuth = Boolean((errorData as any)?.requiresAuth);
+
+          if (topicsRes.status === 429 && requiresAuth) {
+            redirectToAuthForLimit(
+              typeof (errorData as any)?.message === "string" ? (errorData as any).message : undefined,
+              extractedVideoId
+            );
+            return;
+          }
+
           const message = buildApiErrorMessage(errorData, "Failed to generate topics");
           throw new Error(message);
         }

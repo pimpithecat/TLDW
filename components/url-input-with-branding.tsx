@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, ArrowUp, Link as LinkIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -19,19 +19,11 @@ export function UrlInputWithBranding({ onSubmit, isLoading = false, initialUrl }
   const [url, setUrl] = useState(() => initialUrl ?? "");
   const [error, setError] = useState("");
   const [isFocused, setIsFocused] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const pendingInitialRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (initialUrl === undefined) return;
-    if (isEditing) {
-      pendingInitialRef.current = initialUrl;
-      return;
-    }
-
     setUrl((current) => (current === initialUrl ? current : initialUrl));
-    pendingInitialRef.current = null;
-  }, [initialUrl, isEditing]);
+  }, [initialUrl]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,15 +83,9 @@ export function UrlInputWithBranding({ onSubmit, isLoading = false, initialUrl }
                 onChange={(e) => setUrl(e.target.value)}
                 onFocus={() => {
                   setIsFocused(true);
-                  setIsEditing(true);
                 }}
                 onBlur={() => {
                   setIsFocused(false);
-                  setIsEditing(false);
-                  if (pendingInitialRef.current !== null) {
-                    setUrl(pendingInitialRef.current);
-                    pendingInitialRef.current = null;
-                  }
                 }}
                 placeholder="Paste Youtube URL link here..."
                 className="flex-1 border-0 bg-transparent text-[14px] text-[#989999] placeholder:text-[#989999] focus:outline-none min-w-0"

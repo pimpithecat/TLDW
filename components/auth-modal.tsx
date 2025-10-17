@@ -107,12 +107,10 @@ export function AuthModal({ open, onOpenChange, onSuccess, trigger = 'manual', c
     if (trigger === 'generation-limit') {
       return {
         title: 'Sign up to continue',
-        description: 'You\'ve analyzed your first video! Create a free account to continue analyzing videos and save your insights.',
+        description: 'You\'ve used today\'s free analysis! Create a free account to keep going.',
         benefits: [
-          'Unlimited video analysis',
-          'Save and access your analyzed videos anytime',
-          'Build your personal knowledge library',
-          'Resume where you left off',
+          '5 video generations per day',
+          'Save analyzed videos, notes, and highlights',
         ],
       }
     }

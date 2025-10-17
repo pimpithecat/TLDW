@@ -123,6 +123,18 @@ async function handler(req: NextRequest) {
     const rateLimitResult = await RateLimiter.check('video-analysis', rateLimitConfig);
 
     if (!rateLimitResult.allowed) {
+      if (!user) {
+        return NextResponse.json(
+          {
+            error: 'Sign in to keep analyzing videos',
+            message: 'You\'ve used today\'s free analysis. Create a free account for unlimited video breakdowns.',
+            requiresAuth: true,
+            redirectTo: '/?auth=limit'
+          },
+          { status: 429 }
+        );
+      }
+
       return rateLimitResponse(rateLimitResult) || NextResponse.json(
         { error: 'Rate limit exceeded' },
         { status: 429 }
