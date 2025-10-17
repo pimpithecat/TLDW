@@ -22,6 +22,7 @@ import { useModePreference } from "@/lib/hooks/use-mode-preference";
 
 // Page state for better UX
 type PageState = 'IDLE' | 'ANALYZING_NEW' | 'LOADING_CACHED';
+type AuthModalTrigger = 'generation-limit' | 'save-video' | 'manual' | 'save-note';
 import { extractVideoId } from "@/lib/utils";
 import { useElapsedTimer } from "@/lib/hooks/use-elapsed-timer";
 import { Loader2 } from "lucide-react";
@@ -129,6 +130,7 @@ export default function AnalyzePage() {
   // Auth and generation limit state
   const { user } = useAuth();
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalTrigger, setAuthModalTrigger] = useState<AuthModalTrigger>('generation-limit');
   const [rateLimitInfo, setRateLimitInfo] = useState<{
     remaining: number;
     resetAt: Date | null;
@@ -206,6 +208,13 @@ export default function AnalyzePage() {
       }
     }
   }, [user, videoId]);
+
+  const promptSignInForNotes = useCallback(() => {
+    if (user) return;
+    storeCurrentVideoForAuth();
+    setAuthModalTrigger('save-note');
+    setAuthModalOpen(true);
+  }, [storeCurrentVideoForAuth, user, setAuthModalTrigger]);
 
   const redirectToAuthForLimit = useCallback(
     (message?: string, pendingVideoId?: string) => {
@@ -1318,6 +1327,10 @@ export default function AnalyzePage() {
 
   const handleSaveNote = useCallback(async ({ text, source, sourceId, metadata }: { text: string; source: NoteSource; sourceId?: string | null; metadata?: NoteMetadata | null }) => {
     if (!videoId) return;
+    if (!user) {
+      promptSignInForNotes();
+      return;
+    }
 
     try {
       const note = await saveNote({
@@ -1333,9 +1346,14 @@ export default function AnalyzePage() {
       console.error("Failed to save note", error);
       toast.error("Failed to save note");
     }
-  }, [videoId]);
+  }, [videoId, user, promptSignInForNotes]);
 
   const handleTakeNoteFromSelection = useCallback((payload: SelectionActionPayload) => {
+    if (!user) {
+      promptSignInForNotes();
+      return;
+    }
+
     // Switch to notes tab
     rightColumnTabsRef.current?.switchToNotes();
 
@@ -1345,7 +1363,7 @@ export default function AnalyzePage() {
       metadata: payload.metadata ?? null,
       source: payload.source,
     });
-  }, []);
+  }, [promptSignInForNotes, user]);
 
   const handleSaveEditingNote = useCallback(async (noteText: string) => {
     if (!editingNote || !videoId) return;
@@ -1522,6 +1540,8 @@ export default function AnalyzePage() {
                   editingNote={editingNote}
                   onSaveEditingNote={handleSaveEditingNote}
                   onCancelEditing={handleCancelEditing}
+                  isAuthenticated={!!user}
+                  onRequestSignIn={promptSignInForNotes}
                 />
               </div>
             </div>
@@ -1536,9 +1556,12 @@ export default function AnalyzePage() {
           if (open && videoId && !user) {
             storeCurrentVideoForAuth();
           }
+          if (!open) {
+            setAuthModalTrigger('generation-limit');
+          }
           setAuthModalOpen(open);
         }}
-        trigger="generation-limit"
+        trigger={authModalTrigger}
         onSuccess={() => {
           // Refresh rate limit info after successful auth
           checkRateLimit();

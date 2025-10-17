@@ -15,7 +15,7 @@ interface AuthModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess?: () => void
-  trigger?: 'generation-limit' | 'save-video' | 'manual'
+  trigger?: 'generation-limit' | 'save-video' | 'manual' | 'save-note'
   currentVideoId?: string | null
 }
 
@@ -104,29 +104,43 @@ export function AuthModal({ open, onOpenChange, onSuccess, trigger = 'manual', c
   }
 
   const getModalContent = () => {
-    if (trigger === 'generation-limit') {
-      return {
-        title: 'Sign up to continue',
-        description: 'You\'ve used today\'s free analysis! Create a free account to keep going.',
-        benefits: [
-          '5 video generations per day',
-          'Save analyzed videos, notes, and highlights',
-        ],
-      }
-    }
-
-    return {
-      title: 'Sign in to TLDW',
-      description: 'Create an account or sign in to save your video analyses and access them anytime.',
-      benefits: [
-        'Save your analyzed videos',
-        'Access your video library from any device',
-        'Track your learning progress',
-      ],
+    switch (trigger) {
+      case 'generation-limit':
+        return {
+          title: 'Sign up to continue',
+          description: 'You\'ve used today\'s free analysis! Create a free account to keep going.',
+          benefits: [
+            '5 video generations per day',
+            'Save analyzed videos, notes, and highlights',
+          ],
+          showBenefitsCard: true,
+        }
+      case 'save-note':
+        return {
+          title: 'Sign in to save notes',
+          description: 'Capture key moments and keep your highlights in one place.',
+          benefits: [
+            'Save transcript snippets with one click',
+            'Organize notes across every video',
+            'Access your highlights from any device',
+          ],
+          showBenefitsCard: true,
+        }
+      default:
+        return {
+          title: 'Sign in to TLDW',
+          description: 'Create an account or sign in to save your video analyses and access them anytime.',
+          benefits: [
+            'Save your analyzed videos',
+            'Access your video library from any device',
+            'Track your learning progress',
+          ],
+          showBenefitsCard: false,
+        }
     }
   }
 
-  const { title, description, benefits } = getModalContent()
+  const { title, description, benefits, showBenefitsCard } = getModalContent()
 
   if (success) {
     return (
@@ -163,7 +177,7 @@ export function AuthModal({ open, onOpenChange, onSuccess, trigger = 'manual', c
           </DialogDescription>
         </DialogHeader>
 
-        {trigger === 'generation-limit' && (
+        {showBenefitsCard && (
           <div className="bg-muted/50 rounded-lg p-4 space-y-2">
             <p className="text-sm font-medium">What you get with a free account:</p>
             <ul className="text-sm text-muted-foreground space-y-1">

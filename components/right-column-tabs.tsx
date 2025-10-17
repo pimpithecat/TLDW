@@ -38,6 +38,8 @@ interface RightColumnTabsProps {
   editingNote?: EditingNote | null;
   onSaveEditingNote?: (noteText: string) => void;
   onCancelEditing?: () => void;
+  isAuthenticated?: boolean;
+  onRequestSignIn?: () => void;
 }
 
 export interface RightColumnTabsHandle {
@@ -70,6 +72,8 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   editingNote,
   onSaveEditingNote,
   onCancelEditing,
+  isAuthenticated,
+  onRequestSignIn,
 }, ref) => {
   const [activeTab, setActiveTab] = useState<"transcript" | "takeaways" | "notes">(showTakeawaysTab ? "takeaways" : "transcript");
   const [hasShownTakeaways, setHasShownTakeaways] = useState<boolean>(!!showTakeawaysTab);
@@ -236,6 +240,8 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
               editingNote={editingNote}
               onSaveEditingNote={onSaveEditingNote}
               onCancelEditing={onCancelEditing}
+              isAuthenticated={isAuthenticated}
+              onSignInClick={onRequestSignIn}
             />
           </TooltipProvider>
         </div>
