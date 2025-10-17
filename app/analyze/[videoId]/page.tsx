@@ -15,7 +15,7 @@ import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { Topic, TranscriptSegment, VideoInfo, Citation, PlaybackCommand, Note, NoteSource, NoteMetadata, TopicCandidate } from "@/lib/types";
 import { normalizeWhitespace } from "@/lib/quote-matcher";
 import { hydrateTopicsWithTranscript, normalizeTranscript } from "@/lib/topic-utils";
-import { SelectionActionPayload } from "@/components/selection-actions";
+import { SelectionActionPayload, EXPLAIN_SELECTION_EVENT } from "@/components/selection-actions";
 import { fetchNotes, saveNote, deleteNote } from "@/lib/notes-client";
 import { EditingNote } from "@/components/notes-panel";
 
@@ -1367,6 +1367,19 @@ export default function AnalyzePage() {
       })
       .finally(() => setIsLoadingNotes(false));
   }, [videoId, user]);
+
+  // Auto-switch to Takeaways tab when Explain is triggered from transcript
+  useEffect(() => {
+    const handleExplainFromSelection = () => {
+      // Switch to takeaways tab when explain is triggered
+      rightColumnTabsRef.current?.switchToTakeaways?.();
+    };
+
+    window.addEventListener(EXPLAIN_SELECTION_EVENT, handleExplainFromSelection as EventListener);
+    return () => {
+      window.removeEventListener(EXPLAIN_SELECTION_EVENT, handleExplainFromSelection as EventListener);
+    };
+  }, []);
 
   const handleSaveNote = useCallback(async ({ text, source, sourceId, metadata }: { text: string; source: NoteSource; sourceId?: string | null; metadata?: NoteMetadata | null }) => {
     if (!videoId) return;

@@ -34,7 +34,6 @@ export function TranscriptViewer({
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
-  const [hoveredSegment, setHoveredSegment] = useState<number | null>(null);
   const currentSegmentRef = useRef<HTMLDivElement | null>(null);
   const [showScrollToCurrentButton, setShowScrollToCurrentButton] = useState(false);
   const lastUserScrollTime = useRef<number>(0);
@@ -360,16 +359,6 @@ export function TranscriptViewer({
     });
   };
 
-  const handleSegmentClick = useCallback(
-    (segment: TranscriptSegment, isTopicHighlighted: boolean, isCitationHighlighted: boolean) => {
-      // Check if this segment is within the current highlight reel
-      const isWithinHighlightReel = selectedTopic ? isTopicHighlighted : undefined;
-      // Check if this segment is within a citation highlight
-      const isWithinCitationHighlight = citationHighlight ? isCitationHighlighted : undefined;
-      onTimestampClick(segment.start, undefined, false, undefined, isWithinHighlightReel, isWithinCitationHighlight);
-    },
-    [onTimestampClick, selectedTopic, citationHighlight]
-  );
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -521,16 +510,12 @@ export function TranscriptViewer({
                 const highlightedText = getHighlightedText(segment, index);
                 const isCurrent = index === currentSegmentIndex;
                 getSegmentTopic(segment);
-                const isHovered = hoveredSegment === index;
                 
                 const hasHighlight = highlightedText !== null;
-                const hasCitationHighlight = citationHighlight && highlightedText !== null;
-                const hasTopicHighlight = selectedTopic && highlightedText !== null;
 
             return (
-              <Tooltip key={index} delayDuration={300}>
-                <TooltipTrigger asChild>
                   <div
+                    key={index}
                     data-segment-index={index}
                     ref={(el) => {
                       // Store refs properly
@@ -544,13 +529,8 @@ export function TranscriptViewer({
                       }
                     }}
                     className={cn(
-                      "group relative px-2.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer select-none",
-                      "hover:bg-neutral-100/50",
-                      isHovered && "bg-neutral-100"
+                      "group relative px-2.5 py-1.5 rounded-xl transition-all duration-200"
                     )}
-                    onClick={() => handleSegmentClick(segment, hasTopicHighlight || false, hasCitationHighlight || false)}
-                    onMouseEnter={() => setHoveredSegment(index)}
-                    onMouseLeave={() => setHoveredSegment(null)}
                   >
                     {/* Transcript text with partial highlighting */}
                     <p 
@@ -596,11 +576,6 @@ export function TranscriptViewer({
                     </p>
 
                   </div>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="font-mono text-[11px]">
-                  {formatDuration(segment.start)} - {formatDuration(segment.start + segment.duration)}
-                </TooltipContent>
-              </Tooltip>
             );
           });
             })()

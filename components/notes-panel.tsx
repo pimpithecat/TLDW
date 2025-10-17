@@ -9,6 +9,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Trash2, Clock } from "lucide-react";
 import { NoteEditor } from "@/components/note-editor";
 
+function formatDateOnly(dateString: string): string {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: 'numeric', 
+    year: 'numeric' 
+  });
+}
+
 const markdownComponents = {
   p: ({ children }: any) => (
     <p className="mb-2 last:mb-0 whitespace-pre-wrap">{children}</p>
@@ -113,7 +122,7 @@ export function NotesPanel({ notes = [], onDeleteNote, editingNote, onSaveEditin
 
   return (
     <ScrollArea className="h-full">
-      <div className="p-4 space-y-5">
+      <div className="p-4 space-y-5 w-full max-w-full overflow-hidden">
         {/* Note Editor - shown when editing */}
         {editingNote && onSaveEditingNote && onCancelEditing && (
           <NoteEditor
@@ -189,7 +198,7 @@ export function NotesPanel({ notes = [], onDeleteNote, editingNote, onSaveEditin
                               </span>
                             )}
                             <span>
-                              {new Date(note.createdAt).toLocaleString()}
+                              {formatDateOnly(note.createdAt)}
                             </span>
                           </div>
                           {note.metadata?.transcript?.segmentIndex !== undefined && (

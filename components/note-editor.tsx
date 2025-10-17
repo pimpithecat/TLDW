@@ -34,10 +34,10 @@ export function NoteEditor({ selectedText, metadata, onSave, onCancel }: NoteEdi
   };
 
   return (
-    <div className="relative rounded-[20px] bg-neutral-100 border border-[#ebecee] p-4 animate-in fade-in duration-200">
+    <div className="relative rounded-md bg-neutral-100 border border-[#ebecee] p-4 animate-in fade-in duration-200 w-full">
       {/* Quote block inside */}
       <div className="border-l-2 border-primary/40 pl-3 pr-3 py-1.5 rounded-r mb-3">
-        <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">
+        <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap break-words">
           {selectedText}
         </p>
       </div>
@@ -48,7 +48,7 @@ export function NoteEditor({ selectedText, metadata, onSave, onCancel }: NoteEdi
         onChange={(e) => setAdditionalText(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder=""
-        className="resize-none text-xs bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 pr-11 min-h-[80px] p-0"
+        className="resize-none text-xs bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 pr-12 min-h-[80px] px-2 py-1"
         rows={3}
         autoFocus
       />
@@ -57,7 +57,7 @@ export function NoteEditor({ selectedText, metadata, onSave, onCancel }: NoteEdi
       <Button
         onClick={handleSave}
         size="icon"
-        className="absolute right-2 bottom-2 rounded-full h-8 w-8"
+        className="absolute right-3 bottom-3 rounded-full h-8 w-8"
       >
         <Send className="w-3.5 h-3.5" />
       </Button>
