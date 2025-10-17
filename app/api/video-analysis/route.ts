@@ -119,7 +119,7 @@ async function handler(req: NextRequest) {
     }
 
     // Only apply rate limiting for NEW video analysis (not cached)
-    const rateLimitConfig = user ? RATE_LIMITS.AUTH_GENERATION : RATE_LIMITS.ANON_GENERATION;
+    const rateLimitConfig = user ? RATE_LIMITS.AUTH_VIDEO_GENERATION : RATE_LIMITS.ANON_GENERATION;
     const rateLimitResult = await RateLimiter.check('video-analysis', rateLimitConfig);
 
     if (!rateLimitResult.allowed) {

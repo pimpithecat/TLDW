@@ -11,7 +11,7 @@ async function handler(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
 
     // Use appropriate rate limit config based on auth status
-    const rateLimitConfig = user ? RATE_LIMITS.AUTH_GENERATION : RATE_LIMITS.ANON_GENERATION;
+    const rateLimitConfig = user ? RATE_LIMITS.AUTH_VIDEO_GENERATION : RATE_LIMITS.ANON_GENERATION;
 
     // Use the peek method to check rate limit without consuming it
     const rateLimitResult = await RateLimiter.peek('video-analysis', rateLimitConfig);

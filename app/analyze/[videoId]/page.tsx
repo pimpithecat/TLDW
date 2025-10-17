@@ -141,6 +141,7 @@ export default function AnalyzePage() {
     remaining: number;
     resetAt: Date | null;
   }>({ remaining: -1, resetAt: null });
+  const [authLimitReached, setAuthLimitReached] = useState(false);
 
   // Memoize processVideo to prevent infinite loops
   const processVideoMemo = useCallback(
@@ -344,9 +345,11 @@ export default function AnalyzePage() {
           remaining: data.remaining,
           resetAt: data.resetAt ? new Date(data.resetAt) : null
         });
+        setAuthLimitReached(Boolean(data.isAuthenticated && !data.canGenerate));
       }
     } catch (error) {
       console.error('Error checking rate limit:', error);
+      setAuthLimitReached(false);
     }
   };
 
@@ -393,7 +396,13 @@ export default function AnalyzePage() {
 
   // Check if user can generate based on server-side rate limits
   const checkGenerationLimit = (): boolean => {
-    if (user) return true; // Authenticated users have higher limits
+    if (user) {
+      if (authLimitReached) {
+        toast.error('Daily limit reached. Try again tomorrow!');
+        return false;
+      }
+      return true;
+    }
 
     if (rateLimitInfo.remaining === 0) {
       // Show auth modal when rate limited

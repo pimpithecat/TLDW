@@ -37,8 +37,11 @@ export default function RootLayout({
       >
         <AuthProvider>
           <div className="min-h-screen flex flex-col">
-            <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-end px-6 py-5">
-              <UserMenu />
+            <header className="pointer-events-none fixed top-0 left-0 right-0 z-50 flex items-center justify-end px-6 py-5">
+              {/* Keep the menu interactive while letting the page header beneath receive clicks */}
+              <div className="pointer-events-auto">
+                <UserMenu />
+              </div>
             </header>
             <main className="flex-1">
               {children}
