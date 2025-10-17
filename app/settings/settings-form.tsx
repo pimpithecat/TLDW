@@ -7,13 +7,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { User } from '@supabase/supabase-js'
-import { Loader2, Zap, Brain } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 import { toast } from 'sonner'
-import type { TopicGenerationMode } from '@/lib/types'
 
 interface Profile {
   id: string
@@ -23,27 +21,12 @@ interface Profile {
   created_at: string
   updated_at: string
   free_generations_used: number
-  topic_generation_mode: TopicGenerationMode | null
 }
 
 interface SettingsFormProps {
   user: User
   profile: Profile | null
   videoCount: number
-}
-
-const MODE_CARDS: Record<TopicGenerationMode, {
-  title: string
-  icon: React.ComponentType<{ className?: string }>
-}> = {
-  smart: {
-    title: 'Smart',
-    icon: Brain
-  },
-  fast: {
-    title: 'Fast',
-    icon: Zap
-  }
 }
 
 export default function SettingsForm({ user, profile, videoCount }: SettingsFormProps) {
@@ -54,18 +37,12 @@ export default function SettingsForm({ user, profile, videoCount }: SettingsForm
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [topicGenerationMode, setTopicGenerationMode] = useState<TopicGenerationMode>(
-    profile?.topic_generation_mode ?? 'smart'
-  )
 
   const [loading, setLoading] = useState(false)
 
   const hasProfileChanges = useMemo(() => {
-    return (
-      fullName !== (profile?.full_name || '') ||
-      topicGenerationMode !== (profile?.topic_generation_mode ?? 'smart')
-    )
-  }, [fullName, profile?.full_name, profile?.topic_generation_mode, topicGenerationMode])
+    return fullName !== (profile?.full_name || '')
+  }, [fullName, profile?.full_name])
 
   const handleUpdateProfile = async () => {
     if (!hasProfileChanges) {
@@ -78,7 +55,6 @@ export default function SettingsForm({ user, profile, videoCount }: SettingsForm
       .from('profiles')
       .update({
         full_name: fullName,
-        topic_generation_mode: topicGenerationMode,
         updated_at: new Date().toISOString(),
       })
       .eq('id', user.id)
@@ -151,42 +127,6 @@ export default function SettingsForm({ user, profile, videoCount }: SettingsForm
               onChange={(e) => setFullName(e.target.value)}
               placeholder="Enter your full name"
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="topic-mode" className="text-sm font-medium">Topic Generation Mode</Label>
-            <Select
-              value={topicGenerationMode}
-              onValueChange={(value) => setTopicGenerationMode(value as TopicGenerationMode)}
-            >
-              <SelectTrigger id="topic-mode" className="w-[200px]">
-                <SelectValue>
-                  {(() => {
-                    const config = MODE_CARDS[topicGenerationMode]
-                    const Icon = config.icon
-                    return (
-                      <div className="flex items-center gap-2">
-                        <Icon className="h-4 w-4" />
-                        <span>{config.title}</span>
-                      </div>
-                    )
-                  })()}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(MODE_CARDS).map(([value, config]) => {
-                  const Icon = config.icon
-                  return (
-                    <SelectItem key={value} value={value}>
-                      <div className="flex items-center gap-2">
-                        <Icon className="h-4 w-4" />
-                        <span>{config.title}</span>
-                      </div>
-                    </SelectItem>
-                  )
-                })}
-              </SelectContent>
-            </Select>
           </div>
         </CardContent>
         <CardFooter className="flex justify-end">

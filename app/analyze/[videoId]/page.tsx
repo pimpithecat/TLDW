@@ -18,6 +18,7 @@ import { hydrateTopicsWithTranscript, normalizeTranscript } from "@/lib/topic-ut
 import { SelectionActionPayload, EXPLAIN_SELECTION_EVENT } from "@/components/selection-actions";
 import { fetchNotes, saveNote } from "@/lib/notes-client";
 import { EditingNote } from "@/components/notes-panel";
+import { useModePreference } from "@/lib/hooks/use-mode-preference";
 
 // Playback context for tracking what's currently playing
 interface PlaybackContext {
@@ -80,6 +81,7 @@ export default function AnalyzePage() {
   const [pageState, setPageState] = useState<PageState>('IDLE');
   const hasAttemptedLinking = useRef(false);
   const [loadingStage, setLoadingStage] = useState<'fetching' | 'understanding' | 'generating' | 'processing' | null>(null);
+  const { mode, setMode } = useModePreference();
   const [error, setError] = useState("");
   const [videoId, setVideoId] = useState<string | null>(null);
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
@@ -572,7 +574,8 @@ export default function AnalyzePage() {
                   videoInfo: cacheData.videoInfo,
                   transcript: sanitizedTranscript,
                   model: 'gemini-2.5-flash',
-                  includeCandidatePool: true
+                  includeCandidatePool: true,
+                  mode
                 }),
               });
 
@@ -767,7 +770,8 @@ export default function AnalyzePage() {
           videoId: extractedVideoId,
           videoInfo: fetchedVideoInfo,
           transcript: normalizedTranscriptData,
-          model: 'gemini-2.5-flash'
+          model: 'gemini-2.5-flash',
+          mode
         }),
         signal: topicsController.signal,
       }).catch(err => {
@@ -1283,7 +1287,8 @@ export default function AnalyzePage() {
             transcript,
             model: 'gemini-2.5-flash',
             theme: normalizedTheme,
-            excludeTopicKeys: exclusionKeys
+            excludeTopicKeys: exclusionKeys,
+            mode
           }),
           signal: controller.signal
         });
@@ -1491,6 +1496,8 @@ export default function AnalyzePage() {
             onSubmit={handleUrlSubmit}
             isLoading={pageState !== 'IDLE'}
             initialUrl={normalizedUrl}
+            mode={mode}
+            onModeChange={setMode}
           />
         </div>
         {error && (

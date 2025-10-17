@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { extractVideoId } from "@/lib/utils";
 import { toast } from "sonner";
 import { AuthModal } from "@/components/auth-modal";
+import { useModePreference } from "@/lib/hooks/use-mode-preference";
 
 export default function Home() {
   return (
@@ -23,6 +24,7 @@ function HomeContent() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [pendingVideoId, setPendingVideoId] = useState<string | null>(null);
   const authPromptHandled = useRef(false);
+  const { mode, setMode } = useModePreference();
 
   useEffect(() => {
     if (!searchParams) return;
@@ -135,7 +137,7 @@ function HomeContent() {
           </header>
 
           <div className="flex w-full flex-col items-center gap-9">
-            <UrlInput onSubmit={handleSubmit} />
+            <UrlInput onSubmit={handleSubmit} mode={mode} onModeChange={setMode} />
 
             <Card className="relative flex w-[425px] max-w-full flex-col gap-2.5 overflow-hidden rounded-[22px] border border-[#f0f1f1] bg-white p-6 text-left shadow-[2px_11px_40.4px_rgba(0,0,0,0.06)]">
               <div className="relative z-10 flex flex-col gap-2.5">

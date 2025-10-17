@@ -8,14 +8,18 @@ import { extractVideoId } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ModeSelector } from "@/components/mode-selector";
+import type { TopicGenerationMode } from "@/lib/types";
 
 interface UrlInputWithBrandingProps {
   onSubmit: (url: string) => void;
   isLoading?: boolean;
   initialUrl?: string;
+  mode?: TopicGenerationMode;
+  onModeChange?: (mode: TopicGenerationMode) => void;
 }
 
-export function UrlInputWithBranding({ onSubmit, isLoading = false, initialUrl }: UrlInputWithBrandingProps) {
+export function UrlInputWithBranding({ onSubmit, isLoading = false, initialUrl, mode, onModeChange }: UrlInputWithBrandingProps) {
   const [url, setUrl] = useState(() => initialUrl ?? "");
   const [error, setError] = useState("");
   const [isFocused, setIsFocused] = useState(false);
@@ -48,12 +52,13 @@ export function UrlInputWithBranding({ onSubmit, isLoading = false, initialUrl }
       <div className="flex flex-col gap-2">
         <Card
           className={cn(
-            "relative flex flex-col items-start gap-[9px] self-stretch rounded-[22px] border border-[#f0f1f1] bg-white p-6 shadow-[2px_11px_40.4px_rgba(0,0,0,0.06)] transition-shadow",
+            "relative flex flex-col items-start gap-6 self-stretch rounded-[22px] border border-[#f0f1f1] bg-white p-6 shadow-[2px_11px_40.4px_rgba(0,0,0,0.06)] transition-shadow",
             isFocused && "shadow-[2px_11px_40.4px_rgba(0,0,0,0.1)]",
             error && "ring-2 ring-destructive"
           )}
         >
-          <div className="flex w-full items-center gap-3.5">
+          {/* Top row: Branding + Input field only */}
+          <form onSubmit={handleSubmit} className="flex w-full items-center gap-3.5">
             {/* Left: TLDW Logo and Text */}
             <Link
               href="/"
@@ -75,8 +80,10 @@ export function UrlInputWithBranding({ onSubmit, isLoading = false, initialUrl }
             <div className="h-6 w-px bg-[#e5e7eb] shrink-0" />
 
             {/* Middle: Input Field */}
-            <form onSubmit={handleSubmit} className="flex flex-1 items-center gap-2.5 min-w-0">
-              <LinkIcon className="h-5 w-5 text-[#989999] shrink-0" strokeWidth={1.8} />
+            <div className="flex flex-1 items-center gap-2.5 min-w-0">
+              <div className="w-5 flex items-center justify-end shrink-0">
+                <LinkIcon className="h-5 w-5 text-[#989999]" strokeWidth={1.8} />
+              </div>
               <input
                 type="url"
                 value={url}
@@ -90,10 +97,16 @@ export function UrlInputWithBranding({ onSubmit, isLoading = false, initialUrl }
                 placeholder="Paste Youtube URL link here..."
                 className="flex-1 border-0 bg-transparent text-[14px] text-[#989999] placeholder:text-[#989999] focus:outline-none min-w-0"
               />
+            </div>
+          </form>
 
-              {/* Right: Submit Button */}
+          {/* Bottom row: Mode selector (left) and submit button (right) */}
+          {mode && onModeChange && (
+            <div className="flex items-center justify-between w-full">
+              <ModeSelector value={mode} onChange={onModeChange} />
               <Button
                 type="submit"
+                onClick={handleSubmit}
                 disabled={isLoading || !url.trim()}
                 size="icon"
                 className="h-7 w-7 shrink-0 rounded-full bg-[#B3B4B4] text-white hover:bg-[#9d9e9e] disabled:bg-[#B3B4B4] disabled:text-white disabled:opacity-100"
@@ -104,11 +117,11 @@ export function UrlInputWithBranding({ onSubmit, isLoading = false, initialUrl }
                   <ArrowUp className="h-3.5 w-3.5" />
                 )}
               </Button>
-            </form>
-          </div>
+            </div>
+          )}
         </Card>
         {error && (
-          <p className="text-xs text-destructive ml-1">{error}</p>
+          <p className="text-xs text-destructive px-1">{error}</p>
         )}
       </div>
     </div>
