@@ -5,6 +5,7 @@ import { RateLimiter, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limiter'
 import { z } from 'zod';
 import { withSecurity, SECURITY_PRESETS } from '@/lib/security-middleware';
 import { generateTopicsFromTranscript, generateThemesFromTranscript } from '@/lib/ai-processing';
+import { hasUnlimitedVideoAllowance } from '@/lib/access-control';
 
 async function handler(req: NextRequest) {
   try {
@@ -119,26 +120,30 @@ async function handler(req: NextRequest) {
     }
 
     // Only apply rate limiting for NEW video analysis (not cached)
-    const rateLimitConfig = user ? RATE_LIMITS.AUTH_VIDEO_GENERATION : RATE_LIMITS.ANON_GENERATION;
-    const rateLimitResult = await RateLimiter.check('video-analysis', rateLimitConfig);
+    const unlimitedAccess = hasUnlimitedVideoAllowance(user);
 
-    if (!rateLimitResult.allowed) {
-      if (!user) {
-        return NextResponse.json(
-          {
-            error: 'Sign in to keep analyzing videos',
-            message: 'You\'ve used today\'s free analysis. Create a free account for unlimited video breakdowns.',
-            requiresAuth: true,
-            redirectTo: '/?auth=limit'
-          },
+    if (!unlimitedAccess) {
+      const rateLimitConfig = user ? RATE_LIMITS.AUTH_VIDEO_GENERATION : RATE_LIMITS.ANON_GENERATION;
+      const rateLimitResult = await RateLimiter.check('video-analysis', rateLimitConfig);
+
+      if (!rateLimitResult.allowed) {
+        if (!user) {
+          return NextResponse.json(
+            {
+              error: 'Sign in to keep analyzing videos',
+              message: 'You\'ve used today\'s free analysis. Create a free account for unlimited video breakdowns.',
+              requiresAuth: true,
+              redirectTo: '/?auth=limit'
+            },
+            { status: 429 }
+          );
+        }
+
+        return rateLimitResponse(rateLimitResult) || NextResponse.json(
+          { error: 'Rate limit exceeded' },
           { status: 429 }
         );
       }
-
-      return rateLimitResponse(rateLimitResult) || NextResponse.json(
-        { error: 'Rate limit exceeded' },
-        { status: 429 }
-      );
     }
 
     const generationResult = await generateTopicsFromTranscript(transcript, model, {
