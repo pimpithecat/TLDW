@@ -160,6 +160,36 @@ export function NotesPanel({ notes = [], onDeleteNote, editingNote, onSaveEditin
                   additionalText = parts.slice(1).join("\n\n");
                 }
 
+                const isTranscriptNote = note.source === "transcript";
+
+                const inlineMetadata: ReactNode[] = [];
+
+                if (!isTranscriptNote && note.metadata?.selectionContext) {
+                  inlineMetadata.push(
+                    <span key="context" className="truncate" title={note.metadata.selectionContext}>
+                      {note.metadata.selectionContext}
+                    </span>
+                  );
+                }
+
+                if (!isTranscriptNote && note.metadata?.timestampLabel) {
+                  inlineMetadata.push(
+                    <span key="timestamp" className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {note.metadata.timestampLabel}
+                    </span>
+                  );
+                }
+
+                inlineMetadata.push(
+                  <span key="date">
+                    {formatDateOnly(note.createdAt)}
+                  </span>
+                );
+
+                const shouldShowSegmentInfo =
+                  !isTranscriptNote && note.metadata?.transcript?.segmentIndex !== undefined;
+
                 return (
                   <Card key={note.id} className="group p-3.5 bg-white hover:bg-neutral-50/60 border-none shadow-none transition-colors">
                     <div className="flex items-start justify-between gap-3">
@@ -186,22 +216,9 @@ export function NotesPanel({ notes = [], onDeleteNote, editingNote, onSaveEditin
                         )}
                         <div className="flex flex-col gap-1 text-[11px] text-muted-foreground">
                           <div className="flex flex-wrap items-center gap-3">
-                            {note.metadata?.selectionContext && (
-                              <span className="truncate" title={note.metadata.selectionContext}>
-                                {note.metadata.selectionContext}
-                              </span>
-                            )}
-                            {note.metadata?.timestampLabel && (
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                {note.metadata.timestampLabel}
-                              </span>
-                            )}
-                            <span>
-                              {formatDateOnly(note.createdAt)}
-                            </span>
+                            {inlineMetadata}
                           </div>
-                          {note.metadata?.transcript?.segmentIndex !== undefined && (
+                          {shouldShowSegmentInfo && (
                             <span className="text-muted-foreground/80">
                               Segment #{note.metadata.transcript.segmentIndex + 1}
                             </span>
