@@ -19,6 +19,7 @@ interface TranscriptViewerProps {
   topics?: Topic[];
   citationHighlight?: Citation | null;
   onTakeNoteFromSelection?: (payload: SelectionActionPayload) => void;
+  videoId?: string;
 }
 
 export function TranscriptViewer({
@@ -28,7 +29,8 @@ export function TranscriptViewer({
   currentTime = 0,
   topics = [],
   citationHighlight,
-  onTakeNoteFromSelection
+  onTakeNoteFromSelection,
+  videoId
 }: TranscriptViewerProps) {
   const highlightedRefs = useRef<(HTMLDivElement | null)[]>([]);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -38,6 +40,11 @@ export function TranscriptViewer({
   const [showScrollToCurrentButton, setShowScrollToCurrentButton] = useState(false);
   const lastUserScrollTime = useRef<number>(0);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const selectedTopicIndex = selectedTopic
+    ? topics.findIndex((topic) => topic.id === selectedTopic.id)
+    : -1;
+  const selectedTopicColor =
+    selectedTopicIndex >= 0 ? getTopicHSLColor(selectedTopicIndex, videoId) : null;
 
   // Clear refs when topic changes
   useEffect(() => {
@@ -373,7 +380,9 @@ export function TranscriptViewer({
                     <div
                       className="h-2.5 w-2.5 rounded-full cursor-help"
                       style={{
-                        backgroundColor: `hsl(${getTopicHSLColor(topics.indexOf(selectedTopic))})`,
+                        backgroundColor: selectedTopicColor
+                          ? `hsl(${selectedTopicColor})`
+                          : undefined,
                       }}
                     />
                   </TooltipTrigger>
@@ -550,15 +559,15 @@ export function TranscriptViewer({
                               style={
                                 part.highlighted
                                   ? isCitation || selectedTopic?.isCitationReel
+                                  ? {
+                                      backgroundColor: 'hsl(48, 100%, 85%)',
+                                      padding: '1px 3px',
+                                      borderRadius: '3px',
+                                      boxShadow: '0 0 0 1px hsl(48, 100%, 50%, 0.3)',
+                                    }
+                                    : selectedTopicColor
                                     ? {
-                                        backgroundColor: 'hsl(48, 100%, 85%)',
-                                        padding: '1px 3px',
-                                        borderRadius: '3px',
-                                        boxShadow: '0 0 0 1px hsl(48, 100%, 50%, 0.3)',
-                                      }
-                                    : selectedTopic
-                                    ? {
-                                        backgroundColor: `hsl(${getTopicHSLColor(topics.indexOf(selectedTopic))} / 0.2)`,
+                                        backgroundColor: `hsl(${selectedTopicColor} / 0.2)`,
                                         padding: '0 2px',
                                         borderRadius: '2px',
                                       }

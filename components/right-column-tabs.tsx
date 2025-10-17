@@ -210,6 +210,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
             topics={topics}
             citationHighlight={citationHighlight}
             onTakeNoteFromSelection={onTakeNoteFromSelection}
+            videoId={videoId}
           />
         </div>
         <div className={cn("absolute inset-0", (activeTab !== "takeaways" || !showTakeawaysTab) && "hidden")}>
