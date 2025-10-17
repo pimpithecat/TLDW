@@ -354,6 +354,7 @@ export default function AnalyzePage() {
   const cachedParam = searchParams?.get('cached');
   const authErrorParam = searchParams?.get('auth_error');
   const lastInitializedKey = useRef<string | null>(null);
+  const normalizedUrl = urlParam ?? (routeVideoId ? `https://www.youtube.com/watch?v=${routeVideoId}` : "");
 
   // Clear auth errors from URL after notifying the user
   useEffect(() => {
@@ -380,8 +381,6 @@ export default function AnalyzePage() {
 
     lastInitializedKey.current = key;
 
-    const normalizedUrl = urlParam ?? `https://www.youtube.com/watch?v=${routeVideoId}`;
-
     // Store video ID for potential post-auth linking before loading
     if (!user) {
       sessionStorage.setItem('pendingVideoId', routeVideoId);
@@ -390,7 +389,7 @@ export default function AnalyzePage() {
 
     const isCached = cachedParam === 'true';
     processVideoMemo(normalizedUrl, isCached);
-  }, [routeVideoId, urlParam, cachedParam, user, processVideoMemo]);
+  }, [routeVideoId, urlParam, cachedParam, user, processVideoMemo, normalizedUrl]);
 
   // Check if user can generate based on server-side rate limits
   const checkGenerationLimit = (): boolean => {
@@ -723,7 +722,7 @@ export default function AnalyzePage() {
       setGenerationStartTime(Date.now());
 
       // Create abort controllers for both requests
-      const topicsController = abortManager.current.createController('topics', 60000);
+      const topicsController = abortManager.current.createController('topics');
       const takeawaysController = abortManager.current.createController('takeaways', 60000);
 
       // Start topics generation using cached video-analysis endpoint
@@ -739,7 +738,7 @@ export default function AnalyzePage() {
         signal: topicsController.signal,
       }).catch(err => {
         if (err.name === 'AbortError') {
-          throw new Error("Topic generation timed out. The video might be too long. Please try a shorter video.");
+          throw new Error("Topic generation was canceled or interrupted. Please try again.");
         }
         throw new Error("Network error: Unable to generate topics. Please check your connection.");
       });
@@ -1228,7 +1227,7 @@ export default function AnalyzePage() {
     }
 
     if (!themedTopics) {
-      const controller = abortManager.current.createController('theme-topics', 60000);
+      const controller = abortManager.current.createController('theme-topics');
       const exclusionKeys = Array.from(usedTopicKeys).map((key) => key.slice(0, 500));
       try {
         const response = await fetch("/api/video-analysis", {
@@ -1444,7 +1443,11 @@ export default function AnalyzePage() {
     <div className="min-h-screen bg-white">
       <header className="bg-white">
         <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-center px-5 py-5">
-          <UrlInputWithBranding onSubmit={handleUrlSubmit} isLoading={pageState !== 'IDLE'} />
+          <UrlInputWithBranding
+            onSubmit={handleUrlSubmit}
+            isLoading={pageState !== 'IDLE'}
+            initialUrl={normalizedUrl}
+          />
         </div>
         {error && (
           <div className="border-t border-red-100 bg-red-50/80">

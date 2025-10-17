@@ -669,18 +669,23 @@ export async function generateTopicsFromTranscript(
   const isSmartMode = mode === 'smart';
   const fullText = combineTranscript(transcript);
   const transcriptWithTimestamps = formatTranscriptWithTimestamps(transcript);
+  const videoDurationSeconds = transcript.length > 0
+    ? transcript[transcript.length - 1].start + transcript[transcript.length - 1].duration
+    : 0;
+  const isShortVideo = videoDurationSeconds <= 30 * 60;
+  const smartModeModel = isShortVideo ? 'gemini-2.5-flash' : proModel;
 
   let topicsArray: ParsedTopic[] = [];
   let candidateTopics: CandidateTopic[] = [];
   const excludedKeys = excludeTopicKeys ?? new Set<string>();
-  let resolvedModel = isSmartMode ? proModel : fastModel;
+  let resolvedModel = isSmartMode ? smartModeModel : fastModel;
 
   if (isSmartMode) {
     const smartTopics = await runSinglePassTopicGeneration(
       transcript,
       transcriptWithTimestamps,
       fullText,
-      proModel,
+      smartModeModel,
       theme
     );
 
@@ -696,7 +701,28 @@ export async function generateTopicsFromTranscript(
     }
   }
 
-  const shouldRunFastPipeline = !isSmartMode || topicsArray.length === 0;
+  if (!isSmartMode && isShortVideo && transcript.length > 0) {
+    const fullTranscriptTopics = await runSinglePassTopicGeneration(
+      transcript,
+      transcriptWithTimestamps,
+      fullText,
+      fastModel,
+      theme
+    );
+    const filteredFullTranscriptTopics = fullTranscriptTopics.filter(topic => {
+      if (!topic.quote?.timestamp || !topic.quote.text) return false;
+      const key = `${topic.quote.timestamp}|${normalizeWhitespace(topic.quote.text)}`;
+      return !excludedKeys.has(key);
+    });
+    if (filteredFullTranscriptTopics.length > 0) {
+      topicsArray = filteredFullTranscriptTopics;
+    }
+  }
+
+  let shouldRunFastPipeline = !isSmartMode || topicsArray.length === 0;
+  if (!isSmartMode && isShortVideo && topicsArray.length > 0) {
+    shouldRunFastPipeline = false;
+  }
 
   if (shouldRunFastPipeline && transcript.length > 0) {
     try {
@@ -760,9 +786,7 @@ export async function generateTopicsFromTranscript(
       });
     }
 
-    const videoDuration = transcript.length > 0
-      ? transcript[transcript.length - 1].start + transcript[transcript.length - 1].duration
-      : 0;
+    const videoDuration = videoDurationSeconds;
     let firstSegmentCandidates: CandidateTopic[] = [];
     let secondSegmentCandidates: CandidateTopic[] = [];
 
@@ -898,7 +922,7 @@ export async function generateTopicsFromTranscript(
       transcript,
       transcriptWithTimestamps,
       fullText,
-      isSmartMode ? proModel : fastModel,
+      isSmartMode ? smartModeModel : fastModel,
       theme
     );
     topicsArray = singlePassTopics.filter(topic => {
@@ -1021,7 +1045,7 @@ export async function generateTopicsFromTranscript(
   }
 
   if (topics.length === 0) {
-    resolvedModel = isSmartMode ? proModel : fastModel;
+    resolvedModel = isSmartMode ? smartModeModel : fastModel;
   }
 
   return { topics, candidates, modelUsed: resolvedModel };
