@@ -38,7 +38,7 @@ export function ModeSelector({ value, onChange, className }: ModeSelectorProps) 
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger
-        className="h-8 w-[115px] rounded-lg border-0 bg-transparent text-[#b3b4b4] hover:text-[#787878] hover:bg-transparent focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none px-0"
+        className="h-8 w-[90px] rounded-lg border-0 bg-transparent text-[#b3b4b4] hover:text-[#787878] hover:bg-transparent focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none px-0"
       >
         <SelectValue>
           <div className="flex items-center gap-2.5">
@@ -49,14 +49,14 @@ export function ModeSelector({ value, onChange, className }: ModeSelectorProps) 
           </div>
         </SelectValue>
       </SelectTrigger>
-      <SelectContent align="start" className="w-[115px] shadow-none">
+      <SelectContent align="start" className="w-[90px] shadow-none">
         {modes.map((mode) => {
           const ModeIcon = mode.icon;
           return (
             <SelectItem
               key={mode.value}
               value={mode.value}
-              className="cursor-pointer py-1.5"
+              className="cursor-pointer py-1.5 px-0"
             >
               <div className="flex items-center gap-2.5">
                 <div className="w-5 flex items-center justify-end shrink-0">
