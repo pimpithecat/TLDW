@@ -91,7 +91,7 @@ export function HighlightsPanel({
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 pointer-events-none">
           <Loader2 className="h-5 w-5 animate-spin text-primary" />
           <p className="text-sm font-medium text-foreground">
-            Generating your topics...
+            Generating your reels...
           </p>
         </div>
       )}

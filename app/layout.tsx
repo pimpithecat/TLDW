@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   title: "TLDW - Too Long; Didn't Watch",
   description: "Smart video navigation that transforms long YouTube videos into topic-driven learning experiences",
   icons: {
-    icon: "/favicon.ico",
+    icon: "/Video_Play.svg",
   },
 };
 

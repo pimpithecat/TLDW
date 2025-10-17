@@ -189,7 +189,7 @@ export default function SettingsForm({ user, profile, videoCount }: SettingsForm
             </Select>
           </div>
         </CardContent>
-        <CardFooter className="flex justify-end bg-muted/30">
+        <CardFooter className="flex justify-end">
           <Button 
             onClick={handleUpdateProfile} 
             disabled={loading || !hasProfileChanges}
@@ -236,7 +236,7 @@ export default function SettingsForm({ user, profile, videoCount }: SettingsForm
             />
           </div>
         </CardContent>
-        <CardFooter className="flex justify-end bg-muted/30">
+        <CardFooter className="flex justify-end">
           <Button
             onClick={handleUpdatePassword}
             disabled={loading || !newPassword || !confirmPassword}
