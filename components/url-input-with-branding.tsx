@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, ArrowUp, Link as LinkIcon } from "lucide-react";
-import Link from "next/link";
 import Image from "next/image";
+import Link from "next/link";
 import { extractVideoId } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -12,12 +12,26 @@ import { Card } from "@/components/ui/card";
 interface UrlInputWithBrandingProps {
   onSubmit: (url: string) => void;
   isLoading?: boolean;
+  initialUrl?: string;
 }
 
-export function UrlInputWithBranding({ onSubmit, isLoading = false }: UrlInputWithBrandingProps) {
-  const [url, setUrl] = useState("");
+export function UrlInputWithBranding({ onSubmit, isLoading = false, initialUrl }: UrlInputWithBrandingProps) {
+  const [url, setUrl] = useState(() => initialUrl ?? "");
   const [error, setError] = useState("");
   const [isFocused, setIsFocused] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const pendingInitialRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (initialUrl === undefined) return;
+    if (isEditing) {
+      pendingInitialRef.current = initialUrl;
+      return;
+    }
+
+    setUrl((current) => (current === initialUrl ? current : initialUrl));
+    pendingInitialRef.current = null;
+  }, [initialUrl, isEditing]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,7 +52,7 @@ export function UrlInputWithBranding({ onSubmit, isLoading = false }: UrlInputWi
   };
 
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-[615px]">
+    <div className="w-full max-w-[615px]">
       <div className="flex flex-col gap-2">
         <Card
           className={cn(
@@ -47,9 +61,13 @@ export function UrlInputWithBranding({ onSubmit, isLoading = false }: UrlInputWi
             error && "ring-2 ring-destructive"
           )}
         >
-          <div className="flex w-full items-center justify-between gap-3.5">
+          <div className="flex w-full items-center gap-3.5">
             {/* Left: TLDW Logo and Text */}
-            <Link href="/" className="flex items-center gap-2.5 shrink-0" aria-label="Go to TLDW home">
+            <Link
+              href="/"
+              className="flex items-center gap-2.5 shrink-0 border-0 bg-transparent p-0 text-left outline-none transition hover:opacity-90 focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+              aria-label="Go to TLDW home"
+            >
               <Image
                 src="/Video_Play.svg"
                 alt="TLDW logo"
@@ -65,40 +83,48 @@ export function UrlInputWithBranding({ onSubmit, isLoading = false }: UrlInputWi
             <div className="h-6 w-px bg-[#e5e7eb] shrink-0" />
 
             {/* Middle: Input Field */}
-            <div className="flex flex-1 items-center gap-2.5 min-w-0">
+            <form onSubmit={handleSubmit} className="flex flex-1 items-center gap-2.5 min-w-0">
               <LinkIcon className="h-5 w-5 text-[#989999] shrink-0" strokeWidth={1.8} />
               <input
                 type="url"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                onFocus={() => setIsFocused(true)}
-                onBlur={() => setIsFocused(false)}
+                onFocus={() => {
+                  setIsFocused(true);
+                  setIsEditing(true);
+                }}
+                onBlur={() => {
+                  setIsFocused(false);
+                  setIsEditing(false);
+                  if (pendingInitialRef.current !== null) {
+                    setUrl(pendingInitialRef.current);
+                    pendingInitialRef.current = null;
+                  }
+                }}
                 placeholder="Paste Youtube URL link here..."
                 className="flex-1 border-0 bg-transparent text-[14px] text-[#989999] placeholder:text-[#989999] focus:outline-none min-w-0"
-                disabled={isLoading}
               />
-            </div>
 
-            {/* Right: Submit Button */}
-            <Button
-              type="submit"
-              disabled={isLoading || !url.trim()}
-              size="icon"
-              className="h-7 w-7 shrink-0 rounded-full bg-[#B3B4B4] text-white hover:bg-[#9d9e9e] disabled:bg-[#B3B4B4] disabled:text-white disabled:opacity-100"
-            >
-              {isLoading ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <ArrowUp className="h-3.5 w-3.5" />
-              )}
-            </Button>
+              {/* Right: Submit Button */}
+              <Button
+                type="submit"
+                disabled={isLoading || !url.trim()}
+                size="icon"
+                className="h-7 w-7 shrink-0 rounded-full bg-[#B3B4B4] text-white hover:bg-[#9d9e9e] disabled:bg-[#B3B4B4] disabled:text-white disabled:opacity-100"
+              >
+                {isLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ArrowUp className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </form>
           </div>
         </Card>
         {error && (
           <p className="text-xs text-destructive ml-1">{error}</p>
         )}
       </div>
-    </form>
+    </div>
   );
 }
-
