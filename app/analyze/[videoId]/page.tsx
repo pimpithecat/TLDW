@@ -102,7 +102,6 @@ export default function AnalyzePage() {
 
   // Centralized playback control state
   const [playbackCommand, setPlaybackCommand] = useState<PlaybackCommand | null>(null);
-  const [isPlayerReady, setIsPlayerReady] = useState(false);
   const [transcriptHeight, setTranscriptHeight] = useState<string>("auto");
   const [citationHighlight, setCitationHighlight] = useState<Citation | null>(null);
   const [generationStartTime, setGenerationStartTime] = useState<number | null>(null);
@@ -149,39 +148,28 @@ export default function AnalyzePage() {
 
   // Centralized playback request functions
   const requestSeek = useCallback((time: number) => {
-    if (!isPlayerReady) return;
     setPlaybackCommand({ type: 'SEEK', time });
-  }, [isPlayerReady]);
+  }, []);
 
   const requestPlayTopic = useCallback((topic: Topic) => {
-    if (!isPlayerReady) return;
     setPlaybackCommand({ type: 'PLAY_TOPIC', topic, autoPlay: true });
-  }, [isPlayerReady]);
-
-  const requestPlaySegment = useCallback((segment: TranscriptSegment) => {
-    if (!isPlayerReady) return;
-    setPlaybackCommand({ type: 'PLAY_SEGMENT', segment });
-  }, [isPlayerReady]);
+  }, []);
 
   const requestPlayCitations = useCallback((citations: Citation[]) => {
-    if (!isPlayerReady) return;
+    if (!citations || citations.length === 0) return;
     setPlaybackCommand({ type: 'PLAY_CITATIONS', citations, autoPlay: true });
-  }, [isPlayerReady]);
+  }, []);
 
   const requestPlayAll = useCallback(() => {
-    if (!isPlayerReady || topics.length === 0) return;
+    if (topics.length === 0) return;
     // Set Play All state first
     setIsPlayingAll(true);
     setPlayAllIndex(0);
     setPlaybackCommand({ type: 'PLAY_ALL', autoPlay: true });
-  }, [isPlayerReady, topics]);
+  }, [topics]);
 
   const clearPlaybackCommand = useCallback(() => {
     setPlaybackCommand(null);
-  }, []);
-
-  const handlePlayerReady = useCallback(() => {
-    setIsPlayerReady(true);
   }, []);
 
   // Store current video data in sessionStorage before auth
@@ -440,6 +428,9 @@ export default function AnalyzePage() {
       setCitationHighlight(null);
       setVideoInfo(null);
       setVideoPreview("");
+      setPlaybackCommand(null);
+      setIsPlayingAll(false);
+      setPlayAllIndex(0);
 
       // Reset takeaways-related states
       setTakeawaysContent(null);
@@ -480,7 +471,24 @@ export default function AnalyzePage() {
 
           // Load all cached data
           setTranscript(sanitizedTranscript);
-          setVideoInfo(cacheData.videoInfo);
+
+          const cachedVideoInfo = cacheData.videoInfo ?? null;
+          if (cachedVideoInfo) {
+            setVideoInfo(cachedVideoInfo);
+            const rawDuration = (cachedVideoInfo as { duration?: number | string | null }).duration;
+            const numericDuration =
+              typeof rawDuration === "number"
+                ? rawDuration
+                : typeof rawDuration === "string"
+                  ? Number(rawDuration)
+                  : null;
+            if (numericDuration && !Number.isNaN(numericDuration) && numericDuration > 0) {
+              setVideoDuration(numericDuration);
+            }
+          } else {
+            setVideoInfo(null);
+          }
+
           setTopics(hydratedTopics);
           setBaseTopics(hydratedTopics);
           const initialKeys = new Set<string>();
@@ -678,12 +686,22 @@ export default function AnalyzePage() {
       setTranscript(normalizedTranscriptData);
 
       // Process video info response (optional)
-      let fetchedVideoInfo = null;
+      let fetchedVideoInfo: VideoInfo | null = null;
       if (videoInfoRes && videoInfoRes.ok) {
         try {
           const videoInfoData = await videoInfoRes.json();
           if (videoInfoData && !videoInfoData.error) {
             setVideoInfo(videoInfoData);
+            const rawDuration = videoInfoData?.duration;
+            const numericDuration =
+              typeof rawDuration === "number"
+                ? rawDuration
+                : typeof rawDuration === "string"
+                  ? Number(rawDuration)
+                  : null;
+            if (numericDuration && !Number.isNaN(numericDuration) && numericDuration > 0) {
+              setVideoDuration(numericDuration);
+            }
             fetchedVideoInfo = videoInfoData;
           }
         } catch (error) {
@@ -1450,7 +1468,7 @@ export default function AnalyzePage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-white pt-20 pb-2">
+    <div className="min-h-screen bg-white pt-12 pb-2">
       {pageState === 'IDLE' && !videoId && !routeVideoId && !urlParam && (
         <section className="flex min-h-[calc(100vh-11rem)] flex-col items-center justify-center px-5 text-center">
           {error && (
@@ -1556,7 +1574,7 @@ export default function AnalyzePage() {
       )}
 
       {videoId && topics.length > 0 && pageState === 'IDLE' && (
-        <div className="mx-auto w-full max-w-7xl px-5 pb-5 pt-2">
+        <div className="mx-auto w-full max-w-7xl px-5 pb-5 pt-0">
           {error && (
             <div className="mb-6 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-medium text-red-600 shadow-sm">
               {error}
@@ -1571,7 +1589,6 @@ export default function AnalyzePage() {
                   selectedTopic={selectedTopic}
                   playbackCommand={playbackCommand}
                   onCommandExecuted={clearPlaybackCommand}
-                  onPlayerReady={handlePlayerReady}
                   topics={topics}
                   onTopicSelect={handleTopicSelect}
                   onTimeUpdate={handleTimeUpdate}
