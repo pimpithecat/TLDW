@@ -122,20 +122,12 @@ function HomeContent() {
         <div className="mx-auto flex w-full max-w-[660px] -translate-y-[5vh] transform flex-col items-center gap-9 px-6 py-16 text-center sm:py-24">
           <header className="flex flex-col items-center gap-4">
             <div className="flex items-center gap-3">
-              <Image
-                src="/Video_Play.svg"
-                alt="Video play icon"
-                width={30}
-                height={30}
-                className="h-[30px] w-[30px]"
-              />
               <h1 className="text-[21px] font-bold tracking-tight text-[#787878]">TLDW</h1>
             </div>
             <p className="text-[14px] leading-[15px] text-[#787878]">
               Too Long; Didn&apos;t Watch - Learn from long videos 10x faster
             </p>
           </header>
-
           <div className="flex w-full flex-col items-center gap-9">
             <UrlInput onSubmit={handleSubmit} mode={mode} onModeChange={setMode} />
 

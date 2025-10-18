@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import Image from "next/image";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from '@vercel/analytics/react';
 import { AuthProvider } from '@/contexts/auth-context';
@@ -37,9 +39,22 @@ export default function RootLayout({
       >
         <AuthProvider>
           <div className="min-h-screen flex flex-col">
-            <header className="pointer-events-none fixed top-0 left-0 right-0 z-50 flex items-center justify-end px-6 py-5">
-              {/* Keep the menu interactive while letting the page header beneath receive clicks */}
-              <div className="pointer-events-auto">
+            <header className="pointer-events-none fixed top-0 left-0 right-0 z-50 px-6 py-5">
+              <div className="pointer-events-auto flex w-full items-center justify-between">
+                <Link
+                  href="/"
+                  className="flex items-center gap-2 text-[15px] font-semibold text-[#3f3f3f] transition hover:opacity-80"
+                >
+                  <Image
+                    src="/Video_Play.svg"
+                    alt="TLDW logo"
+                    width={28}
+                    height={28}
+                    className="h-7 w-7"
+                    priority
+                  />
+                  
+                </Link>
                 <UserMenu />
               </div>
             </header>

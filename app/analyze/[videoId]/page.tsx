@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { UrlInputWithBranding } from "@/components/url-input-with-branding";
 import { RightColumnTabs, type RightColumnTabsHandle } from "@/components/right-column-tabs";
 import { YouTubePlayer } from "@/components/youtube-player";
 import { HighlightsPanel } from "@/components/highlights-panel";
@@ -9,7 +8,6 @@ import { ThemeSelector } from "@/components/theme-selector";
 import { LoadingContext } from "@/components/loading-context";
 import { LoadingTips } from "@/components/loading-tips";
 import { VideoSkeleton } from "@/components/video-skeleton";
-import Image from "next/image";
 import Link from "next/link";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { Topic, TranscriptSegment, VideoInfo, Citation, PlaybackCommand, Note, NoteSource, NoteMetadata, TopicCandidate, TopicGenerationMode } from "@/lib/types";
@@ -69,10 +67,15 @@ export default function AnalyzePage() {
   const routeVideoId = Array.isArray(params?.videoId) ? params.videoId[0] : params?.videoId;
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [pageState, setPageState] = useState<PageState>('IDLE');
+  const urlParam = searchParams?.get('url');
+  const cachedParam = searchParams?.get('cached');
+  const authErrorParam = searchParams?.get('auth_error');
+  const [pageState, setPageState] = useState<PageState>(() =>
+    (routeVideoId || urlParam) ? 'LOADING_CACHED' : 'IDLE'
+  );
   const hasAttemptedLinking = useRef(false);
   const [loadingStage, setLoadingStage] = useState<'fetching' | 'understanding' | 'generating' | 'processing' | null>(null);
-  const { mode, setMode, isLoading: isModeLoading } = useModePreference();
+  const { mode, isLoading: isModeLoading } = useModePreference();
   const [error, setError] = useState("");
   const [videoId, setVideoId] = useState<string | null>(null);
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
@@ -137,19 +140,6 @@ export default function AnalyzePage() {
   }>({ remaining: -1, resetAt: null });
   const [authLimitReached, setAuthLimitReached] = useState(false);
   const hasRedirectedForLimit = useRef(false);
-
-  const handleUrlSubmit = useCallback((url: string) => {
-    const extractedId = extractVideoId(url);
-    if (!extractedId) {
-      toast.error("Please enter a valid YouTube URL");
-      return;
-    }
-
-    const params = new URLSearchParams();
-    params.set('url', url);
-
-    router.push(`/analyze/${extractedId}?${params.toString()}`);
-  }, [router]);
 
   // Centralized playback request functions
   const requestSeek = useCallback((time: number) => {
@@ -361,9 +351,6 @@ export default function AnalyzePage() {
     };
   }, []);
 
-  const urlParam = searchParams?.get('url');
-  const cachedParam = searchParams?.get('cached');
-  const authErrorParam = searchParams?.get('auth_error');
   const lastInitializedKey = useRef<string | null>(null);
   const normalizedUrl = urlParam ?? (routeVideoId ? `https://www.youtube.com/watch?v=${routeVideoId}` : "");
 
@@ -1428,48 +1415,53 @@ export default function AnalyzePage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-white">
-      <header className="bg-white">
-        <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-center px-5 py-5">
-          <UrlInputWithBranding
-            onSubmit={handleUrlSubmit}
-            isLoading={pageState !== 'IDLE'}
-            initialUrl={normalizedUrl}
-            mode={mode}
-            onModeChange={setMode}
-          />
-        </div>
-        {error && (
-          <div className="border-t border-red-100 bg-red-50/80">
-            <div className="mx-auto w-full max-w-7xl px-5 py-2.5 text-xs text-red-600">
-              {error}
+    <div className="min-h-screen bg-white pt-20 pb-2">
+      {pageState === 'IDLE' && !videoId && !routeVideoId && !urlParam && (
+        <section className="flex min-h-[calc(100vh-11rem)] flex-col items-center justify-center px-5 text-center">
+          {error && (
+            <div className="mb-6 w-full max-w-2xl">
+              <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-medium text-red-600 shadow-sm">
+                {error}
+              </div>
             </div>
-          </div>
-        )}
-      </header>
-
-      {pageState === 'IDLE' && !videoId && (
-        <div className="mx-auto flex w-full max-w-4xl flex-col items-center gap-5 px-5 py-18 text-center">
-          <Card className="w-full border border-dashed border-slate-200 bg-white/70 p-9 backdrop-blur-sm">
-            <div className="space-y-2.5">
-              <h2 className="text-xl font-semibold text-slate-900">Drop a video to start analyzing</h2>
+          )}
+          <Card className="w-full max-w-2xl border border-dashed border-slate-200 bg-white/80 p-9 backdrop-blur-sm">
+            <div className="space-y-3">
+              <h2 className="text-xl font-semibold text-slate-900">Ready to analyze a video?</h2>
               <p className="text-xs leading-relaxed text-slate-600">
-                Paste a YouTube link above to generate highlight reels, searchable transcripts, and AI takeaways.
+                Head back to the home page to paste a YouTube link and generate highlight reels, searchable transcripts, and AI takeaways.
               </p>
+              <div className="pt-1">
+                <Link
+                  href="/"
+                  className="inline-flex items-center justify-center rounded-full border border-slate-200 px-4 py-2 text-xs font-medium text-slate-700 transition hover:bg-[#f8fafc]"
+                >
+                  Go to home
+                </Link>
+              </div>
             </div>
           </Card>
-        </div>
+        </section>
       )}
 
       {pageState === 'LOADING_CACHED' && (
-        <div className="mx-auto w-full max-w-7xl px-5 py-11">
-          <VideoSkeleton />
-        </div>
+        <section className="flex min-h-[calc(100vh-11rem)] items-center justify-center px-5">
+          <div className="w-full max-w-7xl">
+            <VideoSkeleton />
+          </div>
+        </section>
       )}
 
       {pageState === 'ANALYZING_NEW' && (
-        <div className="mx-auto w-full max-w-7xl px-5 py-11">
-          <div className="mb-7 flex flex-col items-center justify-center text-center">
+        <section className="flex min-h-[calc(100vh-11rem)] flex-col items-center justify-center px-5">
+          {error && (
+            <div className="mb-6 w-full max-w-2xl">
+              <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-medium text-red-600 shadow-sm">
+                {error}
+              </div>
+            </div>
+          )}
+          <div className="flex flex-col items-center text-center">
             <Loader2 className="mb-3.5 h-7 w-7 animate-spin text-primary" />
             <p className="text-sm font-medium text-slate-700">Analyzing video and generating highlight reels</p>
             <p className="mt-1.5 text-xs text-slate-500">
@@ -1479,22 +1471,29 @@ export default function AnalyzePage() {
               {loadingStage === 'processing' && `Processing and matching quotes... (${processingElapsedTime} seconds)`}
             </p>
           </div>
-
-          <LoadingContext
-            videoInfo={videoInfo}
-            preview={videoPreview}
-          />
-
-          <LoadingTips />
-        </div>
+          <div className="mt-10 w-full max-w-2xl">
+            <LoadingContext
+              videoInfo={videoInfo}
+              preview={videoPreview}
+            />
+          </div>
+          <div className="w-full max-w-2xl">
+            <LoadingTips />
+          </div>
+        </section>
       )}
 
       {videoId && topics.length > 0 && pageState === 'IDLE' && (
-        <div className="mx-auto w-full max-w-7xl px-5 pb-14 pt-9">
+        <div className="mx-auto w-full max-w-7xl px-5 pb-5 pt-2">
+          {error && (
+            <div className="mb-6 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-medium text-red-600 shadow-sm">
+              {error}
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
             {/* Left Column - Video (2/3 width) */}
             <div className="lg:col-span-2">
-              <div className="sticky top-3.5 space-y-3.5" id="video-container">
+              <div className="sticky top-[6.5rem] space-y-3.5" id="video-container">
                 <YouTubePlayer
                   videoId={videoId}
                   selectedTopic={selectedTopic}
@@ -1545,7 +1544,7 @@ export default function AnalyzePage() {
             {/* Right Column - Tabbed Interface (1/3 width) */}
             <div className="lg:col-span-1">
               <div
-                className="sticky top-3.5"
+                className="sticky top-[6.5rem]"
                 id="right-column-container"
                 style={{ height: transcriptHeight, maxHeight: transcriptHeight }}
               >

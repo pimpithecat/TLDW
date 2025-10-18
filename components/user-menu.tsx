@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Settings, Video, LogOut, Loader2, Home, NotebookPen } from 'lucide-react'
+import { Settings, Video, LogOut, Loader2, NotebookPen } from 'lucide-react'
 import Link from 'next/link'
 import { AuthModal } from '@/components/auth-modal'
 
@@ -90,12 +90,6 @@ export function UserMenu() {
             <span>Settings</span>
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href="/" className="cursor-pointer">
-            <Home className="mr-2 h-4 w-4" />
-            <span>Home</span>
-          </Link>
-        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={signOut} className="cursor-pointer">
           <LogOut className="mr-2 h-4 w-4" />
@@ -105,3 +99,4 @@ export function UserMenu() {
     </DropdownMenu>
   )
 }
+
