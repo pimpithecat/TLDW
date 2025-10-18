@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { parseTimestamp, TIMESTAMP_REGEX } from "@/lib/timestamp-utils";
-import { ChevronDown, Copy, RefreshCw, Check, SquarePen } from "lucide-react";
+import { ChevronDown, Copy, RefreshCw, Check, Bookmark } from "lucide-react";
 import { TimestampButton } from "./timestamp-button";
 import type { NoteMetadata, NoteSource } from "@/lib/types";
 
@@ -422,7 +422,7 @@ export function SummaryViewer({ content, onTimestampClick, collapsibleSections =
                     onClick={handleSaveNote}
                     className="h-7 px-2 text-muted-foreground hover:text-foreground"
                   >
-                    <SquarePen className="h-4 w-4" />
+                    <Bookmark className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>

@@ -371,7 +371,7 @@ export function TranscriptViewer({
     <TooltipProvider delayDuration={300}>
       <div className="h-full max-h-full flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="px-5 py-1.5 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="px-5 py-1.5 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[0_4px_6px_-1px_rgba(0,0,0,0.03)]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
               {selectedTopic && !selectedTopic.isCitationReel && (
@@ -420,7 +420,7 @@ export function TranscriptViewer({
                   jumpToCurrent();
                 }
               }}
-              className="text-[11px] h-6"
+              className="text-[11px] h-6 shadow-none"
             >
               {autoScroll ? (
                 <>

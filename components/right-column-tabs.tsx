@@ -75,8 +75,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   isAuthenticated,
   onRequestSignIn,
 }, ref) => {
-  const [activeTab, setActiveTab] = useState<"transcript" | "takeaways" | "notes">(showTakeawaysTab ? "takeaways" : "transcript");
-  const [hasShownTakeaways, setHasShownTakeaways] = useState<boolean>(!!showTakeawaysTab);
+  const [activeTab, setActiveTab] = useState<"transcript" | "takeaways" | "notes">("transcript");
 
   // Expose methods to parent to switch tabs
   useImperativeHandle(ref, () => ({
@@ -94,14 +93,11 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   }));
 
   useEffect(() => {
-    if (showTakeawaysTab && !hasShownTakeaways) {
-      setActiveTab("takeaways");
-      setHasShownTakeaways(true);
-    }
+    // If takeaways tab is removed while active, switch to transcript
     if (!showTakeawaysTab && activeTab === "takeaways") {
       setActiveTab("transcript");
     }
-  }, [showTakeawaysTab, hasShownTakeaways, activeTab]);
+  }, [showTakeawaysTab, activeTab]);
 
   const takeawaysSection = useMemo(() => {
     if (!showTakeawaysTab) {
@@ -152,6 +148,20 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   return (
     <Card className="h-full flex flex-col overflow-hidden p-0 gap-0 border-0">
       <div className="flex items-center gap-2 p-2 rounded-t-3xl border-b">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setActiveTab("transcript")}
+          className={cn(
+            "flex-1 justify-center gap-2 rounded-2xl",
+            activeTab === "transcript"
+              ? "bg-neutral-100 text-foreground"
+              : "text-muted-foreground hover:text-foreground hover:bg-white/50"
+          )}
+        >
+          <FileText className="h-4 w-4" />
+          Transcript
+        </Button>
         {showTakeawaysTab && (
           <Button
             variant="ghost"
@@ -172,20 +182,6 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
             Takeaways
           </Button>
         )}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setActiveTab("transcript")}
-          className={cn(
-            "flex-1 justify-center gap-2 rounded-2xl",
-            activeTab === "transcript"
-              ? "bg-neutral-100 text-foreground"
-              : "text-muted-foreground hover:text-foreground hover:bg-white/50"
-          )}
-        >
-          <FileText className="h-4 w-4" />
-          Transcript
-        </Button>
         <Button
           variant="ghost"
           size="sm"

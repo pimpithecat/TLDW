@@ -8,7 +8,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TimestampButton } from "./timestamp-button";
-import { Copy, RefreshCw, Check, SquarePen } from "lucide-react";
+import { Copy, RefreshCw, Check, Bookmark } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { parseTimestamp } from "@/lib/timestamp-utils";
 import { normalizeTimestampSources } from "@/lib/timestamp-normalization";
@@ -60,6 +60,13 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
       });
     }
     return map;
+  }, [message.citations]);
+
+  const sortedCitations = useMemo(() => {
+    if (!message.citations) {
+      return [];
+    }
+    return [...message.citations].sort((a, b) => a.start - b.start);
   }, [message.citations]);
 
   // Memoized citation component using TimestampButton
@@ -167,8 +174,8 @@ const findMatchingCitation = useCallback((seconds: number): Citation | null => {
   const processTextWithCitations = (text: string): ReactNode[] => {
     // Pattern for numbered citations, allowing for comma-separated lists
     const citationPattern = /\[([\d,\s]+)\]/g;
-    // Pattern for raw timestamps [MM:SS] or [HH:MM:SS]
-    const rawTimestampPattern = /\[(\d{1,2}:\d{2}(?::\d{2})?)\]/g;
+    // Pattern for bracketed content that may contain timestamps
+    const potentialTimestampPattern = /\[([^\]]+)\]/g;
     
     const parts: ReactNode[] = [];
     let lastIndex = 0;
@@ -201,16 +208,20 @@ const findMatchingCitation = useCallback((seconds: number): Citation | null => {
     }
     
     // Find raw timestamps (as fallback for unprocessed timestamps)
-    rawTimestampPattern.lastIndex = 0;
-    while ((match = rawTimestampPattern.exec(text)) !== null) {
+    potentialTimestampPattern.lastIndex = 0;
+    while ((match = potentialTimestampPattern.exec(text)) !== null) {
       // Check if this position already has a numbered citation
       const hasNumberedCitation = allMatches.some(m => 
         m.index === match!.index && m.length === match![0].length
       );
       
       if (!hasNumberedCitation) {
-        const [, timestampGroup] = match;
-        const normalized = normalizeTimestampSources([timestampGroup], { limit: 5 });
+        const [, bracketContent] = match;
+        const normalized = normalizeTimestampSources([bracketContent], { limit: 5 });
+
+        if (normalized.length === 0) {
+          continue;
+        }
 
         const timestampElements = normalized.flatMap((ts, idx) => {
           const seconds = parseTimestamp(ts);
@@ -218,9 +229,22 @@ const findMatchingCitation = useCallback((seconds: number): Citation | null => {
             return [];
           }
 
-          return [
-            renderTimestampElement(ts, seconds, `raw-timestamp-${match!.index}-${idx}`)
-          ];
+          const keyBase = `raw-timestamp-${match!.index}-${idx}`;
+          const elements: ReactNode[] = [];
+
+          if (idx > 0) {
+            elements.push(
+              <span
+                key={`${keyBase}-separator`}
+                className="text-xs text-muted-foreground px-1 align-baseline"
+              >
+                ,
+              </span>
+            );
+          }
+
+          elements.push(renderTimestampElement(ts, seconds, keyBase));
+          return elements;
         });
 
         if (timestampElements.length === 0) {
@@ -334,6 +358,23 @@ const findMatchingCitation = useCallback((seconds: number): Citation | null => {
           >
             {message.content}
           </ReactMarkdown>
+
+          {sortedCitations.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                Citations
+              </span>
+              {sortedCitations.map((citation) => (
+                <TimestampButton
+                  key={`citation-list-${citation.number}-${citation.start}`}
+                  timestamp={formatTimestamp(citation.start)}
+                  seconds={citation.start}
+                  onClick={() => onCitationClick(citation)}
+                  className="text-[11px]"
+                />
+              ))}
+            </div>
+          )}
           </div>
           
           {/* Action buttons */}
@@ -378,7 +419,7 @@ const findMatchingCitation = useCallback((seconds: number): Citation | null => {
                     })}
                     className="h-7 px-2 text-muted-foreground hover:text-foreground"
                   >
-                    <SquarePen className="h-4 w-4" />
+                    <Bookmark className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
