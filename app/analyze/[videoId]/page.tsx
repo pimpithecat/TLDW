@@ -12,7 +12,7 @@ import { VideoSkeleton } from "@/components/video-skeleton";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
-import { Topic, TranscriptSegment, VideoInfo, Citation, PlaybackCommand, Note, NoteSource, NoteMetadata, TopicCandidate } from "@/lib/types";
+import { Topic, TranscriptSegment, VideoInfo, Citation, PlaybackCommand, Note, NoteSource, NoteMetadata, TopicCandidate, TopicGenerationMode } from "@/lib/types";
 import { normalizeWhitespace } from "@/lib/quote-matcher";
 import { hydrateTopicsWithTranscript, normalizeTranscript } from "@/lib/topic-utils";
 import { SelectionActionPayload, EXPLAIN_SELECTION_EVENT } from "@/components/selection-actions";
@@ -72,7 +72,7 @@ export default function AnalyzePage() {
   const [pageState, setPageState] = useState<PageState>('IDLE');
   const hasAttemptedLinking = useRef(false);
   const [loadingStage, setLoadingStage] = useState<'fetching' | 'understanding' | 'generating' | 'processing' | null>(null);
-  const { mode, setMode } = useModePreference();
+  const { mode, setMode, isLoading: isModeLoading } = useModePreference();
   const [error, setError] = useState("");
   const [videoId, setVideoId] = useState<string | null>(null);
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
@@ -137,14 +137,6 @@ export default function AnalyzePage() {
   }>({ remaining: -1, resetAt: null });
   const [authLimitReached, setAuthLimitReached] = useState(false);
   const hasRedirectedForLimit = useRef(false);
-
-  // Memoize processVideo to prevent infinite loops
-  const processVideoMemo = useCallback(
-    (url: string, isCached: boolean = false) => {
-      processVideo(url, isCached);
-    },
-    []
-  );
 
   const handleUrlSubmit = useCallback((url: string) => {
     const extractedId = extractVideoId(url);
@@ -392,26 +384,8 @@ export default function AnalyzePage() {
   }, [authErrorParam, router, routeVideoId, searchParams]);
 
   // Automatically kick off analysis when arriving via dedicated route
-  useEffect(() => {
-    if (!routeVideoId) return;
-
-    const key = `${routeVideoId}|${urlParam ?? ''}|${cachedParam ?? ''}`;
-    if (lastInitializedKey.current === key) return;
-
-    lastInitializedKey.current = key;
-
-    // Store video ID for potential post-auth linking before loading
-    if (!user) {
-      sessionStorage.setItem('pendingVideoId', routeVideoId);
-      console.log('Stored route video ID for potential post-auth linking:', routeVideoId);
-    }
-
-    const isCached = cachedParam === 'true';
-    processVideoMemo(normalizedUrl, isCached);
-  }, [routeVideoId, urlParam, cachedParam, user, processVideoMemo, normalizedUrl]);
-
   // Check if user can generate based on server-side rate limits
-  const checkGenerationLimit = (
+  const checkGenerationLimit = useCallback((
     pendingVideoId?: string,
     remainingOverride?: number | null
   ): boolean => {
@@ -437,9 +411,13 @@ export default function AnalyzePage() {
       return false;
     }
     return true;
-  };
+  }, [user, authLimitReached, rateLimitInfo.remaining, redirectToAuthForLimit]);
 
-  const processVideo = async (url: string, isCached: boolean = false) => {
+  const processVideo = useCallback(async (
+    url: string,
+    selectedMode: TopicGenerationMode
+  ) => {
+    const currentRemaining = rateLimitInfo.remaining;
     try {
       const extractedVideoId = extractVideoId(url);
       if (!extractedVideoId) {
@@ -549,7 +527,7 @@ export default function AnalyzePage() {
                   transcript: sanitizedTranscript,
                   model: 'gemini-2.5-flash',
                   includeCandidatePool: true,
-                  mode
+                  mode: selectedMode
                 }),
               });
 
@@ -631,7 +609,7 @@ export default function AnalyzePage() {
         }
       }
 
-      let effectiveRemaining = rateLimitInfo.remaining;
+      let effectiveRemaining = currentRemaining;
 
       if (!user) {
         const latestLimitData = await checkRateLimit();
@@ -766,7 +744,7 @@ export default function AnalyzePage() {
           videoInfo: fetchedVideoInfo,
           transcript: normalizedTranscriptData,
           model: 'gemini-2.5-flash',
-          mode
+          mode: selectedMode
         }),
         signal: topicsController.signal,
       }).catch(err => {
@@ -977,7 +955,32 @@ export default function AnalyzePage() {
       setGenerationStartTime(null);
       setProcessingStartTime(null);
     }
-  };
+  }, [
+    rateLimitInfo.remaining,
+    storeCurrentVideoForAuth,
+    videoId,
+    checkRateLimit,
+    user,
+    checkGenerationLimit,
+    redirectToAuthForLimit
+  ]);
+
+  useEffect(() => {
+    if (!routeVideoId || isModeLoading) return;
+
+    const key = `${routeVideoId}|${urlParam ?? ''}|${cachedParam ?? ''}|${mode}`;
+    if (lastInitializedKey.current === key) return;
+
+    lastInitializedKey.current = key;
+
+    // Store video ID for potential post-auth linking before loading
+    if (!user) {
+      sessionStorage.setItem('pendingVideoId', routeVideoId);
+      console.log('Stored route video ID for potential post-auth linking:', routeVideoId);
+    }
+
+    processVideo(normalizedUrl, mode);
+  }, [routeVideoId, urlParam, cachedParam, user, normalizedUrl, isModeLoading, mode, processVideo]);
 
   const handleCitationClick = (citation: Citation) => {
     // Reset Play All mode when clicking a citation
