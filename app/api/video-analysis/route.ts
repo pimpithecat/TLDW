@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { videoAnalysisRequestSchema, formatValidationError } from '@/lib/validation';
-import { RateLimiter, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limiter';
+import { RateLimiter, RATE_LIMITS } from '@/lib/rate-limiter';
 import { z } from 'zod';
 import { withSecurity, SECURITY_PRESETS } from '@/lib/security-middleware';
 import { generateTopicsFromTranscript, generateThemesFromTranscript } from '@/lib/ai-processing';
@@ -139,9 +139,30 @@ async function handler(req: NextRequest) {
           );
         }
 
-        return rateLimitResponse(rateLimitResult) || NextResponse.json(
-          { error: 'Rate limit exceeded' },
-          { status: 429 }
+        const headers: HeadersInit = {
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': rateLimitResult.resetAt.toISOString()
+        };
+
+        if (typeof rateLimitResult.retryAfter === 'number') {
+          headers['Retry-After'] = rateLimitResult.retryAfter.toString();
+        }
+
+        return NextResponse.json(
+          {
+            error: 'Daily limit reached',
+            message: 'You get 5 videos per day. Come back tomorrow.',
+            code: 'DAILY_VIDEO_LIMIT_REACHED',
+            limit: rateLimitConfig.maxRequests,
+            remaining: 0,
+            resetAt: rateLimitResult.resetAt.toISOString(),
+            retryAfter: rateLimitResult.retryAfter ?? null,
+            isAuthenticated: true
+          },
+          {
+            status: 429,
+            headers
+          }
         );
       }
     }

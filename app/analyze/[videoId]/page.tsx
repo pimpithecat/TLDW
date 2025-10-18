@@ -31,6 +31,7 @@ import { backgroundOperation, AbortManager } from "@/lib/promise-utils";
 import { toast } from "sonner";
 
 const GUEST_LIMIT_MESSAGE = "You've used today's free analysis. Sign in to keep going.";
+const AUTH_LIMIT_MESSAGE = "You get 5 videos per day. Come back tomorrow.";
 
 function buildApiErrorMessage(errorData: unknown, fallback: string): string {
   if (!errorData || typeof errorData !== "object") {
@@ -69,14 +70,19 @@ export default function AnalyzePage() {
   const router = useRouter();
   const urlParam = searchParams?.get('url');
   const cachedParam = searchParams?.get('cached');
+  const cachedParamValue = cachedParam?.toLowerCase();
+  const isCachedQuery = cachedParamValue === 'true' || cachedParamValue === '1';
   const authErrorParam = searchParams?.get('auth_error');
   const [pageState, setPageState] = useState<PageState>(() =>
-    (routeVideoId || urlParam) ? 'LOADING_CACHED' : 'IDLE'
+    (routeVideoId || urlParam)
+      ? (isCachedQuery ? 'LOADING_CACHED' : 'ANALYZING_NEW')
+      : 'IDLE'
   );
   const hasAttemptedLinking = useRef(false);
   const [loadingStage, setLoadingStage] = useState<'fetching' | 'understanding' | 'generating' | 'processing' | null>(null);
   const { mode, isLoading: isModeLoading } = useModePreference();
   const [error, setError] = useState("");
+  const [isRateLimitError, setIsRateLimitError] = useState(false);
   const [videoId, setVideoId] = useState<string | null>(null);
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
   const [videoPreview, setVideoPreview] = useState<string>("");
@@ -378,7 +384,9 @@ export default function AnalyzePage() {
   ): boolean => {
     if (user) {
       if (authLimitReached) {
-        toast.error('Daily limit reached. Try again tomorrow!');
+        setIsRateLimitError(true);
+        setError(AUTH_LIMIT_MESSAGE);
+        toast.error(AUTH_LIMIT_MESSAGE);
         return false;
       }
       return true;
@@ -415,6 +423,7 @@ export default function AnalyzePage() {
       abortManager.current.cleanup();
 
       setError("");
+      setIsRateLimitError(false);
       setTopics([]);
       setBaseTopics([]);
       setTranscript([]);
@@ -717,6 +726,7 @@ export default function AnalyzePage() {
       // Initiate parallel API requests for topics and takeaways
       setLoadingStage('generating');
       setGenerationStartTime(Date.now());
+      setPageState((current) => current === 'ANALYZING_NEW' ? 'LOADING_CACHED' : current);
 
       // Create abort controllers for both requests
       const topicsController = abortManager.current.createController('topics');
@@ -773,7 +783,7 @@ export default function AnalyzePage() {
       let generatedThemes: string[] = [];
       let generatedCandidates: TopicCandidate[] = [];
       if (topicsResult.status === 'fulfilled') {
-      const topicsRes = topicsResult.value;
+        const topicsRes = topicsResult.value;
 
         if (!topicsRes.ok) {
           const errorData = await topicsRes.json().catch(() => ({ error: "Unknown error" }));
@@ -785,6 +795,30 @@ export default function AnalyzePage() {
               extractedVideoId
             );
             return;
+          }
+
+          if (topicsRes.status === 429) {
+            setIsRateLimitError(true);
+            checkRateLimit();
+
+            const limitMessageRaw =
+              typeof (errorData as any)?.message === "string"
+                ? (errorData as any).message.trim()
+                : "";
+
+            const limitErrorRaw =
+              typeof (errorData as any)?.error === "string"
+                ? (errorData as any).error.trim()
+                : "";
+
+            const limitMessage =
+              limitMessageRaw.length > 0
+                ? limitMessageRaw
+                : limitErrorRaw.length > 0
+                  ? limitErrorRaw
+                  : AUTH_LIMIT_MESSAGE;
+
+            throw new Error(limitMessage);
           }
 
           const message = buildApiErrorMessage(errorData, "Failed to generate topics");
@@ -1278,6 +1312,7 @@ export default function AnalyzePage() {
     themeTopicsMap,
     themeCandidateMap,
     usedTopicKeys,
+    mode,
     abortManager,
     setIsPlayingAll,
     setPlayAllIndex
@@ -1480,6 +1515,43 @@ export default function AnalyzePage() {
           <div className="w-full max-w-2xl">
             <LoadingTips />
           </div>
+        </section>
+      )}
+
+      {pageState === 'IDLE' && videoId && topics.length === 0 && error && (
+        <section className="flex min-h-[calc(100vh-11rem)] flex-col items-center justify-center px-5 text-center">
+          <Card className="w-full max-w-2xl border border-slate-200 bg-white/90 p-9 backdrop-blur-sm">
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-xl font-semibold text-slate-900">
+                  {isRateLimitError ? 'Daily limit reached' : 'We couldn\'t finish analyzing this video'}
+                </h2>
+                <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
+                  {isRateLimitError
+                    ? AUTH_LIMIT_MESSAGE
+                    : error}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                <Link
+                  href="/"
+                  className="inline-flex items-center justify-center rounded-full border border-slate-200 px-4 py-2 text-xs font-medium text-slate-700 transition hover:bg-[#f8fafc]"
+                >
+                  Go to home
+                </Link>
+                {!isRateLimitError && (
+                  <button
+                    type="button"
+                    onClick={() => processVideo(normalizedUrl, mode)}
+                    className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white transition hover:bg-slate-800 disabled:pointer-events-none disabled:opacity-50"
+                    disabled={isModeLoading}
+                  >
+                    Try again
+                  </button>
+                )}
+              </div>
+            </div>
+          </Card>
         </section>
       )}
 

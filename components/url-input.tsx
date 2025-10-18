@@ -20,6 +20,8 @@ export function UrlInput({ onSubmit, isLoading = false, mode, onModeChange }: Ur
   const [url, setUrl] = useState("");
   const [error, setError] = useState("");
   const [isFocused, setIsFocused] = useState(false);
+  const showModeSelector = typeof onModeChange === "function";
+  const modeValue: TopicGenerationMode = mode ?? "smart";
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,23 +69,28 @@ export function UrlInput({ onSubmit, isLoading = false, mode, onModeChange }: Ur
           </div>
 
           {/* Bottom row: Mode selector (left) and submit button (right) */}
-          {mode && onModeChange && (
-            <div className="flex items-center justify-between w-full">
-              <ModeSelector value={mode} onChange={onModeChange} />
-              <Button
-                type="submit"
-                disabled={isLoading || !url.trim()}
-                size="icon"
-                className="h-7 w-7 shrink-0 rounded-full bg-[#B3B4B4] text-white hover:bg-[#9d9e9e] disabled:bg-[#B3B4B4] disabled:text-white disabled:opacity-100"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <ArrowUp className="h-3.5 w-3.5" />
-                )}
-              </Button>
-            </div>
-          )}
+          <div
+            className={cn(
+              "flex w-full items-center gap-3",
+              showModeSelector ? "justify-between" : "justify-end"
+            )}
+          >
+            {showModeSelector && (
+              <ModeSelector value={modeValue} onChange={onModeChange} />
+            )}
+            <Button
+              type="submit"
+              disabled={isLoading || !url.trim()}
+              size="icon"
+              className="h-7 w-7 shrink-0 rounded-full bg-[#B3B4B4] text-white hover:bg-[#9d9e9e] disabled:bg-[#B3B4B4] disabled:text-white disabled:opacity-100"
+            >
+              {isLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <ArrowUp className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          </div>
         </Card>
         {error && (
           <p className="text-xs text-destructive px-1">{error}</p>
