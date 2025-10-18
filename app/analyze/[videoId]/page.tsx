@@ -132,7 +132,7 @@ export default function AnalyzePage() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalTrigger, setAuthModalTrigger] = useState<AuthModalTrigger>('generation-limit');
   const [rateLimitInfo, setRateLimitInfo] = useState<{
-    remaining: number;
+    remaining: number | null;
     resetAt: Date | null;
   }>({ remaining: -1, resetAt: null });
   const [authLimitReached, setAuthLimitReached] = useState(false);
@@ -318,7 +318,7 @@ export default function AnalyzePage() {
   // Check rate limit status on mount
   useEffect(() => {
     checkRateLimit();
-  }, []);
+  }, [checkRateLimit]);
 
   // Handle pending video linking when user logs in and videoId is available
   useEffect(() => {
@@ -340,22 +340,34 @@ export default function AnalyzePage() {
     };
   }, []);
 
-  const checkRateLimit = async () => {
+  const checkRateLimit = useCallback(async () => {
     try {
       const response = await fetch('/api/check-limit');
       const data = await response.json();
-      if (data.remaining !== undefined) {
+
+      setAuthLimitReached(Boolean(data?.isAuthenticated && data?.canGenerate === false));
+
+      if (Object.prototype.hasOwnProperty.call(data ?? {}, 'remaining')) {
+        const remainingValue =
+          typeof data.remaining === 'number'
+            ? data.remaining
+            : data.remaining === null
+              ? null
+              : -1;
+
         setRateLimitInfo({
-          remaining: data.remaining,
+          remaining: remainingValue,
           resetAt: data.resetAt ? new Date(data.resetAt) : null
         });
-        setAuthLimitReached(Boolean(data.isAuthenticated && !data.canGenerate));
       }
+
+      return data;
     } catch (error) {
       console.error('Error checking rate limit:', error);
       setAuthLimitReached(false);
+      return null;
     }
-  };
+  }, []);
 
   const urlParam = searchParams?.get('url');
   const cachedParam = searchParams?.get('cached');
@@ -399,7 +411,10 @@ export default function AnalyzePage() {
   }, [routeVideoId, urlParam, cachedParam, user, processVideoMemo, normalizedUrl]);
 
   // Check if user can generate based on server-side rate limits
-  const checkGenerationLimit = (pendingVideoId?: string): boolean => {
+  const checkGenerationLimit = (
+    pendingVideoId?: string,
+    remainingOverride?: number | null
+  ): boolean => {
     if (user) {
       if (authLimitReached) {
         toast.error('Daily limit reached. Try again tomorrow!');
@@ -408,7 +423,16 @@ export default function AnalyzePage() {
       return true;
     }
 
-    if (rateLimitInfo.remaining === 0) {
+    const effectiveRemaining =
+      typeof remainingOverride === 'number' || remainingOverride === null
+        ? remainingOverride
+        : rateLimitInfo.remaining;
+
+    if (
+      typeof effectiveRemaining === 'number' &&
+      effectiveRemaining !== -1 &&
+      effectiveRemaining <= 0
+    ) {
       redirectToAuthForLimit(undefined, pendingVideoId);
       return false;
     }
@@ -422,20 +446,8 @@ export default function AnalyzePage() {
         throw new Error("Invalid YouTube URL");
       }
 
-      if (!checkGenerationLimit(extractedVideoId)) {
-        return;
-      }
-
       // Cleanup any pending requests from previous analysis
       abortManager.current.cleanup();
-
-      // For cached videos, skip the analyzing state and go directly to loading
-      if (isCached) {
-        setPageState('LOADING_CACHED');
-      } else {
-        setPageState('ANALYZING_NEW');
-        setLoadingStage('fetching');
-      }
 
       setError("");
       setTopics([]);
@@ -484,9 +496,7 @@ export default function AnalyzePage() {
         if (cacheData.cached) {
           // For cached videos, we're already in LOADING_CACHED state if isCached was true
           // Otherwise, set it now
-          if (!isCached) {
-            setPageState('LOADING_CACHED');
-          }
+          setPageState('LOADING_CACHED');
 
           const sanitizedTranscript = normalizeTranscript(cacheData.transcript);
           const hydratedTopics = hydrateTopicsWithTranscript(
@@ -620,6 +630,27 @@ export default function AnalyzePage() {
           return; // Exit early - no need to fetch anything else
         }
       }
+
+      let effectiveRemaining = rateLimitInfo.remaining;
+
+      if (!user) {
+        const latestLimitData = await checkRateLimit();
+        if (latestLimitData && Object.prototype.hasOwnProperty.call(latestLimitData, 'remaining')) {
+          effectiveRemaining =
+            typeof latestLimitData.remaining === 'number'
+              ? latestLimitData.remaining
+              : latestLimitData.remaining === null
+                ? null
+                : effectiveRemaining;
+        }
+      }
+
+      if (!checkGenerationLimit(extractedVideoId, effectiveRemaining)) {
+        return;
+      }
+
+      setPageState('ANALYZING_NEW');
+      setLoadingStage('fetching');
 
       // Not cached, proceed with normal flow
       // Create AbortControllers for both requests
