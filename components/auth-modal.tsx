@@ -152,7 +152,7 @@ export function AuthModal({ open, onOpenChange, onSuccess, trigger = 'manual', c
               Check your email
             </DialogTitle>
             <DialogDescription className="pt-2">
-              We've sent you a confirmation link to <strong>{email}</strong>.
+              We&apos;ve sent you a confirmation link to <strong>{email}</strong>.
               Please check your email and click the link to activate your account.
             </DialogDescription>
           </DialogHeader>

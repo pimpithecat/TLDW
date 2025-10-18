@@ -63,40 +63,47 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
   }, [message.citations]);
 
   // Memoized citation component using TimestampButton
-  const CitationComponent = React.memo(({ citationNumber }: { citationNumber: number }) => {
-    const citation = citationMap.get(citationNumber);
-    
-    if (!citation) {
-      return <span className="text-xs text-muted-foreground">[{citationNumber}]</span>;
-    }
+  const CitationComponent = React.memo(
+    ({ citationNumber }: { citationNumber: number }) => {
+      const citation = citationMap.get(citationNumber);
 
-    const handleClick = React.useCallback(() => {
-      onCitationClick(citation);
-    }, [citation, onCitationClick]);
+      const handleClick = React.useCallback(() => {
+        if (!citation) {
+          return;
+        }
+        onCitationClick(citation);
+      }, [citation, onCitationClick]);
 
-    const timestampText = formatTimestamp(citation.start);
+      if (!citation) {
+        return <span className="text-xs text-muted-foreground">[{citationNumber}]</span>;
+      }
 
-    return (
-      <Tooltip delayDuration={0} disableHoverableContent={true}>
-        <TooltipTrigger asChild>
-          <span className="inline-block ml-1 align-baseline">
-            <TimestampButton
-              timestamp={timestampText}
-              seconds={citation.start}
-              onClick={handleClick}
-              className="text-[11px]"
-            />
-          </span>
-        </TooltipTrigger>
-        <TooltipContent className="p-2 z-[100] pointer-events-none" sideOffset={5}>
-          <div className="font-semibold text-xs whitespace-nowrap">
-            {formatTimestamp(citation.start)}
-            {` - ${formatTimestamp(citation.end)}`}
-          </div>
-        </TooltipContent>
-      </Tooltip>
-    );
-  }, (prevProps, nextProps) => prevProps.citationNumber === nextProps.citationNumber);
+      const timestampText = formatTimestamp(citation.start);
+
+      return (
+        <Tooltip delayDuration={0} disableHoverableContent={true}>
+          <TooltipTrigger asChild>
+            <span className="inline-block ml-1 align-baseline">
+              <TimestampButton
+                timestamp={timestampText}
+                seconds={citation.start}
+                onClick={handleClick}
+                className="text-[11px]"
+              />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent className="p-2 z-[100] pointer-events-none" sideOffset={5}>
+            <div className="font-semibold text-xs whitespace-nowrap">
+              {formatTimestamp(citation.start)}
+              {` - ${formatTimestamp(citation.end)}`}
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      );
+    },
+    (prevProps, nextProps) => prevProps.citationNumber === nextProps.citationNumber
+  );
+  CitationComponent.displayName = "CitationComponent";
 
 const findMatchingCitation = useCallback((seconds: number): Citation | null => {
   if (!message.citations || message.citations.length === 0) {

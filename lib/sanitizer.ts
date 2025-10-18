@@ -31,7 +31,7 @@ export function sanitizeHtml(dirty: string): string {
   }
 
   // Additional pre-processing to remove dangerous patterns
-  let preprocessed = dirty
+  const preprocessed = dirty
     .replace(/javascript:/gi, '')
     .replace(/on\w+\s*=/gi, '')
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')

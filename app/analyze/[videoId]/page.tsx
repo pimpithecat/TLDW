@@ -315,31 +315,6 @@ export default function AnalyzePage() {
     }
   };
 
-  // Check rate limit status on mount
-  useEffect(() => {
-    checkRateLimit();
-  }, [checkRateLimit]);
-
-  // Handle pending video linking when user logs in and videoId is available
-  useEffect(() => {
-    if (user && !hasAttemptedLinking.current && (videoId || sessionStorage.getItem('pendingVideoId'))) {
-      hasAttemptedLinking.current = true;
-      // Delay the link attempt to ensure authentication is fully propagated
-      setTimeout(() => {
-        checkPendingVideoLink();
-      }, 1500);
-    }
-  }, [user, videoId]); // Properly track both dependencies
-
-  // Cleanup AbortManager on component unmount
-  useEffect(() => {
-    const currentAbortManager = abortManager.current;
-    return () => {
-      // Abort all pending requests when component unmounts
-      currentAbortManager.cleanup();
-    };
-  }, []);
-
   const checkRateLimit = useCallback(async () => {
     try {
       const response = await fetch('/api/check-limit');
@@ -367,6 +342,31 @@ export default function AnalyzePage() {
       setAuthLimitReached(false);
       return null;
     }
+  }, []);
+
+  // Check rate limit status on mount
+  useEffect(() => {
+    checkRateLimit();
+  }, [checkRateLimit]);
+
+  // Handle pending video linking when user logs in and videoId is available
+  useEffect(() => {
+    if (user && !hasAttemptedLinking.current && (videoId || sessionStorage.getItem('pendingVideoId'))) {
+      hasAttemptedLinking.current = true;
+      // Delay the link attempt to ensure authentication is fully propagated
+      setTimeout(() => {
+        checkPendingVideoLink();
+      }, 1500);
+    }
+  }, [user, videoId]); // Properly track both dependencies
+
+  // Cleanup AbortManager on component unmount
+  useEffect(() => {
+    const currentAbortManager = abortManager.current;
+    return () => {
+      // Abort all pending requests when component unmounts
+      currentAbortManager.cleanup();
+    };
   }, []);
 
   const urlParam = searchParams?.get('url');

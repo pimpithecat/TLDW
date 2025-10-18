@@ -105,6 +105,15 @@ function getSourceLabel(source: NoteSource) {
 }
 
 export function NotesPanel({ notes = [], onDeleteNote, editingNote, onSaveEditingNote, onCancelEditing, isAuthenticated = true, onSignInClick }: NotesPanelProps) {
+  const groupedNotes = useMemo(() => {
+    return notes.reduce<Record<NoteSource, Note[]>>((acc, note) => {
+      const list = acc[note.source] || [];
+      list.push(note);
+      acc[note.source] = list;
+      return acc;
+    }, {} as Record<NoteSource, Note[]>);
+  }, [notes]);
+
   if (!isAuthenticated) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-3 px-6 text-center">
@@ -124,15 +133,6 @@ export function NotesPanel({ notes = [], onDeleteNote, editingNote, onSaveEditin
       </div>
     );
   }
-
-  const groupedNotes = useMemo(() => {
-    return notes.reduce<Record<NoteSource, Note[]>>((acc, note) => {
-      const list = acc[note.source] || [];
-      list.push(note);
-      acc[note.source] = list;
-      return acc;
-    }, {} as Record<NoteSource, Note[]>);
-  }, [notes]);
 
   if (!notes.length && !editingNote) {
     return (

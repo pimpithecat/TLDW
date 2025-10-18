@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { VideoGrid } from './video-grid';
@@ -39,14 +40,14 @@ export default async function MyVideosPage() {
       ) : (
         <div className="text-center py-12">
           <p className="text-lg text-muted-foreground mb-4">
-            You haven't analyzed any videos yet.
+            You haven&apos;t analyzed any videos yet.
           </p>
-          <a
+          <Link
             href="/"
             className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
           >
             Analyze Your First Video
-          </a>
+          </Link>
         </div>
       )}
     </div>

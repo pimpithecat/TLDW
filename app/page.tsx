@@ -132,7 +132,7 @@ function HomeContent() {
               <h1 className="text-[21px] font-bold tracking-tight text-[#787878]">TLDW</h1>
             </div>
             <p className="text-[14px] leading-[15px] text-[#787878]">
-              Too Long; Didn't Watch - Learn from long videos 10x faster
+              Too Long; Didn&apos;t Watch - Learn from long videos 10x faster
             </p>
           </header>
 
@@ -145,7 +145,7 @@ function HomeContent() {
                   Jump to top insights immediately
                 </h3>
                 <p className="max-w-[60%] text-[14px] leading-[1.5] text-[#8d8d8d]">
-                  Paste a link, and we'll generate highlight reels for you. Consume a 1-hour video in 5 minutes.
+                  Paste a link, and we&apos;ll generate highlight reels for you. Consume a 1-hour video in 5 minutes.
                 </p>
               </div>
               <div className="pointer-events-none absolute right-[10px] top-[-00px] h-[110px] w-[110px]">
