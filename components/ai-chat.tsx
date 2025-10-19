@@ -13,7 +13,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Send, Loader2 } from "lucide-react";
 
 const KEY_TAKEAWAYS_LABEL = "What are the key takeaways?";
-const TOP_QUOTES_LABEL = "Top Quotes";
+const TOP_QUOTES_LABEL = "What are the juciest quotes?";
 const PRESET_KEY_TAKEAWAYS = "__preset_key_takeaways__";
 const PRESET_TOP_QUOTES = "__preset_top_quotes__";
 
