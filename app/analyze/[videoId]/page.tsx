@@ -123,10 +123,10 @@ export default function AnalyzePage() {
   }, []);
   
   // Takeaways generation state
-  const [takeawaysContent, setTakeawaysContent] = useState<string | null>(null);
-  const [isGeneratingTakeaways, setIsGeneratingTakeaways] = useState<boolean>(false);
-  const [takeawaysError, setTakeawaysError] = useState<string>("");
-  const [showTakeawaysTab, setShowTakeawaysTab] = useState<boolean>(false);
+  const [, setTakeawaysContent] = useState<string | null>(null);
+  const [, setIsGeneratingTakeaways] = useState<boolean>(false);
+  const [, setTakeawaysError] = useState<string>("");
+  const [showChatTab, setShowChatTab] = useState<boolean>(false);
 
   // Cached suggested questions
   const [cachedSuggestedQuestions, setCachedSuggestedQuestions] = useState<string[] | null>(null);
@@ -153,11 +153,6 @@ export default function AnalyzePage() {
 
   const requestPlayTopic = useCallback((topic: Topic) => {
     setPlaybackCommand({ type: 'PLAY_TOPIC', topic, autoPlay: true });
-  }, []);
-
-  const requestPlayCitations = useCallback((citations: Citation[]) => {
-    if (!citations || citations.length === 0) return;
-    setPlaybackCommand({ type: 'PLAY_CITATIONS', citations, autoPlay: true });
   }, []);
 
   const requestPlayAll = useCallback(() => {
@@ -435,7 +430,7 @@ export default function AnalyzePage() {
       // Reset takeaways-related states
       setTakeawaysContent(null);
       setTakeawaysError("");
-      setShowTakeawaysTab(false);
+      setShowChatTab(false);
 
       // Reset cached suggested questions
       setCachedSuggestedQuestions(null);
@@ -504,7 +499,7 @@ export default function AnalyzePage() {
           // Set cached takeaways and questions
           if (cacheData.summary) {
             setTakeawaysContent(cacheData.summary);
-            setShowTakeawaysTab(true);
+            setShowChatTab(true);
             setIsGeneratingTakeaways(false);
           }
           if (cacheData.suggestedQuestions) {
@@ -560,7 +555,7 @@ export default function AnalyzePage() {
 
           // Auto-start takeaways generation if not available
           if (!cacheData.summary) {
-            setShowTakeawaysTab(true);
+            setShowChatTab(true);
             setIsGeneratingTakeaways(true);
 
             backgroundOperation(
@@ -782,7 +777,7 @@ export default function AnalyzePage() {
       });
 
       // Show takeaways tab and loading state immediately (optimistic UI)
-      setShowTakeawaysTab(true);
+      setShowChatTab(true);
       setIsGeneratingTakeaways(true);
 
       // Wait for both to complete using Promise.allSettled
@@ -896,11 +891,11 @@ export default function AnalyzePage() {
       setThemes(generatedThemes);
       if (generatedTakeaways) {
         setTakeawaysContent(generatedTakeaways);
-        setShowTakeawaysTab(true);
+        setShowChatTab(true);
         setIsGeneratingTakeaways(false);
       } else if (takeawaysGenerationError) {
         setTakeawaysError(takeawaysGenerationError);
-        setShowTakeawaysTab(true);
+        setShowChatTab(true);
         setIsGeneratingTakeaways(false);
       }
 
@@ -1065,74 +1060,6 @@ export default function AnalyzePage() {
     requestSeek(seconds);
   };
 
-  const handleTakeawayTimestampClick = (seconds: number) => {
-    // Reset Play All mode when clicking any timestamp
-    setIsPlayingAll(false);
-    setPlayAllIndex(0);
-
-    // Clear topic and citation highlight
-    setSelectedTopic(null);
-    setCitationHighlight(null);
-
-    // Request seek through centralized command system
-    requestSeek(seconds);
-  };
-
-  const handleRetryTakeaways = useCallback(async () => {
-    if (!videoId || !transcript.length) return;
-
-    // Clear existing content and error
-    setTakeawaysContent(null);
-    setTakeawaysError("");
-    setIsGeneratingTakeaways(true);
-
-    try {
-      const takeawaysController = abortManager.current.createController('retry-takeaways', 60000);
-
-      const response = await fetch("/api/generate-summary", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transcript,
-          videoInfo,
-          videoId
-        }),
-        signal: takeawaysController.signal,
-      });
-
-      if (response.ok) {
-        const { summaryContent: generatedTakeaways } = await response.json();
-        setTakeawaysContent(generatedTakeaways);
-
-        // Update the video analysis with the new takeaways
-        backgroundOperation(
-          'update-retry-takeaways',
-          async () => {
-            await fetch("/api/update-video-analysis", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                videoId,
-                summary: generatedTakeaways
-              }),
-            });
-          }
-        );
-      } else {
-        const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-        const message = buildApiErrorMessage(errorData, "Failed to generate takeaways");
-        throw new Error(message);
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to generate takeaways. Please try again.";
-      setTakeawaysError(errorMessage);
-      toast.error(errorMessage);
-    } finally {
-      setIsGeneratingTakeaways(false);
-      abortManager.current.cleanup('retry-takeaways');
-    }
-  }, [videoId, transcript, videoInfo]);
-
   const handleTimeUpdate = useCallback((seconds: number) => {
     setCurrentTime(seconds);
   }, []);
@@ -1153,24 +1080,6 @@ export default function AnalyzePage() {
       requestPlayTopic(topic);
     }
   }, [isPlayingAll, requestPlayTopic]);
-
-  const handlePlayAllCitations = (citations: Citation[]) => {
-    // Reset Play All mode when playing citations
-    setIsPlayingAll(false);
-    setPlayAllIndex(0);
-
-    // Clear existing highlights to avoid conflicts
-    setCitationHighlight(null);
-
-    // Scroll to video player
-    const videoContainer = document.getElementById("video-container");
-    if (videoContainer) {
-      videoContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-
-    // Request to play citations through centralized command system
-    requestPlayCitations(citations);
-  };
 
   const handleTogglePlayAll = useCallback(() => {
     if (isPlayingAll) {
@@ -1386,11 +1295,11 @@ export default function AnalyzePage() {
       .finally(() => setIsLoadingNotes(false));
   }, [videoId, user]);
 
-  // Auto-switch to Takeaways tab when Explain is triggered from transcript
+  // Auto-switch to Chat tab when Explain is triggered from transcript
   useEffect(() => {
     const handleExplainFromSelection = () => {
-      // Switch to takeaways tab when explain is triggered
-      rightColumnTabsRef.current?.switchToTakeaways?.();
+      // Switch to chat tab when explain is triggered
+      rightColumnTabsRef.current?.switchToChat?.();
     };
 
     window.addEventListener(EXPLAIN_SELECTION_EVENT, handleExplainFromSelection as EventListener);
@@ -1642,20 +1551,15 @@ export default function AnalyzePage() {
                   transcript={transcript}
                   selectedTopic={selectedTopic}
                   onTimestampClick={handleTimestampClick}
-                  onTakeawayTimestampClick={handleTakeawayTimestampClick}
                   currentTime={currentTime}
                   topics={topics}
                   citationHighlight={citationHighlight}
                   videoId={videoId}
                   videoTitle={videoInfo?.title}
+                  videoInfo={videoInfo}
                   onCitationClick={handleCitationClick}
-                  onPlayAllCitations={handlePlayAllCitations}
-                  takeawaysContent={takeawaysContent}
-                  isGeneratingTakeaways={isGeneratingTakeaways}
-                  takeawaysError={takeawaysError}
-                  showTakeawaysTab={showTakeawaysTab}
+                  showChatTab={showChatTab}
                   cachedSuggestedQuestions={cachedSuggestedQuestions}
-                  onRetryTakeaways={handleRetryTakeaways}
                   notes={notes}
                   onSaveNote={handleSaveNote}
                   onTakeNoteFromSelection={handleTakeNoteFromSelection}

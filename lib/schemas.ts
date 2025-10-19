@@ -32,3 +32,11 @@ export const summaryTakeawaysSchema = z.array(summaryTakeawaySchema).min(4).max(
 export const quickPreviewSchema = z.object({
   overview: z.string().min(1)
 });
+
+export const topQuoteSchema = z.object({
+  title: z.string().min(1),
+  quote: z.string().min(1),
+  timestamp: z.string().regex(timestampPattern)
+});
+
+export const topQuotesSchema = z.array(topQuoteSchema).min(1).max(5);

@@ -5,6 +5,7 @@ import { RATE_LIMITS } from '@/lib/rate-limiter';
 import { generateWithFallback } from '@/lib/gemini-client';
 import { summaryTakeawaysSchema } from '@/lib/schemas';
 import { normalizeTimestampSources } from '@/lib/timestamp-normalization';
+import { buildTakeawaysPrompt } from '@/lib/prompts/takeaways';
 
 type StructuredTakeaway = {
   label: string;
@@ -105,61 +106,20 @@ function normalizeTakeawaysPayload(payload: unknown): StructuredTakeaway[] {
   return normalized;
 }
 
-function formatTime(totalSeconds: number): string {
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = Math.floor(totalSeconds % 60);
-
-  if (hours > 0) {
-    return [
-      hours.toString().padStart(2, '0'),
-      minutes.toString().padStart(2, '0'),
-      seconds.toString().padStart(2, '0')
-    ].join(':');
-  }
-
-  return [
-    minutes.toString().padStart(2, '0'),
-    seconds.toString().padStart(2, '0')
-  ].join(':');
-}
-
-function formatTranscriptWithTimestamps(segments: TranscriptSegment[]): string {
-  return segments.map(segment => {
-    const start = formatTime(segment.start);
-    const end = formatTime(segment.start + segment.duration);
-    return `[${start}-${end}] ${segment.text}`;
-  }).join('\n');
-}
-
-function formatVideoInfoBlock(videoInfo: Partial<VideoInfo>): string {
-  const lines: string[] = [
-    `Title: ${videoInfo.title ?? 'Untitled video'}`
-  ];
-
-  if (videoInfo.author) {
-    lines.push(`Channel: ${videoInfo.author}`);
-  }
-
-  if (videoInfo.description) {
-    lines.push(`Description: ${videoInfo.description}`);
-  }
-
-  return lines.join('\n');
-}
-
 function buildTakeawaysMarkdown(takeaways: StructuredTakeaway[]): string {
   const lines = [TAKEAWAYS_HEADING];
 
   for (const item of takeaways) {
     const label = item.label.trim().replace(/\s+/g, ' ');
     const insight = item.insight.trim();
-    const timestamps = item.timestamps
+    const timestampItems = item.timestamps
       .map(ts => ts.trim())
       .filter(Boolean)
-      .join(', ');
+      .map(ts => `[${ts}]`);
 
-    const timestampSuffix = timestamps ? ` (${timestamps})` : '';
+    const timestampSuffix = timestampItems.length > 0
+      ? ` ${timestampItems.join(', ')}`
+      : '';
     lines.push(`- **${label}**: ${insight}${timestampSuffix}`);
   }
 
@@ -184,33 +144,10 @@ async function handler(request: NextRequest) {
       );
     }
 
-    const transcriptWithTimestamps = formatTranscriptWithTimestamps(transcript as TranscriptSegment[]);
-    const videoInfoBlock = formatVideoInfoBlock(videoInfo as Partial<VideoInfo>);
-
-    const prompt = `<task>
-<role>You are an expert editorial analyst distilling a video's most potent insights for time-pressed viewers.</role>
-<context>
-${videoInfoBlock}
-</context>
-<goal>Produce 4-6 high-signal takeaways that help a viewer retain the video's core ideas.</goal>
-<instructions>
-  <item>Only use information stated explicitly in the transcript. Never speculate.</item>
-  <item>Make each label specific, punchy, and no longer than 10 words.</item>
-  <item>Write each insight as 1-2 sentences that preserve the speaker's framing.</item>
-  <item>Attach 1-2 zero-padded timestamps (MM:SS or HH:MM:SS) that point to the supporting moments.</item>
-  <item>Favor contrarian viewpoints, concrete examples, data, or memorable stories over generic advice.</item>
-  <item>Avoid overlapping takeaways. Each one should stand alone.</item>
-</instructions>
-<qualityControl>
-  <item>Verify every claim is grounded in transcript lines you can cite verbatim.</item>
-  <item>Ensure timestamps map to the lines that justify the insight.</item>
-  <item>If the transcript lacks enough high-quality insights, still return at least four by choosing the strongest available.</item>
-</qualityControl>
-<outputFormat>Return strict JSON with 4-6 objects: [{"label":"string","insight":"string","timestamps":["MM:SS"]}]. Do not include markdown or commentary.</outputFormat>
-<transcript><![CDATA[
-${transcriptWithTimestamps}
-]]></transcript>
-</task>`;
+    const prompt = buildTakeawaysPrompt({
+      transcript: transcript as TranscriptSegment[],
+      videoInfo: videoInfo as Partial<VideoInfo>
+    });
 
     let response: string;
 

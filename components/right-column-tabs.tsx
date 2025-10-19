@@ -1,37 +1,30 @@
 "use client";
 
-import { useState, useEffect, useImperativeHandle, forwardRef, useMemo } from "react";
+import { useState, useEffect, useImperativeHandle, forwardRef } from "react";
 import { TranscriptViewer } from "@/components/transcript-viewer";
 import { AIChat } from "@/components/ai-chat";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { FileText, Lightbulb, Loader2, PenLine } from "lucide-react";
-import { TranscriptSegment, Topic, Citation, Note, NoteSource, NoteMetadata } from "@/lib/types";
+import { FileText, MessageSquare, PenLine } from "lucide-react";
+import { TranscriptSegment, Topic, Citation, Note, NoteSource, NoteMetadata, VideoInfo } from "@/lib/types";
 import { SelectionActionPayload } from "@/components/selection-actions";
 import { NotesPanel, EditingNote } from "@/components/notes-panel";
 import { cn } from "@/lib/utils";
-import { SummaryViewer } from "@/components/summary-viewer";
-import { Skeleton } from "@/components/ui/skeleton";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 interface RightColumnTabsProps {
   transcript: TranscriptSegment[];
   selectedTopic: Topic | null;
   onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean, citationText?: string, isWithinHighlightReel?: boolean, isWithinCitationHighlight?: boolean) => void;
-  onTakeawayTimestampClick?: (seconds: number) => void;
   currentTime?: number;
   topics?: Topic[];
   citationHighlight?: Citation | null;
   videoId: string;
   videoTitle?: string;
+  videoInfo?: VideoInfo | null;
   onCitationClick: (citation: Citation) => void;
-  onPlayAllCitations?: (citations: Citation[]) => void;
-  takeawaysContent?: string | null;
-  isGeneratingTakeaways?: boolean;
-  takeawaysError?: string;
-  showTakeawaysTab?: boolean;
+  showChatTab?: boolean;
   cachedSuggestedQuestions?: string[] | null;
-  onRetryTakeaways?: () => void;
   notes?: Note[];
   onSaveNote?: (payload: { text: string; source: NoteSource; sourceId?: string | null; metadata?: NoteMetadata | null }) => Promise<void>;
   onTakeNoteFromSelection?: (payload: SelectionActionPayload) => void;
@@ -44,7 +37,7 @@ interface RightColumnTabsProps {
 
 export interface RightColumnTabsHandle {
   switchToTranscript: () => void;
-  switchToTakeaways?: () => void;
+  switchToChat?: () => void;
   switchToNotes: () => void;
 }
 
@@ -52,20 +45,15 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   transcript,
   selectedTopic,
   onTimestampClick,
-  onTakeawayTimestampClick,
   currentTime,
   topics,
   citationHighlight,
   videoId,
   videoTitle,
+  videoInfo,
   onCitationClick,
-  onPlayAllCitations,
-  takeawaysContent,
-  isGeneratingTakeaways,
-  takeawaysError,
-  showTakeawaysTab,
+  showChatTab,
   cachedSuggestedQuestions,
-  onRetryTakeaways,
   notes,
   onSaveNote,
   onTakeNoteFromSelection,
@@ -75,16 +63,16 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   isAuthenticated,
   onRequestSignIn,
 }, ref) => {
-  const [activeTab, setActiveTab] = useState<"transcript" | "takeaways" | "notes">("transcript");
+  const [activeTab, setActiveTab] = useState<"transcript" | "chat" | "notes">("transcript");
 
   // Expose methods to parent to switch tabs
   useImperativeHandle(ref, () => ({
     switchToTranscript: () => {
       setActiveTab("transcript");
     },
-    switchToTakeaways: () => {
-      if (showTakeawaysTab) {
-        setActiveTab("takeaways");
+    switchToChat: () => {
+      if (showChatTab) {
+        setActiveTab("chat");
       }
     },
     switchToNotes: () => {
@@ -93,57 +81,11 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   }));
 
   useEffect(() => {
-    // If takeaways tab is removed while active, switch to transcript
-    if (!showTakeawaysTab && activeTab === "takeaways") {
+    // If chat tab is removed while active, switch to transcript
+    if (!showChatTab && activeTab === "chat") {
       setActiveTab("transcript");
     }
-  }, [showTakeawaysTab, activeTab]);
-
-  const takeawaysSection = useMemo(() => {
-    if (!showTakeawaysTab) {
-      return null;
-    }
-
-    const handleTimestamp = onTakeawayTimestampClick || onTimestampClick;
-
-    if (isGeneratingTakeaways) {
-      return (
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-2/3" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-11/12" />
-          <Skeleton className="h-4 w-4/5" />
-        </div>
-      );
-    }
-
-    if (takeawaysError) {
-      return (
-        <p className="text-sm text-destructive">
-          {takeawaysError}
-        </p>
-      );
-    }
-
-    if (takeawaysContent) {
-      return (
-        <SummaryViewer
-          content={takeawaysContent}
-          onTimestampClick={handleTimestamp}
-          collapsibleSections={false}
-          onRetry={onRetryTakeaways}
-          showActions={true}
-          onSaveNote={onSaveNote}
-        />
-      );
-    }
-
-    return (
-      <p className="text-sm text-muted-foreground">
-        Takeaways will appear here once ready.
-      </p>
-    );
-  }, [showTakeawaysTab, isGeneratingTakeaways, takeawaysError, takeawaysContent, onTakeawayTimestampClick, onTimestampClick, onRetryTakeaways, onSaveNote]);
+  }, [showChatTab, activeTab]);
 
   return (
     <Card className="h-full flex flex-col overflow-hidden p-0 gap-0 border-0">
@@ -162,24 +104,20 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
           <FileText className="h-4 w-4" />
           Transcript
         </Button>
-        {showTakeawaysTab && (
+        {showChatTab && (
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setActiveTab("takeaways")}
+            onClick={() => setActiveTab("chat")}
             className={cn(
               "flex-1 justify-center gap-2 rounded-2xl",
-              activeTab === "takeaways"
+              activeTab === "chat"
                 ? "bg-neutral-100 text-foreground"
                 : "text-muted-foreground hover:text-foreground hover:bg-white/50"
             )}
           >
-            {isGeneratingTakeaways ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Lightbulb className="h-4 w-4" />
-            )}
-            Takeaways
+            <MessageSquare className="h-4 w-4" />
+            Chat
           </Button>
         )}
         <Button
@@ -213,17 +151,16 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
             videoId={videoId}
           />
         </div>
-        <div className={cn("absolute inset-0", (activeTab !== "takeaways" || !showTakeawaysTab) && "hidden")}>
+        <div className={cn("absolute inset-0", (activeTab !== "chat" || !showChatTab) && "hidden")}>
           <AIChat
             transcript={transcript}
             topics={topics || []}
             videoId={videoId}
             videoTitle={videoTitle}
+            videoInfo={videoInfo}
             onCitationClick={onCitationClick}
             onTimestampClick={onTimestampClick}
-            onPlayAllCitations={onPlayAllCitations}
             cachedSuggestedQuestions={cachedSuggestedQuestions}
-            pinnedContent={takeawaysSection}
             onSaveNote={onSaveNote}
             onTakeNoteFromSelection={onTakeNoteFromSelection}
           />

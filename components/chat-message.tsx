@@ -62,13 +62,6 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
     return map;
   }, [message.citations]);
 
-  const sortedCitations = useMemo(() => {
-    if (!message.citations) {
-      return [];
-    }
-    return [...message.citations].sort((a, b) => a.start - b.start);
-  }, [message.citations]);
-
   // Memoized citation component using TimestampButton
   const CitationComponent = React.memo(
     ({ citationNumber }: { citationNumber: number }) => {
@@ -314,7 +307,7 @@ const findMatchingCitation = useCallback((seconds: number): Citation | null => {
   };
 
   return (
-    <div className={cn("py-2", isUser ? "max-w-[80%] ml-auto mb-8" : "w-full")}>
+    <div className={cn("py-2", isUser ? "w-fit max-w-[80%] ml-auto mb-8" : "w-full")}>
       {isUser ? (
         <Card className="p-5 rounded-2xl bg-primary/5 border-0 shadow-none">
           <p className="text-sm whitespace-pre-wrap">{message.content}</p>
@@ -358,23 +351,6 @@ const findMatchingCitation = useCallback((seconds: number): Citation | null => {
           >
             {message.content}
           </ReactMarkdown>
-
-          {sortedCitations.length > 0 && (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                Citations
-              </span>
-              {sortedCitations.map((citation) => (
-                <TimestampButton
-                  key={`citation-list-${citation.number}-${citation.start}`}
-                  timestamp={formatTimestamp(citation.start)}
-                  seconds={citation.start}
-                  onClick={() => onCitationClick(citation)}
-                  className="text-[11px]"
-                />
-              ))}
-            </div>
-          )}
           </div>
           
           {/* Action buttons */}
