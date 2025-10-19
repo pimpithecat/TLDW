@@ -1101,6 +1101,118 @@ function sanitizeThemeList(themes: string[]): string[] {
   return cleaned;
 }
 
+const THEME_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "the",
+  "and",
+  "or",
+  "but",
+  "for",
+  "nor",
+  "with",
+  "without",
+  "of",
+  "on",
+  "in",
+  "into",
+  "onto",
+  "to",
+  "from",
+  "by",
+  "about",
+  "over",
+  "under",
+  "across",
+  "between",
+  "vs",
+  "versus",
+  "per",
+  "via"
+]);
+
+function extractThemeTokens(theme: string): string[] {
+  return theme
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .map((token) => token.replace(/'s$/, ""))
+    .map((token) => (token.endsWith("s") && token.length > 3 ? token.slice(0, -1) : token))
+    .filter((token) => token.length > 0 && !THEME_STOP_WORDS.has(token));
+}
+
+function areThemesSimilar(aTokens: string[], bTokens: string[]): boolean {
+  if (aTokens.length === 0 || bTokens.length === 0) {
+    return false;
+  }
+
+  const setA = new Set(aTokens);
+  const setB = new Set(bTokens);
+  let overlap = 0;
+
+  for (const token of setA) {
+    if (setB.has(token)) {
+      overlap += 1;
+    }
+  }
+
+  if (overlap === 0) {
+    return false;
+  }
+
+  const smallerSize = Math.min(setA.size, setB.size);
+  const containment = overlap / smallerSize;
+  const unionSize = setA.size + setB.size - overlap;
+  const jaccard = overlap / unionSize;
+
+  const lastTokenA = aTokens[aTokens.length - 1];
+  const lastTokenB = bTokens[bTokens.length - 1];
+  const shareSpecificLastToken =
+    lastTokenA === lastTokenB &&
+    lastTokenA.length > 3 &&
+    !THEME_STOP_WORDS.has(lastTokenA);
+
+  return containment >= 0.75 || jaccard >= 0.6 || shareSpecificLastToken;
+}
+
+function promoteDistinctThemes(themes: string[], primaryCount = 3): string[] {
+  if (themes.length <= 1) {
+    return themes;
+  }
+
+  type ThemeTokenInfo = {
+    value: string;
+    tokens: string[];
+  };
+
+  const themedTokens: ThemeTokenInfo[] = themes.map((theme) => ({
+    value: theme,
+    tokens: extractThemeTokens(theme),
+  }));
+
+  const selected: ThemeTokenInfo[] = [];
+  const deferred: ThemeTokenInfo[] = [];
+
+  for (const item of themedTokens) {
+    if (selected.length < primaryCount) {
+      const isSimilar = selected.some((sel) => areThemesSimilar(sel.tokens, item.tokens));
+      if (!isSimilar) {
+        selected.push(item);
+        continue;
+      }
+    }
+
+    deferred.push(item);
+  }
+
+  if (selected.length < primaryCount) {
+    const needed = primaryCount - selected.length;
+    selected.push(...deferred.splice(0, needed));
+  }
+
+  return [...selected, ...deferred].map((entry) => entry.value);
+}
+
 export async function generateThemesFromTranscript(
   transcript: TranscriptSegment[],
   videoInfo?: Partial<VideoInfo>,
@@ -1117,23 +1229,29 @@ export async function generateThemesFromTranscript(
 You are an expert content analyst and a specialist in semantic keyword extraction. Your goal is to distill complex information into its most essential conceptual components for easy discovery.
 
 ## Objective
-Analyze the provided video transcript to identify and extract its core concepts. Generate a list of 5-10 keywords or key phrases that precisely capture the main topics discussed. These keywords will be used to help potential viewers quickly understand the video's specific focus and determine its relevance to their interests.
+Analyze the provided video transcript to identify and extract its core concepts. Generate a list of 5-7 keywords or short key phrases that precisely capture the main topics discussed without overlapping. These keywords will be used to help potential viewers quickly understand the video's specific focus and determine its relevance to their interests.
 
 ## Strict Constraints
-1.  **Quantity:** Provide between 3 keywords/phrases.
+1.  **Quantity:** Provide between 5 and 7 keywords/phrases.
 2.  **Length:** Each keyword/phrase must be strictly between 1 and 3 words.
 3.  **Format:** Output must be a simple, unnumbered bulleted list. Do not add any introductory or concluding sentences.
+4.  **Distinctness:** Each keyword must capture a meaningfully different angle, stakeholder, problem, method, or takeaway. Do not repeat the same head noun or near-synonym across items.
 
 ## Guiding Principles
 * **Specificity over Generality:** Keywords must be specific, tangible concepts.
 * **Focus on 'What', not 'About':** The keywords should be the *concepts themselves*, not descriptions *about* the concepts.
 * **Identify Nouns and Noun Phrases:** Prioritize key terms, techniques, arguments, or recurring ideas that form the backbone of the content.
 
+## Distinctness Guardrails
+* Cover different facets of the discussion (e.g., challenges, solutions, frameworks, stakeholders, outcomes).
+* Avoid re-using the same head noun (e.g., "strategy") unless it refers to a substantively different domain.
+* Skip synonyms or simple adjective swaps of earlier keywords; each entry should stand on its own.
+
 ## Examples of Good vs. Bad Keywords
 * **Good:** \`Student motivation\` (Specific, concise concept)
 * **Good:** \`Onboarding flow optimization\` (Specific, concise concept)
 * **Bad:** \`Future of education\` (Too vague and generic)
-* **Bad:** \`Selection effects and scalability issues in private education\` (Too long; violates the 5-word limit)
+* **Bad:** \`Selection effects and scalability issues in private education\` (Too long; violates the 3-word limit)
 
 ## Task
 Now, apply these rules to the following video transcript.
@@ -1164,10 +1282,12 @@ ${videoInfoBlock ? `${videoInfoBlock}\n\n` : ''}${transcriptWithTimestamps}`;
       .filter(Boolean)
       .filter(line => {
         const wordCount = line.split(/\s+/).length;
-        return wordCount >= 1 && wordCount <= 5;
+        return wordCount >= 1 && wordCount <= 3;
       });
 
-    return sanitizeThemeList(themes).slice(0, 10);
+    const sanitizedThemes = sanitizeThemeList(themes);
+    const diversifiedThemes = promoteDistinctThemes(sanitizedThemes);
+    return diversifiedThemes.slice(0, 10);
   } catch (error) {
     console.error('Theme generation failed:', error);
     return [];
