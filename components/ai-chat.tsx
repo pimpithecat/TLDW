@@ -248,189 +248,195 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
     }
   }, [input, isLoading, messages, transcript, topics, videoId]);
 
-  const executeKeyTakeaways = useCallback(async ({ skipUserMessage } = {}) => {
-    if (transcript.length === 0) {
-      return;
-    }
-
-    if (isLoading) {
-      return;
-    }
-
-    if (!skipUserMessage && askedQuestions.has(KEY_TAKEAWAYS_LABEL)) {
-      return;
-    }
-
-    presetPromptMapRef.current.set(KEY_TAKEAWAYS_LABEL, PRESET_KEY_TAKEAWAYS);
-
-    if (!skipUserMessage) {
-      const userMessage: ChatMessage = {
-        id: Date.now().toString(),
-        role: "user",
-        content: KEY_TAKEAWAYS_LABEL,
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, userMessage]);
-    }
-
-    setAskedQuestions(prev => {
-      const next = new Set(prev);
-      next.add(KEY_TAKEAWAYS_LABEL);
-      return next;
-    });
-
-    setIsLoading(true);
-
-    try {
-      const requestVideoInfo: Partial<VideoInfo> = {
-        title: videoInfo?.title ?? videoTitle ?? "Untitled video",
-        author: videoInfo?.author,
-        description: videoInfo?.description,
-      };
-
-      const summaryResponse = await fetch("/api/generate-summary", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transcript,
-          videoInfo: requestVideoInfo,
-          videoId,
-        }),
-      });
-
-      if (!summaryResponse.ok) {
-        const errorData = await summaryResponse.json().catch(() => ({}));
-        const errorText = typeof errorData.error === "string" ? errorData.error : "Failed to generate takeaways.";
-        throw new Error(errorText);
+  const executeKeyTakeaways = useCallback(
+    async ({ skipUserMessage = false }: { skipUserMessage?: boolean } = {}) => {
+      if (transcript.length === 0) {
+        return;
       }
 
-      const rawSummary = await summaryResponse.json();
-      const parsedSummary = summaryResponseSchema.parse(rawSummary);
-      const content = 'summaryContent' in parsedSummary
-        ? parsedSummary.summaryContent
-        : parsedSummary.summary;
+      if (isLoading) {
+        return;
+      }
 
-      const normalizedContent = normalizeBracketTimestamps(content);
+      if (!skipUserMessage && askedQuestions.has(KEY_TAKEAWAYS_LABEL)) {
+        return;
+      }
 
-      const assistantMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: normalizedContent,
-        timestamp: new Date(),
-      };
+      presetPromptMapRef.current.set(KEY_TAKEAWAYS_LABEL, PRESET_KEY_TAKEAWAYS);
 
-      setMessages(prev => [...prev, assistantMessage]);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to generate takeaways. Please try again.";
-
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 2).toString(),
-        role: "assistant",
-        content: errorMessage,
-        timestamp: new Date(),
-      }]);
+      if (!skipUserMessage) {
+        const userMessage: ChatMessage = {
+          id: Date.now().toString(),
+          role: "user",
+          content: KEY_TAKEAWAYS_LABEL,
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, userMessage]);
+      }
 
       setAskedQuestions(prev => {
         const next = new Set(prev);
-        next.delete(KEY_TAKEAWAYS_LABEL);
+        next.add(KEY_TAKEAWAYS_LABEL);
         return next;
       });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [askedQuestions, isLoading, transcript, videoInfo, videoId, videoTitle]);
 
-  const executeTopQuotes = useCallback(async ({ skipUserMessage } = {}) => {
-    if (transcript.length === 0) {
-      return;
-    }
+      setIsLoading(true);
 
-    if (isLoading) {
-      return;
-    }
+      try {
+        const requestVideoInfo: Partial<VideoInfo> = {
+          title: videoInfo?.title ?? videoTitle ?? "Untitled video",
+          author: videoInfo?.author,
+          description: videoInfo?.description,
+        };
 
-    if (!skipUserMessage && askedQuestions.has(TOP_QUOTES_LABEL)) {
-      return;
-    }
+        const summaryResponse = await fetch("/api/generate-summary", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            transcript,
+            videoInfo: requestVideoInfo,
+            videoId,
+          }),
+        });
 
-    presetPromptMapRef.current.set(TOP_QUOTES_LABEL, PRESET_TOP_QUOTES);
+        if (!summaryResponse.ok) {
+          const errorData = await summaryResponse.json().catch(() => ({}));
+          const errorText = typeof errorData.error === "string" ? errorData.error : "Failed to generate takeaways.";
+          throw new Error(errorText);
+        }
 
-    if (!skipUserMessage) {
-      const userMessage: ChatMessage = {
-        id: Date.now().toString(),
-        role: "user",
-        content: TOP_QUOTES_LABEL,
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, userMessage]);
-    }
+        const rawSummary = await summaryResponse.json();
+        const parsedSummary = summaryResponseSchema.parse(rawSummary);
+        const content = 'summaryContent' in parsedSummary
+          ? parsedSummary.summaryContent
+          : parsedSummary.summary;
 
-    setAskedQuestions(prev => {
-      const next = new Set(prev);
-      next.add(TOP_QUOTES_LABEL);
-      return next;
-    });
+        const normalizedContent = normalizeBracketTimestamps(content);
 
-    setIsLoading(true);
+        const assistantMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: normalizedContent,
+          timestamp: new Date(),
+        };
 
-    try {
-      const requestVideoInfo: Partial<VideoInfo> = {
-        title: videoInfo?.title ?? videoTitle ?? "Untitled video",
-        author: videoInfo?.author,
-        description: videoInfo?.description,
-      };
+        setMessages(prev => [...prev, assistantMessage]);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Failed to generate takeaways. Please try again.";
 
-      const response = await fetch("/api/top-quotes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transcript,
-          videoInfo: requestVideoInfo,
-        }),
-      });
+        setMessages(prev => [...prev, {
+          id: (Date.now() + 2).toString(),
+          role: "assistant",
+          content: errorMessage,
+          timestamp: new Date(),
+        }]);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorText = typeof errorData.error === "string" ? errorData.error : "Failed to generate top quotes.";
-        throw new Error(errorText);
+        setAskedQuestions(prev => {
+          const next = new Set(prev);
+          next.delete(KEY_TAKEAWAYS_LABEL);
+          return next;
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [askedQuestions, isLoading, transcript, videoInfo, videoId, videoTitle]
+  );
+
+  const executeTopQuotes = useCallback(
+    async ({ skipUserMessage = false }: { skipUserMessage?: boolean } = {}) => {
+      if (transcript.length === 0) {
+        return;
       }
 
-      const data = await response.json();
-      const content = typeof data.quotesMarkdown === "string" && data.quotesMarkdown.trim().length > 0
-        ? data.quotesMarkdown
-        : null;
-
-      if (!content) {
-        throw new Error("No quotes were returned. Please try again.");
+      if (isLoading) {
+        return;
       }
 
-      const assistantMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content,
-        timestamp: new Date(),
-      };
+      if (!skipUserMessage && askedQuestions.has(TOP_QUOTES_LABEL)) {
+        return;
+      }
 
-      setMessages(prev => [...prev, assistantMessage]);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to generate top quotes. Please try again.";
+      presetPromptMapRef.current.set(TOP_QUOTES_LABEL, PRESET_TOP_QUOTES);
 
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 2).toString(),
-        role: "assistant",
-        content: errorMessage,
-        timestamp: new Date(),
-      }]);
+      if (!skipUserMessage) {
+        const userMessage: ChatMessage = {
+          id: Date.now().toString(),
+          role: "user",
+          content: TOP_QUOTES_LABEL,
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, userMessage]);
+      }
 
       setAskedQuestions(prev => {
         const next = new Set(prev);
-        next.delete(TOP_QUOTES_LABEL);
+        next.add(TOP_QUOTES_LABEL);
         return next;
       });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [askedQuestions, isLoading, transcript, videoInfo, videoTitle]);
+
+      setIsLoading(true);
+
+      try {
+        const requestVideoInfo: Partial<VideoInfo> = {
+          title: videoInfo?.title ?? videoTitle ?? "Untitled video",
+          author: videoInfo?.author,
+          description: videoInfo?.description,
+        };
+
+        const response = await fetch("/api/top-quotes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            transcript,
+            videoInfo: requestVideoInfo,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorText = typeof errorData.error === "string" ? errorData.error : "Failed to generate top quotes.";
+          throw new Error(errorText);
+        }
+
+        const data = await response.json();
+        const content = typeof data.quotesMarkdown === "string" && data.quotesMarkdown.trim().length > 0
+          ? data.quotesMarkdown
+          : null;
+
+        if (!content) {
+          throw new Error("No quotes were returned. Please try again.");
+        }
+
+        const assistantMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content,
+          timestamp: new Date(),
+        };
+
+        setMessages(prev => [...prev, assistantMessage]);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Failed to generate top quotes. Please try again.";
+
+        setMessages(prev => [...prev, {
+          id: (Date.now() + 2).toString(),
+          role: "assistant",
+          content: errorMessage,
+          timestamp: new Date(),
+        }]);
+
+        setAskedQuestions(prev => {
+          const next = new Set(prev);
+          next.delete(TOP_QUOTES_LABEL);
+          return next;
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [askedQuestions, isLoading, transcript, videoInfo, videoTitle]
+  );
 
   const handleAskKeyTakeaways = useCallback(() => {
     void executeKeyTakeaways();
