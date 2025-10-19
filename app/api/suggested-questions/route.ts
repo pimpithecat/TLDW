@@ -16,7 +16,14 @@ function formatTranscriptForContext(segments: TranscriptSegment[]): string {
 
 async function handler(request: NextRequest) {
   try {
-    const { transcript, topics, videoTitle } = await request.json();
+    const {
+      transcript,
+      topics,
+      videoTitle,
+      count,
+      exclude,
+      lastQuestion,
+    } = await request.json();
 
     if (!transcript || !Array.isArray(transcript)) {
       return NextResponse.json(
@@ -24,6 +31,64 @@ async function handler(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const requestedCountRaw = typeof count === 'number' ? Math.round(count) : 3;
+    const requestedCount = Math.min(Math.max(requestedCountRaw, 1), 5);
+
+    const excludeList = Array.isArray(exclude)
+      ? exclude
+          .filter((item: unknown): item is string => typeof item === 'string')
+          .map(item => item.trim())
+          .filter(item => item.length > 0)
+      : [];
+    const uniqueExclude = Array.from(new Set(excludeList));
+    const excludeLower = new Set(uniqueExclude.map(item => item.toLowerCase()));
+
+    const lastViewerQuestion = typeof lastQuestion === 'string'
+      ? lastQuestion.trim()
+      : '';
+
+    const fallbackPool = [
+      "What evidence backs the main claim?",
+      "How do the key steps connect?",
+      "Why does this insight matter now?",
+      "What example clarifies the takeaway?",
+      "How can I apply this idea today?"
+    ];
+    const supplementalFallbacks = [
+      "Which detail should I double-check in the transcript?",
+      "Where does the speaker justify this idea?"
+    ];
+
+    const buildFallback = () => {
+      const results: string[] = [];
+      for (const question of fallbackPool) {
+        if (results.length >= requestedCount) break;
+        if (excludeLower.has(question.toLowerCase())) continue;
+        results.push(question);
+      }
+      for (const question of supplementalFallbacks) {
+        if (results.length >= requestedCount) break;
+        if (excludeLower.has(question.toLowerCase())) continue;
+        if (!results.some(existing => existing.toLowerCase() === question.toLowerCase())) {
+          results.push(question);
+        }
+      }
+      while (results.length < requestedCount) {
+        const filler = "What detail should I revisit in the transcript?";
+        if (!results.some(existing => existing.toLowerCase() === filler.toLowerCase())
+          && !excludeLower.has(filler.toLowerCase())) {
+          results.push(filler);
+        } else {
+          results.push("Which statement deserves closer scrutiny?");
+        }
+      }
+      return results.slice(0, requestedCount);
+    };
+
+    const exclusionsSection = uniqueExclude.length
+      ? uniqueExclude.map(q => `  <item>${q}</item>`).join('\n')
+      : '  <item>None</item>';
 
     const fullTranscript = formatTranscriptForContext(transcript);
     const topicsContext = Array.isArray(topics) && topics.length > 0
@@ -41,19 +106,28 @@ async function handler(request: NextRequest) {
 ${topicsContext}
 </coveredHighlights>
 </context>
-<goal>Generate exactly three fresh, non-overlapping questions that deepen understanding of the transcript.</goal>
+<viewerContext>
+  <lastViewerQuestion>${lastViewerQuestion || 'None provided'}</lastViewerQuestion>
+  <excludedQuestions>
+${exclusionsSection}
+  </excludedQuestions>
+</viewerContext>
+<goal>Generate exactly ${requestedCount} fresh, non-overlapping questions that deepen understanding of the transcript.</goal>
 <instructions>
   <item>Every question must be fully answerable using the transcript alone.</item>
   <item>Avoid any theme that overlaps the provided highlight reels.</item>
-  <item>Keep each question under 15 words and written in the transcript's primary language.</item>
+  <item>Keep each question under 12 words and use direct, concrete language.</item>
   <item>Prefer "what", "how", or "why" framing over yes/no or multi-part prompts.</item>
+  <item>Skip filler like "Can you explain" or "Could you talk about".</item>
+  <item>Do not repeat excluded or previously asked questions verbatim.</item>
+  <item>If a last viewer question is provided, build on it with a complementary angle.</item>
   <item>Focus on concrete facts, reasoning, examples, or explanations explicitly stated in the transcript.</item>
 </instructions>
 <validationChecklist>
   <item>If you cannot point to the exact supporting sentences, discard the question.</item>
-  <item>Ensure the three questions cover distinct ideas.</item>
+  <item>Ensure the questions cover distinct ideas.</item>
 </validationChecklist>
-<outputFormat>Return strict JSON with exactly three strings: ["question 1","question 2","question 3"]. No additional text.</outputFormat>
+<outputFormat>Return strict JSON with exactly ${requestedCount} strings: ["question 1","question 2",...]. No additional text.</outputFormat>
 <transcript><![CDATA[
 ${fullTranscript}
 ]]></transcript>
@@ -68,17 +142,13 @@ ${fullTranscript}
         },
         zodSchema: suggestedQuestionsSchema
       });
-    } catch (error: any) {
+    } catch {
       response = '';
     }
 
     if (!response) {
       return NextResponse.json({
-        questions: [
-          "What contrarian or surprising insights challenge conventional thinking?",
-          "What specific examples or case studies illustrate the key concepts?",
-          "What are the practical implications for someone in my field?"
-        ]
+        questions: buildFallback()
       });
     }
 
@@ -86,31 +156,47 @@ ${fullTranscript}
     try {
       const parsed = JSON.parse(response);
       questions = suggestedQuestionsSchema.parse(parsed);
-    } catch (parseError) {
+    } catch {
       questions = [];
     }
 
-    questions = questions
-      .filter(q => typeof q === 'string' && q.trim().length > 0)
-      .map(q => q.trim())
-      .slice(0, 3);
-    
-    
-    if (questions.length === 0) {
-      questions = [
-        "What's the most actionable advice I can apply immediately?",
-        "Which ideas challenge my current assumptions?",
-        "What evidence or data supports the main arguments?"
-      ];
+    const normalizeQuestion = (value: string) =>
+      typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+
+    const normalized = Array.from(new Set(
+      questions
+        .filter(q => typeof q === 'string')
+        .map(normalizeQuestion)
+        .filter(q => q.length > 0)
+    ));
+
+    const filtered = normalized.filter(q => !excludeLower.has(q.toLowerCase()));
+
+    let finalQuestions = filtered.slice(0, requestedCount);
+
+    if (finalQuestions.length < requestedCount) {
+      const fallback = buildFallback();
+      for (const candidate of fallback) {
+        if (finalQuestions.length >= requestedCount) {
+          break;
+        }
+        if (!finalQuestions.some(existing => existing.toLowerCase() === candidate.toLowerCase())) {
+          finalQuestions.push(candidate);
+        }
+      }
     }
 
-    return NextResponse.json({ questions });
-  } catch (error) {
+    if (finalQuestions.length === 0) {
+      finalQuestions = buildFallback();
+    }
+
+    return NextResponse.json({ questions: finalQuestions.slice(0, requestedCount) });
+  } catch {
     return NextResponse.json(
       { questions: [
-        "What's the most actionable advice I can apply immediately?",
-        "Which ideas challenge my current assumptions?",
-        "What evidence or data supports the main arguments?"
+        "What evidence backs the main claim?",
+        "How do the key steps connect?",
+        "Why does this insight matter now?"
       ] },
       { status: 200 }
     );

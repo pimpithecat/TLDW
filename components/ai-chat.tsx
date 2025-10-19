@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, RefObject } from "react";
+import { useState, useRef, useEffect, useCallback, RefObject, Fragment } from "react";
 import { z } from "zod";
 import { ChatMessage, TranscriptSegment, Topic, Citation, NoteSource, NoteMetadata, VideoInfo } from "@/lib/types";
 import { SelectionActions, SelectionActionPayload, triggerExplainSelection, EXPLAIN_SELECTION_EVENT } from "@/components/selection-actions";
@@ -28,6 +28,7 @@ type SuggestedMessage = string | {
   prompt: string;
   display?: string;
   askedLabel?: string;
+  skipTracking?: boolean;
 };
 
 const citationSchema = z.object({
@@ -70,11 +71,17 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
   const [isLoading, setIsLoading] = useState(false);
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([]);
+  const [loadingFollowUps, setLoadingFollowUps] = useState(false);
+  const [followUpAnchorId, setFollowUpAnchorId] = useState<string | null>(null);
   const [askedQuestions, setAskedQuestions] = useState<Set<string>>(new Set());
   const chatMessagesContainerRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const scrollViewportRef = useRef<HTMLDivElement | null>(null);
   const presetPromptMapRef = useRef<Map<string, string>>(new Map());
+  const dismissedQuestionsRef = useRef<Set<string>>(new Set());
+  const followUpQuestionsRef = useRef<string[]>([]);
+  const followUpRequestIdRef = useRef(0);
 
   useEffect(() => {
     const viewport = scrollViewportRef.current;
@@ -101,10 +108,41 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
   // Reset questions when video changes
   useEffect(() => {
     setSuggestedQuestions([]);
+    setFollowUpQuestions([]);
     setAskedQuestions(new Set());
     presetPromptMapRef.current.clear();
+    dismissedQuestionsRef.current = new Set();
+    setFollowUpAnchorId(null);
   }, [videoId]);
 
+  useEffect(() => {
+    followUpQuestionsRef.current = followUpQuestions;
+  }, [followUpQuestions]);
+
+  const fetchSuggestedQuestions = useCallback(async () => {
+    setLoadingQuestions(true);
+    try {
+      const response = await fetch("/api/suggested-questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transcript,
+          topics,
+          videoTitle,
+          count: 3,
+          exclude: Array.from(dismissedQuestionsRef.current),
+        }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setSuggestedQuestions(data.questions || []);
+      }
+    } catch {
+    } finally {
+      setLoadingQuestions(false);
+    }
+  }, [transcript, topics, videoTitle]);
   // Update suggested questions when cached questions change
   useEffect(() => {
     if (cachedSuggestedQuestions && cachedSuggestedQuestions.length > 0) {
@@ -115,9 +153,71 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
   // Only fetch new questions if we don't have cached ones
   useEffect(() => {
     if (transcript.length > 0 && suggestedQuestions.length === 0 && !cachedSuggestedQuestions) {
-      fetchSuggestedQuestions();
+      void fetchSuggestedQuestions();
     }
-  }, [transcript, cachedSuggestedQuestions]);
+  }, [transcript, cachedSuggestedQuestions, suggestedQuestions.length, fetchSuggestedQuestions]);
+
+  const requestFollowUpQuestions = useCallback(async (lastQuestion?: string) => {
+    if (transcript.length === 0) {
+      return [];
+    }
+
+    try {
+      const excludeAccumulator = new Set<string>();
+      dismissedQuestionsRef.current.forEach(question => {
+        const trimmed = question.trim();
+        if (trimmed.length > 0) {
+          excludeAccumulator.add(trimmed);
+        }
+      });
+      suggestedQuestions.forEach(question => {
+        const trimmed = question.trim();
+        if (trimmed.length > 0) {
+          excludeAccumulator.add(trimmed);
+        }
+      });
+      followUpQuestionsRef.current.forEach(question => {
+        const trimmed = question.trim();
+        if (trimmed.length > 0) {
+          excludeAccumulator.add(trimmed);
+        }
+      });
+      if (typeof lastQuestion === "string") {
+        const trimmedLast = lastQuestion.trim();
+        if (trimmedLast.length > 0) {
+          excludeAccumulator.add(trimmedLast);
+        }
+      }
+
+      const response = await fetch("/api/suggested-questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transcript,
+          topics,
+          videoTitle,
+          count: 2,
+          lastQuestion,
+          exclude: Array.from(excludeAccumulator),
+        }),
+      });
+
+      if (!response.ok) {
+        return [];
+      }
+
+      const data = await response.json();
+      const nextQuestions = Array.isArray(data.questions)
+        ? data.questions
+            .filter((q: unknown): q is string => typeof q === "string" && q.trim().length > 0)
+            .map((q: string) => q.trim())
+            .slice(0, 2)
+        : [];
+      return nextQuestions;
+    } catch {
+      return [];
+    }
+  }, [transcript, topics, videoTitle, suggestedQuestions]);
 
   const sendMessage = useCallback(async (messageInput?: SuggestedMessage, retryCount = 0) => {
     const isObjectInput = typeof messageInput === "object" && messageInput !== null;
@@ -138,8 +238,27 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
       : typeof messageInput === "string"
         ? messageInput
         : undefined;
+    const skipTracking = isObjectInput ? Boolean(messageInput.skipTracking) : false;
 
     if (!promptText || isLoading) return;
+
+    let shouldGenerateFollowUps = false;
+    let followUpPromise: Promise<{ id: number; questions: string[]; error: boolean }> | null = null;
+    let assistantMessageId: string | null = null;
+
+    if (transcript.length > 0) {
+      const requestId = followUpRequestIdRef.current + 1;
+      followUpRequestIdRef.current = requestId;
+      setLoadingFollowUps(true);
+      followUpPromise = (async () => {
+        try {
+          const questions = await requestFollowUpQuestions(promptText);
+          return { id: requestId, questions, error: false as const };
+        } catch {
+          return { id: requestId, questions: [] as string[], error: true as const };
+        }
+      })();
+    }
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -152,7 +271,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
     if (retryCount === 0) {
       setMessages(prev => [...prev, userMessage]);
       setInput("");
-      if (askedLabel) {
+      if (askedLabel && !skipTracking) {
         setAskedQuestions(prev => {
           const next = new Set(prev);
           next.add(askedLabel);
@@ -205,8 +324,10 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
         citations: parsedData.citations || [],
         timestamp: new Date(),
       };
+      assistantMessageId = assistantMessage.id;
 
       setMessages(prev => [...prev, assistantMessage]);
+      shouldGenerateFollowUps = true;
     } catch (error) {
       
       // Retry logic for temporary failures
@@ -245,8 +366,23 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
       setMessages(prev => [...prev, errorMsg]);
     } finally {
       setIsLoading(false);
+      if (followUpPromise) {
+        const { id, questions, error } = await followUpPromise;
+        if (followUpRequestIdRef.current === id) {
+          if (!error && shouldGenerateFollowUps) {
+            if (assistantMessageId && questions.length > 0) {
+              setFollowUpQuestions(questions);
+              setFollowUpAnchorId(assistantMessageId);
+            } else if (assistantMessageId) {
+              setFollowUpQuestions([]);
+              setFollowUpAnchorId(null);
+            }
+          }
+          setLoadingFollowUps(false);
+        }
+      }
     }
-  }, [input, isLoading, messages, transcript, topics, videoId]);
+  }, [input, isLoading, messages, transcript, topics, videoId, requestFollowUpQuestions]);
 
   const executeKeyTakeaways = useCallback(
     async ({ skipUserMessage = false }: { skipUserMessage?: boolean } = {}) => {
@@ -281,6 +417,23 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
       });
 
       setIsLoading(true);
+      let followUpPromise: Promise<{ id: number; questions: string[]; error: boolean }> | null = null;
+      let shouldGenerateFollowUps = false;
+      let assistantMessageId: string | null = null;
+
+      if (transcript.length > 0) {
+        const requestId = followUpRequestIdRef.current + 1;
+        followUpRequestIdRef.current = requestId;
+        setLoadingFollowUps(true);
+        followUpPromise = (async () => {
+          try {
+            const questions = await requestFollowUpQuestions(KEY_TAKEAWAYS_LABEL);
+            return { id: requestId, questions, error: false as const };
+          } catch {
+            return { id: requestId, questions: [] as string[], error: true as const };
+          }
+        })();
+      }
 
       try {
         const requestVideoInfo: Partial<VideoInfo> = {
@@ -321,6 +474,8 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
         };
 
         setMessages(prev => [...prev, assistantMessage]);
+        assistantMessageId = assistantMessage.id;
+        shouldGenerateFollowUps = true;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Failed to generate takeaways. Please try again.";
 
@@ -338,9 +493,24 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
         });
       } finally {
         setIsLoading(false);
+        if (followUpPromise) {
+          const { id, questions, error } = await followUpPromise;
+          if (followUpRequestIdRef.current === id) {
+            if (!error && shouldGenerateFollowUps) {
+              if (assistantMessageId && questions.length > 0) {
+                setFollowUpQuestions(questions);
+                setFollowUpAnchorId(assistantMessageId);
+              } else if (assistantMessageId) {
+                setFollowUpQuestions([]);
+                setFollowUpAnchorId(null);
+              }
+            }
+            setLoadingFollowUps(false);
+          }
+        }
       }
     },
-    [askedQuestions, isLoading, transcript, videoInfo, videoId, videoTitle]
+    [askedQuestions, isLoading, transcript, videoInfo, videoId, videoTitle, requestFollowUpQuestions]
   );
 
   const executeTopQuotes = useCallback(
@@ -376,6 +546,23 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
       });
 
       setIsLoading(true);
+      let followUpPromise: Promise<{ id: number; questions: string[]; error: boolean }> | null = null;
+      let shouldGenerateFollowUps = false;
+      let assistantMessageId: string | null = null;
+
+      if (transcript.length > 0) {
+        const requestId = followUpRequestIdRef.current + 1;
+        followUpRequestIdRef.current = requestId;
+        setLoadingFollowUps(true);
+        followUpPromise = (async () => {
+          try {
+            const questions = await requestFollowUpQuestions(TOP_QUOTES_LABEL);
+            return { id: requestId, questions, error: false as const };
+          } catch {
+            return { id: requestId, questions: [] as string[], error: true as const };
+          }
+        })();
+      }
 
       try {
         const requestVideoInfo: Partial<VideoInfo> = {
@@ -416,6 +603,8 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
         };
 
         setMessages(prev => [...prev, assistantMessage]);
+        assistantMessageId = assistantMessage.id;
+        shouldGenerateFollowUps = true;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Failed to generate top quotes. Please try again.";
 
@@ -433,9 +622,24 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
         });
       } finally {
         setIsLoading(false);
+        if (followUpPromise) {
+          const { id, questions, error } = await followUpPromise;
+          if (followUpRequestIdRef.current === id) {
+            if (!error && shouldGenerateFollowUps) {
+              if (assistantMessageId && questions.length > 0) {
+                setFollowUpQuestions(questions);
+                setFollowUpAnchorId(assistantMessageId);
+              } else if (assistantMessageId) {
+                setFollowUpQuestions([]);
+                setFollowUpAnchorId(null);
+              }
+            }
+            setLoadingFollowUps(false);
+          }
+        }
       }
     },
-    [askedQuestions, isLoading, transcript, videoInfo, videoTitle]
+    [askedQuestions, isLoading, transcript, videoInfo, videoTitle, requestFollowUpQuestions]
   );
 
   const handleAskKeyTakeaways = useCallback(() => {
@@ -465,25 +669,37 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
     };
   }, [sendMessage, videoTitle]);
 
-
-  const fetchSuggestedQuestions = async () => {
-    setLoadingQuestions(true);
-    try {
-      const response = await fetch("/api/suggested-questions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript, topics, videoTitle }),
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setSuggestedQuestions(data.questions || []);
-      }
-    } catch (error) {
-    } finally {
-      setLoadingQuestions(false);
+  const handleSuggestedQuestionClick = useCallback((question: string, index: number) => {
+    if (isLoading) {
+      return;
     }
-  };
+    setSuggestedQuestions(prev => prev.filter((_, i) => i !== index));
+    dismissedQuestionsRef.current.add(question);
+    sendMessage({
+      prompt: question,
+      display: question,
+      skipTracking: true,
+    });
+  }, [isLoading, sendMessage]);
+
+  const handleFollowUpQuestionClick = useCallback((question: string, index: number) => {
+    if (isLoading) {
+      return;
+    }
+    setFollowUpQuestions(prev => {
+      const next = prev.filter((_, i) => i !== index);
+      if (next.length === 0) {
+        setFollowUpAnchorId(null);
+      }
+      return next;
+    });
+    dismissedQuestionsRef.current.add(question);
+    sendMessage({
+      prompt: question,
+      display: question,
+      skipTracking: true,
+    });
+  }, [isLoading, sendMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -537,30 +753,33 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
         }}>
           <div className="space-y-3.5 pt-3">
             <div className="flex w-full flex-col items-end gap-2">
-              <Button
-                variant="pill"
-                size="sm"
-                onClick={handleAskKeyTakeaways}
-                disabled={isLoading || hasAskedKeyTakeaways || transcript.length === 0}
-                className="self-end w-fit max-w-full sm:max-w-[80%] h-auto justify-start text-left whitespace-normal break-words leading-snug py-2 px-4 transition-colors hover:bg-neutral-100"
-              >
-                {KEY_TAKEAWAYS_LABEL}
-              </Button>
-              <Button
-                variant="pill"
-                size="sm"
-                onClick={handleAskTopQuotes}
-                disabled={isLoading || hasAskedTopQuotes || transcript.length === 0}
-                className="self-end w-fit max-w-full sm:max-w-[80%] h-auto justify-start text-left whitespace-normal break-words leading-snug py-2 px-4 transition-colors hover:bg-neutral-100"
-              >
-                {TOP_QUOTES_LABEL}
-              </Button>
+              {!hasAskedKeyTakeaways && (
+                <Button
+                  variant="pill"
+                  size="sm"
+                  onClick={handleAskKeyTakeaways}
+                  disabled={isLoading || transcript.length === 0}
+                  className="self-end w-fit max-w-full sm:max-w-[80%] h-auto justify-start text-left whitespace-normal break-words leading-snug py-2 px-4 transition-colors hover:bg-neutral-100"
+                >
+                  {KEY_TAKEAWAYS_LABEL}
+                </Button>
+              )}
+              {!hasAskedTopQuotes && (
+                <Button
+                  variant="pill"
+                  size="sm"
+                  onClick={handleAskTopQuotes}
+                  disabled={isLoading || transcript.length === 0}
+                  className="self-end w-fit max-w-full sm:max-w-[80%] h-auto justify-start text-left whitespace-normal break-words leading-snug py-2 px-4 transition-colors hover:bg-neutral-100"
+                >
+                  {TOP_QUOTES_LABEL}
+                </Button>
+              )}
               <SuggestedQuestions
                 questions={suggestedQuestions}
-                onQuestionClick={sendMessage}
+                onQuestionClick={handleSuggestedQuestionClick}
                 isLoading={loadingQuestions}
                 isChatLoading={isLoading}
-                askedQuestions={askedQuestions}
               />
             </div>
             <div ref={chatMessagesContainerRef}>
@@ -580,18 +799,34 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
                 }}
                 source="chat"
               />
-              {messages.map((message) => (
-              <ChatMessageComponent
-                key={message.id}
-                message={message}
-                onCitationClick={onCitationClick}
-                onTimestampClick={onTimestampClick}
-                onRetry={message.role === 'assistant' ? handleRetry : undefined}
-                onSaveNote={message.role === 'assistant' ? onSaveNote : undefined}
-              />
-              ))}
+              {messages.map((message) => {
+                const showFollowUps =
+                  followUpQuestions.length > 0 &&
+                  followUpAnchorId !== null &&
+                  message.id === followUpAnchorId;
+                return (
+                  <Fragment key={message.id}>
+                    <ChatMessageComponent
+                      message={message}
+                      onCitationClick={onCitationClick}
+                      onTimestampClick={onTimestampClick}
+                      onRetry={message.role === 'assistant' ? handleRetry : undefined}
+                      onSaveNote={message.role === 'assistant' ? onSaveNote : undefined}
+                    />
+                    {showFollowUps && (
+                      <div className="mt-3">
+                        <SuggestedQuestions
+                          questions={followUpQuestions}
+                          onQuestionClick={handleFollowUpQuestionClick}
+                          isLoading={loadingFollowUps}
+                          isChatLoading={isLoading}
+                        />
+                      </div>
+                    )}
+                  </Fragment>
+                );
+              })}
             </div>
-
             {isLoading && (
               <div className="flex items-center gap-2 mb-3">
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
