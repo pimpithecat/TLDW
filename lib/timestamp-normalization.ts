@@ -44,7 +44,7 @@ export function sanitizeTimestamp(value: string): string | null {
     .replace(/\s+/g, ' ')
     .trim();
 
-  const directMatch = cleaned.match(/(\d{1,2}:\d{2}:\d{2}|\d{1,2}:\d{2})/);
+  const directMatch = cleaned.match(/(\d{1,2}:\d{1,2}:\d{1,2}|\d{1,2}:\d{1,2})/);
   if (directMatch) {
     const parts = directMatch[1].split(':').map(part => parseInt(part, 10));
     if (parts.some(Number.isNaN)) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, RefObject, Fragment } from "react";
+import { useState, useRef, useEffect, useCallback, RefObject, Fragment, useMemo } from "react";
 import { z } from "zod";
 import { ChatMessage, TranscriptSegment, Topic, Citation, NoteSource, NoteMetadata, VideoInfo } from "@/lib/types";
 import { SelectionActions, SelectionActionPayload, triggerExplainSelection, EXPLAIN_SELECTION_EVENT } from "@/components/selection-actions";
@@ -11,6 +11,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Send, Loader2 } from "lucide-react";
+import { buildSuggestedQuestionFallbacks } from "@/lib/suggested-question-fallback";
+import { STRICT_TIMESTAMP_RANGE_REGEX, parseTimestamp } from "@/lib/timestamp-utils";
+import { sanitizeTimestamp } from "@/lib/timestamp-normalization";
 
 const KEY_TAKEAWAYS_LABEL = "What are the key takeaways?";
 const TOP_QUOTES_LABEL = "What are the juciest quotes?";
@@ -30,6 +33,47 @@ type SuggestedMessage = string | {
   askedLabel?: string;
   skipTracking?: boolean;
 };
+
+function normalizeTopicTimestampRange(value?: string): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const inner = trimmed
+    .replace(/^[[({\s]+/, '')
+    .replace(/[\])}\s]+$/, '')
+    .replace(/–|—/g, '-')
+    .replace(/\bto\b/gi, '-');
+
+  const parts = inner.split('-').map(part => part.trim()).filter(Boolean);
+  if (parts.length !== 2) {
+    return null;
+  }
+
+  const normalizedParts: string[] = [];
+  for (const part of parts) {
+    const sanitized = sanitizeTimestamp(part);
+    if (!sanitized) {
+      return null;
+    }
+    normalizedParts.push(sanitized);
+  }
+
+  const [start, end] = normalizedParts;
+  const startSeconds = parseTimestamp(start);
+  const endSeconds = parseTimestamp(end);
+
+  if (startSeconds == null || endSeconds == null || endSeconds <= startSeconds) {
+    return null;
+  }
+
+  return `[${start}-${end}]`;
+}
 
 const citationSchema = z.object({
   number: z.number(),
@@ -119,6 +163,47 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
     followUpQuestionsRef.current = followUpQuestions;
   }, [followUpQuestions]);
 
+  const applyFallbackSuggestedQuestions = useCallback(() => {
+    setSuggestedQuestions(prev => {
+      if (prev.length > 0) {
+        return prev;
+      }
+      return buildSuggestedQuestionFallbacks(
+        3,
+        dismissedQuestionsRef.current
+      );
+    });
+  }, []);
+
+  const sanitizedTopicsForChat = useMemo(() => {
+    return topics.map(topic => {
+      const timestamp = topic.quote?.timestamp;
+      if (!timestamp) {
+        return topic;
+      }
+
+      const normalized = normalizeTopicTimestampRange(timestamp);
+
+      if (!normalized) {
+        const { quote: _quote, ...rest } = topic;
+        return { ...rest };
+      }
+
+      if (normalized !== timestamp || !STRICT_TIMESTAMP_RANGE_REGEX.test(timestamp.trim())) {
+          const baseQuote = topic.quote ? { ...topic.quote } : { text: "", timestamp: normalized };
+          return {
+            ...topic,
+            quote: {
+              ...baseQuote,
+              timestamp: normalized
+            }
+          };
+      }
+
+      return topic;
+    });
+  }, [topics]);
+
   const fetchSuggestedQuestions = useCallback(async () => {
     setLoadingQuestions(true);
     try {
@@ -127,7 +212,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           transcript,
-          topics,
+          topics: sanitizedTopicsForChat,
           videoTitle,
           count: 3,
           exclude: Array.from(dismissedQuestionsRef.current),
@@ -135,14 +220,37 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
       });
       
       if (response.ok) {
-        const data = await response.json();
-        setSuggestedQuestions(data.questions || []);
+        let data: unknown;
+        try {
+          data = await response.json();
+        } catch (error) {
+          console.error("Failed to parse suggested questions response:", error);
+          applyFallbackSuggestedQuestions();
+          return;
+        }
+
+        const questions = Array.isArray((data as any)?.questions)
+          ? (data as any).questions
+              .filter((item: unknown): item is string => typeof item === "string" && item.trim().length > 0)
+              .map((item: string) => item.trim())
+          : [];
+
+        if (questions.length > 0) {
+          setSuggestedQuestions(questions);
+        } else {
+          applyFallbackSuggestedQuestions();
+        }
+      } else {
+        console.error("Suggested questions request failed:", response.status, response.statusText);
+        applyFallbackSuggestedQuestions();
       }
-    } catch {
+    } catch (error) {
+      console.error("Error fetching suggested questions:", error);
+      applyFallbackSuggestedQuestions();
     } finally {
       setLoadingQuestions(false);
     }
-  }, [transcript, topics, videoTitle]);
+  }, [transcript, sanitizedTopicsForChat, videoTitle, applyFallbackSuggestedQuestions]);
   // Update suggested questions when cached questions change
   useEffect(() => {
     if (cachedSuggestedQuestions && cachedSuggestedQuestions.length > 0) {
@@ -158,52 +266,46 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
   }, [transcript, cachedSuggestedQuestions, suggestedQuestions.length, fetchSuggestedQuestions]);
 
   const requestFollowUpQuestions = useCallback(async (lastQuestion?: string) => {
+    const excludeAccumulator = new Set<string>();
+    const addToExclude = (question: string | undefined | null) => {
+      if (!question) {
+        return;
+      }
+      const trimmed = question.trim();
+      if (trimmed.length > 0) {
+        excludeAccumulator.add(trimmed);
+      }
+    };
+
+    dismissedQuestionsRef.current.forEach(addToExclude);
+    suggestedQuestions.forEach(addToExclude);
+    followUpQuestionsRef.current.forEach(addToExclude);
+    addToExclude(lastQuestion);
+
+    const excludeList = Array.from(excludeAccumulator);
+    const buildFallbackFollowUps = (existing: string[] = []) =>
+      buildSuggestedQuestionFallbacks(2, excludeList, existing);
+
     if (transcript.length === 0) {
-      return [];
+      return buildFallbackFollowUps();
     }
 
     try {
-      const excludeAccumulator = new Set<string>();
-      dismissedQuestionsRef.current.forEach(question => {
-        const trimmed = question.trim();
-        if (trimmed.length > 0) {
-          excludeAccumulator.add(trimmed);
-        }
-      });
-      suggestedQuestions.forEach(question => {
-        const trimmed = question.trim();
-        if (trimmed.length > 0) {
-          excludeAccumulator.add(trimmed);
-        }
-      });
-      followUpQuestionsRef.current.forEach(question => {
-        const trimmed = question.trim();
-        if (trimmed.length > 0) {
-          excludeAccumulator.add(trimmed);
-        }
-      });
-      if (typeof lastQuestion === "string") {
-        const trimmedLast = lastQuestion.trim();
-        if (trimmedLast.length > 0) {
-          excludeAccumulator.add(trimmedLast);
-        }
-      }
-
       const response = await fetch("/api/suggested-questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           transcript,
-          topics,
+          topics: sanitizedTopicsForChat,
           videoTitle,
           count: 2,
           lastQuestion,
-          exclude: Array.from(excludeAccumulator),
+          exclude: excludeList,
         }),
       });
 
       if (!response.ok) {
-        return [];
+        return buildFallbackFollowUps();
       }
 
       const data = await response.json();
@@ -211,13 +313,27 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
         ? data.questions
             .filter((q: unknown): q is string => typeof q === "string" && q.trim().length > 0)
             .map((q: string) => q.trim())
-            .slice(0, 2)
         : [];
-      return nextQuestions;
+
+      if (nextQuestions.length >= 2) {
+        return nextQuestions.slice(0, 2);
+      }
+
+      const merged = [...nextQuestions];
+      const fallback = buildFallbackFollowUps(merged);
+      for (const candidate of fallback) {
+        if (merged.length >= 2) {
+          break;
+        }
+        if (!merged.some(existing => existing.toLowerCase() === candidate.toLowerCase())) {
+          merged.push(candidate);
+        }
+      }
+      return merged.slice(0, 2);
     } catch {
-      return [];
+      return buildFallbackFollowUps();
     }
-  }, [transcript, topics, videoTitle, suggestedQuestions]);
+  }, [transcript, sanitizedTopicsForChat, videoTitle, suggestedQuestions]);
 
   const sendMessage = useCallback(async (messageInput?: SuggestedMessage, retryCount = 0) => {
     const isObjectInput = typeof messageInput === "object" && messageInput !== null;
@@ -295,7 +411,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
         body: JSON.stringify({
           message: promptText,
           transcript,
-          topics,
+          topics: sanitizedTopicsForChat,
           videoId,
           chatHistory: messages,
           model: 'gemini-2.5-flash-lite',
@@ -305,15 +421,61 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
 
       clearTimeout(timeoutId);
 
+      const rawText = await response.text();
+
       if (!response.ok) {
-        // Check if it's a rate limit or temporary error
+        let errorDetails = `Failed to get response (${response.status})`;
+
         if (response.status === 429 || response.status === 503) {
           throw new Error("Service temporarily unavailable");
         }
-        throw new Error(`Failed to get response (${response.status})`);
+
+        if (rawText) {
+          try {
+            const errorPayload = JSON.parse(rawText);
+            if (errorPayload && typeof errorPayload === "object") {
+              const errorMessage = typeof errorPayload.error === "string" ? errorPayload.error : "";
+              const errorExplanation = typeof errorPayload.details === "string" ? errorPayload.details : "";
+              const fallbackMessage = typeof errorPayload.message === "string" ? errorPayload.message : "";
+
+              const composed = [errorMessage || fallbackMessage, errorExplanation]
+                .filter(Boolean)
+                .join(": ")
+                .trim();
+
+              if (composed.length > 0) {
+                errorDetails = composed;
+              }
+            }
+          } catch {
+            // ignore JSON parse errors and keep default message
+          }
+        }
+
+        throw new Error(errorDetails);
       }
 
-      const rawData = await response.json();
+      if (!rawText) {
+        throw new Error("Empty response received from chat service.");
+      }
+
+      let rawData: unknown;
+      try {
+        rawData = JSON.parse(rawText);
+      } catch (parseError) {
+        console.error("Failed to parse chat response JSON:", parseError, rawText);
+        throw new Error("Received malformed data from chat service.");
+      }
+
+      if (rawData && typeof rawData === "object" && "error" in rawData) {
+        const errorPayload = rawData as { error?: string; details?: string; message?: string };
+        const composed = [errorPayload.error || errorPayload.message, errorPayload.details]
+          .filter(Boolean)
+          .join(": ")
+          .trim();
+        throw new Error(composed || "Chat service returned an error.");
+      }
+
       const parsedData = chatApiResponseSchema.parse(rawData);
       const normalizedContent = normalizeBracketTimestamps(parsedData.content);
 
@@ -329,6 +491,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
       setMessages(prev => [...prev, assistantMessage]);
       shouldGenerateFollowUps = true;
     } catch (error) {
+      console.error("Chat message error:", error);
       
       // Retry logic for temporary failures
       const errorName = error instanceof Error ? error.name : '';
@@ -355,6 +518,8 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
         errorContent = "The AI service is temporarily unavailable. Please try again in a moment.";
       } else if (errorMessage.includes('Empty response')) {
         errorContent = "I couldn't generate a proper response. Please try rephrasing your question.";
+      } else if (errorMessage && errorMessage !== errorContent) {
+        errorContent = errorMessage;
       }
       
       const errorMsg: ChatMessage = {
@@ -382,7 +547,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
         }
       }
     }
-  }, [input, isLoading, messages, transcript, topics, videoId, requestFollowUpQuestions]);
+  }, [input, isLoading, messages, transcript, sanitizedTopicsForChat, videoId, requestFollowUpQuestions]);
 
   const executeKeyTakeaways = useCallback(
     async ({ skipUserMessage = false }: { skipUserMessage?: boolean } = {}) => {

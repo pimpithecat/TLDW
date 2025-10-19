@@ -4,6 +4,7 @@ import { withSecurity } from '@/lib/security-middleware';
 import { RATE_LIMITS } from '@/lib/rate-limiter';
 import { generateWithFallback } from '@/lib/gemini-client';
 import { suggestedQuestionsSchema } from '@/lib/schemas';
+import { buildSuggestedQuestionFallbacks } from '@/lib/suggested-question-fallback';
 
 function formatTranscriptForContext(segments: TranscriptSegment[]): string {
   return segments.map(s => {
@@ -47,44 +48,6 @@ async function handler(request: NextRequest) {
     const lastViewerQuestion = typeof lastQuestion === 'string'
       ? lastQuestion.trim()
       : '';
-
-    const fallbackPool = [
-      "What evidence backs the main claim?",
-      "How do the key steps connect?",
-      "Why does this insight matter now?",
-      "What example clarifies the takeaway?",
-      "How can I apply this idea today?"
-    ];
-    const supplementalFallbacks = [
-      "Which detail should I double-check in the transcript?",
-      "Where does the speaker justify this idea?"
-    ];
-
-    const buildFallback = () => {
-      const results: string[] = [];
-      for (const question of fallbackPool) {
-        if (results.length >= requestedCount) break;
-        if (excludeLower.has(question.toLowerCase())) continue;
-        results.push(question);
-      }
-      for (const question of supplementalFallbacks) {
-        if (results.length >= requestedCount) break;
-        if (excludeLower.has(question.toLowerCase())) continue;
-        if (!results.some(existing => existing.toLowerCase() === question.toLowerCase())) {
-          results.push(question);
-        }
-      }
-      while (results.length < requestedCount) {
-        const filler = "What detail should I revisit in the transcript?";
-        if (!results.some(existing => existing.toLowerCase() === filler.toLowerCase())
-          && !excludeLower.has(filler.toLowerCase())) {
-          results.push(filler);
-        } else {
-          results.push("Which statement deserves closer scrutiny?");
-        }
-      }
-      return results.slice(0, requestedCount);
-    };
 
     const exclusionsSection = uniqueExclude.length
       ? uniqueExclude.map(q => `  <item>${q}</item>`).join('\n')
@@ -146,9 +109,12 @@ ${fullTranscript}
       response = '';
     }
 
+    const fallbackFactory = (existing: string[] = []) =>
+      buildSuggestedQuestionFallbacks(requestedCount, uniqueExclude, existing);
+
     if (!response) {
       return NextResponse.json({
-        questions: buildFallback()
+        questions: fallbackFactory()
       });
     }
 
@@ -175,7 +141,7 @@ ${fullTranscript}
     let finalQuestions = filtered.slice(0, requestedCount);
 
     if (finalQuestions.length < requestedCount) {
-      const fallback = buildFallback();
+      const fallback = fallbackFactory(finalQuestions);
       for (const candidate of fallback) {
         if (finalQuestions.length >= requestedCount) {
           break;
@@ -187,17 +153,13 @@ ${fullTranscript}
     }
 
     if (finalQuestions.length === 0) {
-      finalQuestions = buildFallback();
+      finalQuestions = fallbackFactory();
     }
 
     return NextResponse.json({ questions: finalQuestions.slice(0, requestedCount) });
   } catch {
     return NextResponse.json(
-      { questions: [
-        "What evidence backs the main claim?",
-        "How do the key steps connect?",
-        "Why does this insight matter now?"
-      ] },
+      { questions: buildSuggestedQuestionFallbacks(3) },
       { status: 200 }
     );
   }

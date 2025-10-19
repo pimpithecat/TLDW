@@ -41,7 +41,7 @@ function recoverPartialResponse(raw: string): { answer: string; timestamps?: str
     decodedAnswer = answerValue.replace(/\\"/g, '"');
   }
 
-  const timestampMatches = raw.match(/\b\d{2}:\d{2}(?::\d{2})?\b/g) ?? [];
+  const timestampMatches = raw.match(/\b\d{1,2}:\d{1,2}(?::\d{1,2})?\b/g) ?? [];
   const uniqueTimestamps = Array.from(new Set(timestampMatches)).slice(0, 5);
 
   return uniqueTimestamps.length > 0

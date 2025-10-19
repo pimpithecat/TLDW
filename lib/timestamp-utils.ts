@@ -3,17 +3,20 @@
 // More specific regex to avoid false matches with version numbers, ratios, etc.
 // Matches timestamps in context (whitespace, brackets, commas, or start/end of string)
 // Updated to handle comma-separated timestamps like (12:20, 28:02)
-export const TIMESTAMP_REGEX = /(?:^|\s|[\[(,])(\d{1,2}:\d{2}(?::\d{2})?)(?:[\]),]|\s|$)/g;
+export const TIMESTAMP_REGEX = /(?:^|\s|[\[(,])(\d{1,2}:\d{1,2}(?::\d{1,2})?)(?:[\]),]|\s|$)/g;
+
+export const TIMESTAMP_RANGE_REGEX = /\[?((?:\d{1,2}:)?\d{1,2}:\d{1,2})-((?:\d{1,2}:)?\d{1,2}:\d{1,2})\]?/;
+export const STRICT_TIMESTAMP_RANGE_REGEX = /^\[?((?:\d{1,2}:)?\d{1,2}:\d{1,2})-((?:\d{1,2}:)?\d{1,2}:\d{1,2})\]?$/;
 
 // Legacy regex for backward compatibility (if needed)
-export const TIMESTAMP_REGEX_LEGACY = /(?:[\[(])?\b(\d{1,2}:\d{2}(?::\d{2})?)\b(?:[\])])?/g;
+export const TIMESTAMP_REGEX_LEGACY = /(?:[\[(])?\b(\d{1,2}:\d{1,2}(?::\d{1,2})?)\b(?:[\])])?/g;
 
 /**
  * Parse timestamp string (MM:SS or HH:MM:SS) to seconds
  * Returns null if timestamp is invalid
  */
 export function parseTimestamp(timestamp: string): number | null {
-  const regex = /^(?:(\d{1,2}):)?(\d{1,2}):(\d{2})$/;
+  const regex = /^(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2})$/;
   const match = timestamp.match(regex);
   
   if (!match) return null;
@@ -75,4 +78,23 @@ export function extractTimestamps(text: string): Array<{ text: string; seconds: 
 export function isTimestamp(text: string): boolean {
   const trimmed = text.trim();
   return parseTimestamp(trimmed) !== null;
+}
+
+export function parseTimestampRange(range: string): { start: number; end: number } | null {
+  if (!range) return null;
+
+  const trimmed = range.trim();
+  if (!trimmed) return null;
+
+  const match = trimmed.match(STRICT_TIMESTAMP_RANGE_REGEX);
+  if (!match) return null;
+
+  const start = parseTimestamp(match[1]);
+  const end = parseTimestamp(match[2]);
+
+  if (start === null || end === null || end <= start) {
+    return null;
+  }
+
+  return { start, end };
 }

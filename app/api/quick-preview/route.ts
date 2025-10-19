@@ -4,6 +4,34 @@ import { withSecurity, SECURITY_PRESETS } from '@/lib/security-middleware';
 import { generateWithFallback } from '@/lib/gemini-client';
 import { quickPreviewSchema } from '@/lib/schemas';
 
+function buildFallbackPreview(options: {
+  videoTitle?: string;
+  channelName?: string;
+  videoDescription?: string;
+}) {
+  const { videoTitle, channelName, videoDescription } = options;
+
+  if (videoDescription && videoDescription.trim().length > 0) {
+    const excerpt = videoDescription.trim().split(/\s+/).slice(0, 40).join(' ');
+    const prefix = videoTitle ? `Preview of "${videoTitle}":` : 'Preview:';
+    return `${prefix} ${excerpt}${excerpt.endsWith('.') ? '' : '...'}`;
+  }
+
+  if (videoTitle && channelName) {
+    return `${channelName} digs into "${videoTitle}". We’re surfacing the key ideas for you...`;
+  }
+
+  if (videoTitle) {
+    return `Analyzing "${videoTitle}" to capture the standout moments and takeaways...`;
+  }
+
+  if (channelName) {
+    return `Exploring the latest from ${channelName}. Highlights coming together...`;
+  }
+
+  return 'Analyzing this video to surface the big ideas and timestamps...';
+}
+
 async function handler(request: NextRequest) {
   try {
     const { transcript, videoTitle, videoDescription, channelName, tags } = await request.json();
@@ -21,9 +49,15 @@ async function handler(request: NextRequest) {
     const maxWords = 500;
     const maxTime = 30; // seconds
 
-    for (const segment of transcript as TranscriptSegment[]) {
-      if (segment.start > maxTime) break;
-      
+    const segments = transcript as TranscriptSegment[];
+    const baseStart = segments.length > 0 ? segments[0].start : 0;
+
+    for (const segment of segments) {
+      const relativeStart = Math.max(0, segment.start - baseStart);
+      if (relativeStart > maxTime && previewText.trim().length > 0) {
+        break;
+      }
+
       const words = segment.text.split(' ');
       if (wordCount + words.length > maxWords) {
         const remainingWords = maxWords - wordCount;
@@ -36,10 +70,15 @@ async function handler(request: NextRequest) {
     }
 
     const trimmedPreview = previewText.trim();
+    const metadataFallback = buildFallbackPreview({
+      videoTitle,
+      channelName,
+      videoDescription
+    });
 
     if (!trimmedPreview) {
       return NextResponse.json({ 
-        preview: 'Processing video content...' 
+        preview: metadataFallback
       });
     }
 
@@ -88,19 +127,8 @@ ${trimmedPreview}
       return NextResponse.json({ preview });
     }
 
-    // If both models failed, use the metadata-based fallback
-    let fallbackPreview = '';
-
-    if (videoTitle && channelName) {
-      fallbackPreview = `This video by ${channelName} discusses "${videoTitle}". Full analysis in progress...`;
-    } else if (videoTitle) {
-      fallbackPreview = `Analyzing "${videoTitle}" to identify key topics and insights...`;
-    } else {
-      fallbackPreview = 'Generating preview of video content and key discussion points...';
-    }
-
     return NextResponse.json({
-      preview: fallbackPreview
+      preview: metadataFallback
     });
 
   } catch (error) {

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const timestampPattern = /^\d{2}:\d{2}(?::\d{2})?$/;
+const timestampPattern = /^(?:\d{1,2}:)?\d{1,2}:\d{1,2}$/;
 
 export const topicQuoteSchema = z.object({
   timestamp: z.string(),

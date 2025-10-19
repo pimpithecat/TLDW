@@ -4,8 +4,7 @@ import {
   findTextInTranscript,
   type TranscriptIndex,
 } from '@/lib/quote-matcher';
-
-const TIMESTAMP_RANGE_REGEX = /\[?(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})\]?/;
+import { parseTimestampRange as parseTimestampRangeStrict } from '@/lib/timestamp-utils';
 
 type TopicSegment = Topic['segments'][number];
 
@@ -113,28 +112,10 @@ function computeDuration(segments: TopicSegment[] = []): number {
 }
 
 function parseTimestampRange(timestamp?: string | null): { start: number; end: number } | null {
-  if (!timestamp) return null;
-  const match = TIMESTAMP_RANGE_REGEX.exec(timestamp);
-  if (!match) return null;
-
-  const startMinutes = Number.parseInt(match[1], 10);
-  const startSeconds = Number.parseInt(match[2], 10);
-  const endMinutes = Number.parseInt(match[3], 10);
-  const endSeconds = Number.parseInt(match[4], 10);
-
-  if (
-    Number.isNaN(startMinutes) ||
-    Number.isNaN(startSeconds) ||
-    Number.isNaN(endMinutes) ||
-    Number.isNaN(endSeconds)
-  ) {
-    return null;
-  }
-
-  const start = startMinutes * 60 + startSeconds;
-  const end = endMinutes * 60 + endSeconds;
-  if (end <= start) return null;
-  return { start, end };
+  if (typeof timestamp !== 'string') return null;
+  const trimmed = timestamp.trim();
+  if (!trimmed) return null;
+  return parseTimestampRangeStrict(trimmed);
 }
 
 function approximateTimeOffset(segment: TranscriptSegment | undefined, charOffset?: number | null): number {

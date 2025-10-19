@@ -29,6 +29,7 @@ import { AuthModal } from "@/components/auth-modal";
 import { useAuth } from "@/contexts/auth-context";
 import { backgroundOperation, AbortManager } from "@/lib/promise-utils";
 import { toast } from "sonner";
+import { buildSuggestedQuestionFallbacks } from "@/lib/suggested-question-fallback";
 
 const GUEST_LIMIT_MESSAGE = "You've used today's free analysis. Sign in to keep going.";
 const AUTH_LIMIT_MESSAGE = "You get 5 videos per day. Come back tomorrow.";
@@ -739,7 +740,6 @@ export default function AnalyzePage() {
       // Initiate parallel API requests for topics and takeaways
       setLoadingStage('generating');
       setGenerationStartTime(Date.now());
-      setPageState((current) => current === 'ANALYZING_NEW' ? 'LOADING_CACHED' : current);
 
       // Create abort controllers for both requests
       const topicsController = abortManager.current.createController('topics');
@@ -950,31 +950,64 @@ export default function AnalyzePage() {
             }),
           });
 
-          if (res.ok) {
-            const { questions } = await res.json();
-            setCachedSuggestedQuestions(questions);
-
-            // Update video analysis with suggested questions
-            await backgroundOperation(
-              'update-questions',
-              async () => {
-                const updateRes = await fetch("/api/update-video-analysis", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    videoId: extractedVideoId,
-                    suggestedQuestions: questions
-                  }),
-                });
-
-                if (!updateRes.ok && updateRes.status !== 404) {
-                  throw new Error('Failed to update suggested questions');
-                }
+          const applyCachedQuestions = (questions: string[]) => {
+            if (questions.length === 0) {
+              return questions;
+            }
+            setCachedSuggestedQuestions(prev => {
+              if (prev && prev.length > 0) {
+                return prev;
               }
-            );
+              return questions;
+            });
             return questions;
+          };
+
+          if (!res.ok) {
+            console.error("Failed to generate suggested questions:", res.status, res.statusText);
+            return applyCachedQuestions(buildSuggestedQuestionFallbacks(3));
           }
-          return null;
+
+          let parsed: unknown;
+          try {
+            parsed = await res.json();
+          } catch (error) {
+            console.error("Failed to parse suggested questions payload:", error);
+            return applyCachedQuestions(buildSuggestedQuestionFallbacks(3));
+          }
+
+          const questions = Array.isArray((parsed as any)?.questions)
+            ? (parsed as any).questions
+                .filter((item: unknown): item is string => typeof item === "string" && item.trim().length > 0)
+                .map((item: string) => item.trim())
+            : [];
+
+          const normalizedQuestions = questions.length > 0
+            ? questions.slice(0, 3)
+            : buildSuggestedQuestionFallbacks(3);
+
+          applyCachedQuestions(normalizedQuestions);
+
+          // Update video analysis with suggested questions
+          await backgroundOperation(
+            'update-questions',
+            async () => {
+              const updateRes = await fetch("/api/update-video-analysis", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  videoId: extractedVideoId,
+                  suggestedQuestions: normalizedQuestions
+                }),
+              });
+
+              if (!updateRes.ok && updateRes.status !== 404) {
+                throw new Error('Failed to update suggested questions');
+              }
+            }
+          );
+
+          return normalizedQuestions;
         },
         (error) => {
           console.error("Failed to generate suggested questions:", error);

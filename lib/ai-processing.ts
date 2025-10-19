@@ -7,6 +7,7 @@ import {
 } from '@/lib/quote-matcher';
 import { generateWithFallback } from '@/lib/gemini-client';
 import { topicGenerationSchema } from '@/lib/schemas';
+import { parseTimestampRange } from '@/lib/timestamp-utils';
 import { z } from 'zod';
 
 interface ParsedTopic {
@@ -46,16 +47,6 @@ interface CandidateTopic extends ParsedTopic {
 const DEFAULT_CHUNK_DURATION_SECONDS = 5 * 60; // 5 minutes
 const DEFAULT_CHUNK_OVERLAP_SECONDS = 45;
 const CHUNK_MAX_CANDIDATES = 2;
-
-function parseTimestampRange(timestamp?: string): { start: number; end: number } | null {
-  if (!timestamp) return null;
-  const match = timestamp.match(/\[?(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})\]?/);
-  if (!match) return null;
-
-  const start = parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
-  const end = parseInt(match[3], 10) * 60 + parseInt(match[4], 10);
-  return { start, end };
-}
 
 function chunkTranscript(
   segments: TranscriptSegment[],
@@ -531,13 +522,10 @@ async function findExactQuotes(
   // Process quotes in parallel for better performance
   const quotePromises = quotes.map(async (quote) => {
     // Parse timestamp if provided
-    const timestampMatch = quote.timestamp?.match(/\[?(\d{1,2}:\d{2})-(\d{1,2}:\d{2})\]?/);
-    if (!timestampMatch) return null;
+    const timestampRange = quote.timestamp ? parseTimestampRange(quote.timestamp) : null;
+    if (!timestampRange) return null;
 
-    const [startMin, startSec] = timestampMatch[1].split(':').map(Number);
-    const [endMin, endSec] = timestampMatch[2].split(':').map(Number);
-    const timestampStart = startMin * 60 + startSec;
-    const timestampEnd = endMin * 60 + endSec;
+    const { start: timestampStart, end: timestampEnd } = timestampRange;
 
     // Use the exact text from the quote
     const quoteText = quote.text.trim();
