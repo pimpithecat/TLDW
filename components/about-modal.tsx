@@ -17,8 +17,8 @@ export function AboutModal({ open, onOpenChange }: AboutModalProps) {
     },
     {
       name: 'Yiqi Yan',
-      twitter: 'https://x.com/placeholder2',
-      linkedin: 'https://linkedin.com/in/placeholder2',
+      twitter: 'https://x.com/yanyiqi73877',
+      linkedin: 'https://linkedin.com/in/yiqiyan2015',
     },
     {
       name: 'Samuel Zhang',

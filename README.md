@@ -1,115 +1,147 @@
 # TLDW (Too Long; Didn't Watch)
 
-[](https://www.gnu.org/licenses/agpl-3.0)
+TLDW turns long-form YouTube videos into a structured learning workspace. Paste a URL and the app generates highlight reels, timestamped AI answers, and a place to capture your own notes so you can absorb an hour-long video in minutes.
 
-TLDW transforms long YouTube videos into topic-driven learning experiences. Using AI, it generates interactive "highlight reels", detailed summaries, and a context-aware chat to help you quickly find and understand the most valuable information.
+## Overview
 
-## Features
+The project is a Next.js 15 + React 19 application that wraps Google Gemini 2.5 models and Supadata transcripts with a polished UX. Supabase provides authentication, persistence, rate limiting, and profile preferences. The experience is optimized for fast iteration using Turbopack, Tailwind CSS v4, and shadcn/ui components.
 
-  - **🤖 AI-Generated Highlight Reels**: Identifies key themes across the entire video, creating concise, playable segments that capture the most important insights scattered throughout the content.
-  - **💬 Interactive AI Chat**: Ask specific questions about the video content and get answers grounded in the transcript, complete with timestamped citations that jump directly to the source.
-  - **📝 Detailed Summaries**: Get a comprehensive, structured summary of the video—including key takeaways, smart chapters, and memorable quotes—delivered in clear English.
-  - **▶️ Synchronized Transcript & Player**: Read the full transcript with parts highlighted as the video plays. Click any sentence to jump to that moment in the video.
-  - **📊 Visual Timeline Navigation**: A dynamic progress bar visualizes where highlight reel segments are located, allowing for quick, non-linear navigation.
-  - **❓ Suggested Questions**: Kickstart your exploration with dynamically generated questions based on the video's content.
+## Feature Highlights
 
-## How It Works
+- AI highlight reels with Smart (quality) and Fast (speed) generation modes, Play All playback, and theme-based re-generation.
+- Gemini-powered quick preview, structured summary, suggested questions, and memorable quotes surfaced in parallel.
+- AI chat grounded in the transcript with structured JSON responses, timestamp citations, and fallbacks when Gemini rate-limits.
+- Transcript viewer that stays in sync with the YouTube player; click any sentence to jump or capture the quote.
+- Personal notes workspace with transcript, chat, and takeaway sources plus an `/all-notes` dashboard for cross-video review.
+- Authenticated library pages for saved analyses, favorites, generation limits, and Supabase-backed profile preferences.
+- Aggressive caching of previous analyses, background refresh tasks, and rate limits for anonymous vs. signed-in users.
+- Security middleware that enforces CSP headers, CSRF protection, body-size caps, and Supabase-backed rate limiting.
 
-1.  **Paste a YouTube URL.** The app validates the link and prepares for analysis.
-2.  **Analyze Content.** The system fetches the video's transcript and metadata.
-3.  **Generate Insights.** In parallel, AI generates:
-      - A quick preview for immediate context.
-      - Insightful highlight reels based on recurring themes.
-      - A detailed, structured summary.
-      - A set of suggested questions to guide your inquiry.
-4.  **Explore Interactively.** Use the tabbed interface to:
-      - **Summary**: Get a quick, structured overview of the entire video.
-      - **AI Chat**: Ask specific questions and receive answers with clickable citations.
-      - **Transcript**: Read along with highlighting that is synchronized to the video playback.
-5.  **Navigate with Precision.** Click on highlight reels, chat citations, or transcript timestamps to instantly play the most relevant parts of the video, saving you time and effort.
+## Architecture
 
-## Tech Stack
+- Frontend stack: Next.js 15 App Router, React 19, TypeScript, Tailwind CSS v4, shadcn/ui, lucide-react, sonner toasts.
+- Backend runtime: Next.js serverless route handlers with `withSecurity` middleware for CSRF, input validation (Zod), and rate caps.
+- AI pipeline: `lib/ai-processing.ts` and `lib/gemini-client.ts` orchestrate Gemini 2.5 models with structured output schemas, cascading fallbacks, and transcript chunking.
+- Transcript & metadata: Supadata API delivers transcripts; lightweight YouTube oEmbed calls pull thumbnails and titles.
+- Persistence: Supabase stores `video_analyses`, `user_videos` (history + favorites), `user_notes`, `profiles` (topic generation mode, profile data), and `rate_limits`.
+- Authentication: Supabase Auth with session refresh in `middleware.ts`; `AuthModal` drives sign-up prompts when limits are hit.
+- Security: Global middleware adds CSP/HSTS headers, CSRF tokens for stateful requests, hashed IP identifiers for anonymous rate limiting, and request body size guards.
 
-  - **Framework**: [Next.js](https://nextjs.org/) 15 (with Turbopack)
-  - **UI**: [React](https://react.dev/) 19, [TypeScript](https://www.typescriptlang.org/), [Tailwind CSS](https://tailwindcss.com/), [shadcn/ui](https://ui.shadcn.com/)
-  - **AI**: [Google Gemini API](https://ai.google.dev/) (Gemini 2.5 Flash)
-  - **APIs**: [Supadata](https://supadata.ai/) (Transcripts), YouTube oEmbed API
-  - **Deployment**: [Vercel](https://vercel.com/)
+## Application Pages
 
-## Getting Started
+- `/` – Landing page with branded URL input, mode selector, and auth modal triggers when rate limits are reached.
+- `/analyze/[videoId]` – Primary workspace: YouTube player, highlight reels, theme selector, summary/chat/transcript/notes tabs, suggestions, and note-saving flows.
+- `/my-videos` – Auth-required library of previously analyzed videos with search, favorites, and quick resume.
+- `/all-notes` – Auth-required notebook that aggregates notes across videos with filtering, sorting, markdown rendering, and deletion.
+- `/settings` – Profile screen for updating name, password, viewing usage stats, and persisting preferred topic generation mode.
 
-### Prerequisites
+## API Surface
 
-  - Node.js 18+
-  - `npm`, `yarn`, or `pnpm`
-  - A Google Gemini API key
-  - A Supadata API key
+- Video ingestion: `/api/video-info`, `/api/transcript`, `/api/check-video-cache`, `/api/video-analysis`, `/api/save-analysis`, `/api/update-video-analysis`, `/api/link-video`.
+- AI generation: `/api/generate-topics`, `/api/generate-summary`, `/api/quick-preview`, `/api/suggested-questions`, `/api/top-quotes`.
+- Conversational tools: `/api/chat` (Gemini chat with citations) and `/api/check-limit` for pre-flight rate checks.
+- User data: `/api/notes`, `/api/notes/all`, `/api/toggle-favorite`.
+- Security utilities: `/api/csrf-token` and the shared `withSecurity` middleware (allowed methods, rate limits, CSRF validation).
 
-### Installation
-
-1.  Clone the repository:
-
-    ```bash
-    git clone https://github.com/yourusername/tldw.git
-    cd tldw
-    ```
-
-2.  Install dependencies:
-
-    ```bash
-    npm install
-    ```
-
-3.  Set up environment variables. Create a `.env.local` file in the root directory and add your API keys:
-
-    ```env
-    GEMINI_API_KEY="your_gemini_api_key_here"
-    SUPADATA_API_KEY="your_supadata_api_key_here"
-    ```
-
-4.  Run the development server:
-
-    ```bash
-    npm run dev
-    ```
-
-5.  Open [http://localhost:3000](https://www.google.com/search?q=http://localhost:3000) in your browser.
-
-## Project Structure
+## Directory Layout
 
 ```
 .
 ├── app/
-│   ├── api/                  # API routes for backend logic
-│   │   ├── chat/             # Handles AI chat Q&A with citations
-│   │   ├── generate-summary/ # Generates structured video summaries
-│   │   ├── generate-topics/  # Core "Highlight Reel" generation
-│   │   ├── quick-preview/    # Creates a fast initial summary
-│   │   ├── suggested-questions/ # Generates questions for the chat
-│   │   ├── transcript/       # Fetches video transcripts
-│   │   └── video-info/       # Fetches video metadata
-│   ├── page.tsx              # Main application page component
-│   └── layout.tsx            # Root layout
+│   ├── api/                    # Route handlers for AI, caching, notes, auth, etc.
+│   ├── analyze/[videoId]/      # Client page for the analysis workspace
+│   ├── all-notes/              # Notes dashboard (client component)
+│   ├── my-videos/              # Saved video list + favorites
+│   ├── settings/               # Account settings and profile form
+│   ├── auth/                   # Auth UI fragments
+│   ├── layout.tsx              # Root layout with Auth & theme providers
+│   └── page.tsx                # Landing page
 ├── components/
-│   ├── ai-chat.tsx           # Interactive chat interface
-│   ├── summary-viewer.tsx    # Renders the detailed summary
-│   ├── right-column-tabs.tsx # Tabbed UI for Summary, Chat, Transcript
-│   ├── transcript-viewer.tsx # Displays transcript with highlighting
-│   ├── video-progress-bar.tsx# Visual timeline with topic segments
-│   └── youtube-player.tsx    # YouTube player wrapper and custom controls
+│   ├── ai-chat.tsx             # Transcript-aware chat UI
+│   ├── highlights-panel.tsx    # Highlight reel cards + controls
+│   ├── notes-panel.tsx         # Note capture + listing
+│   ├── right-column-tabs.tsx   # Summary / Chat / Transcript / Notes tabs
+│   ├── youtube-player.tsx      # Player wrapper with shared playback state
+│   └── ui/                     # Reusable shadcn/ui primitives
+├── contexts/
+│   └── auth-context.tsx        # Supabase auth provider
 ├── lib/
-│   ├── quote-matcher.ts      # Algorithms for matching AI quotes to transcript text
-│   ├── types.ts              # Core TypeScript type definitions
-│   └── utils.ts              # Utility functions
-└── ...
+│   ├── ai-processing.ts        # Gemini prompts, transcript chunking, candidate pooling
+│   ├── gemini-client.ts        # Model cascade + structured output handling
+│   ├── notes-client.ts         # CSRF-protected note helpers
+│   ├── rate-limiter.ts         # Supabase-backed request limiting
+│   ├── security-middleware.ts  # Common security wrapper for route handlers
+│   ├── supabase/               # Browser/server clients + middleware helpers
+│   ├── validation.ts           # Zod schemas shared across endpoints
+│   └── utils.ts                # URL parsing, formatting, color helpers, etc.
+├── public/                     # Static assets (logos, SVGs)
+├── supabase/
+│   └── migrations/             # Database migrations (e.g., topic_generation_mode column)
+├── CLAUDE.md                   # Extended architecture + contributor handbook
+└── next.config.ts              # Remote image allowlist, Turbopack rules, webpack tweaks
 ```
+
+## Local Development
+
+### Prerequisites
+
+- Node.js 18+ (Next.js 15 requires 18.18 or newer)
+- `npm` (repo uses package-lock.json), though `pnpm` or `yarn` also work
+- Supabase project (Auth + Postgres) and API keys for Supadata & Google Gemini
+
+### 1. Clone & Install
+
+```bash
+git clone https://github.com/yourusername/tldw.git
+cd tldw
+npm install
+```
+
+### 2. Configure Environment
+
+Create `.env.local` in the repo root:
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `GEMINI_API_KEY` | yes | Google Gemini API key (2.5 models) |
+| `SUPADATA_API_KEY` | yes | Supadata transcript API key |
+| `NEXT_PUBLIC_SUPABASE_URL` | yes | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | yes | Supabase anonymous key |
+| `CSRF_SALT` | yes | Long random string used to sign CSRF tokens |
+| `NEXT_PUBLIC_APP_URL` | optional | Canonical app URL (defaults to `http://localhost:3000`) |
+| `YOUTUBE_API_KEY` | optional | Enables additional metadata when available |
+| `UNLIMITED_VIDEO_USERS` | optional | Comma-separated emails or user IDs allowed to bypass daily limits |
+
+> Generate a unique `CSRF_SALT` (e.g., `openssl rand -base64 32`). `UNLIMITED_VIDEO_USERS` entries are normalized to lowercase.
+
+### 3. Supabase Setup
+
+1. Run SQL migrations in `supabase/migrations/` using the Supabase SQL editor or CLI.
+2. Ensure the following tables exist (structure documented in `CLAUDE.md`): `video_analyses`, `user_videos`, `user_notes`, `profiles`, and `rate_limits`.
+3. Add the Postgres function `upsert_video_analysis_with_user_link` that stores analyses and links them to a user in `user_videos` (the production project contains the reference implementation—export it or recreate it before local testing).
+4. Enable email OTP/auth providers required by your login flow and configure redirect URLs to match `NEXT_PUBLIC_APP_URL`.
+
+### 4. Run the App
+
+```bash
+npm run dev        # starts Next.js with Turbopack on http://localhost:3000
+npm run lint       # optional: run lint checks (ESLint v9)
+```
+
+The dev server reaches out to Gemini and Supadata directly, so make sure those API keys have local allowlists if your project settings restrict origins.
+
+## Developer Notes
+
+- All state-changing requests must go through `csrfFetch` so that `withSecurity` can validate the token.
+- Rate limiting records are stored in the `rate_limits` table; clear it when resetting dev limits.
+- Topic generation mode (`smart` vs `fast`) is persisted per-profile and synced via `useModePreference`.
+- `middleware.ts` refreshes Supabase sessions and adds security headers—keep it enabled when deploying to Vercel.
+- Detailed architecture notes, prompts, and database expectations live in `CLAUDE.md`; review it before larger changes.
 
 ## Contributing
 
-Contributions are welcome\! Please feel free to open an issue or submit a pull request.
-
-This repository uses the [Anthropic Claude Action](https://github.com/anthropics/claude-code-action) to perform automated code reviews on pull requests. The AI provides feedback on code quality, potential bugs, and adherence to project conventions outlined in `CLAUDE.md`.
+Issues and PRs are welcome. This repo uses the [Anthropic Claude Code Action](https://github.com/anthropics/claude-code-action) for automated pull-request reviews guided by `CLAUDE.md`. Please run `npm run lint` and double-check Supabase migrations before opening a PR.
 
 ## License
 
-This project is licensed under the **GNU Affero General Public License v3.0**. See the [LICENSE](https://www.google.com/search?q=./LICENSE) file for details.
+Distributed under the [GNU Affero General Public License v3.0](LICENSE).
