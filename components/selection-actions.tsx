@@ -160,9 +160,13 @@ export function SelectionActions({
 
   const handleAction = async (action: "explain" | "note") => {
     if (!latestSelectionRef.current) return;
+    const { text, metadata: selectionMetadata } = latestSelectionRef.current;
+    const metadata: NoteMetadata = selectionMetadata
+      ? { ...selectionMetadata, selectedText: text }
+      : { selectedText: text };
     const payload: SelectionActionPayload = {
-      text: latestSelectionRef.current.text,
-      metadata: latestSelectionRef.current.metadata,
+      text,
+      metadata,
       source,
     };
 
@@ -226,5 +230,4 @@ export function SelectionActions({
     document.body
   );
 }
-
 
