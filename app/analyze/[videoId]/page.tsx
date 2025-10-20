@@ -640,8 +640,8 @@ export default function AnalyzePage() {
 
       // Not cached, proceed with normal flow
       // Create AbortControllers for both requests
-      const transcriptController = abortManager.current.createController('transcript', 30000);
-      const videoInfoController = abortManager.current.createController('videoInfo', 10000);
+      const transcriptController = abortManager.current.createController('transcript', 300000);
+      const videoInfoController = abortManager.current.createController('videoInfo', 100000);
 
       // Fetch transcript and video info in parallel
       const transcriptPromise = fetch("/api/transcript", {
@@ -685,7 +685,17 @@ export default function AnalyzePage() {
         throw new Error(message);
       }
 
-      const { transcript: fetchedTranscript } = await transcriptRes.json();
+      let fetchedTranscript;
+      try {
+        const data = await transcriptRes.json();
+        fetchedTranscript = data.transcript;
+      } catch (jsonError) {
+        if (jsonError instanceof Error && jsonError.name === 'AbortError') {
+          throw new Error("Transcript processing timed out. The video may be too long. Please try again.");
+        }
+        throw new Error("Failed to process transcript data. Please try again.");
+      }
+
       const normalizedTranscriptData = normalizeTranscript(fetchedTranscript);
       setTranscript(normalizedTranscriptData);
 

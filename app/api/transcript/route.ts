@@ -32,7 +32,7 @@ async function handler(request: NextRequest) {
 
     let transcript;
     try {
-      const response = await fetch(`https://api.supadata.ai/v1/youtube/transcript?url=https://www.youtube.com/watch?v=${videoId}`, {
+      const response = await fetch(`https://api.supadata.ai/v1/youtube/transcript?url=https://www.youtube.com/watch?v=${videoId}&lang=en`, {
         method: 'GET',
         headers: {
           'x-api-key': apiKey,
