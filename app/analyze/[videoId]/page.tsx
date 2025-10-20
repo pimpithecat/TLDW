@@ -109,6 +109,10 @@ export default function AnalyzePage() {
   const [processingStartTime, setProcessingStartTime] = useState<number | null>(null);
   const rightColumnTabsRef = useRef<RightColumnTabsHandle>(null);
   const abortManager = useRef(new AbortManager());
+  const selectedThemeRef = useRef<string | null>(null);
+  const nextThemeRequestIdRef = useRef(0);
+  const activeThemeRequestIdRef = useRef<number | null>(null);
+  const pendingThemeRequestsRef = useRef(new Map<string, number>());
 
   // Play All state (lifted from YouTubePlayer)
   const [isPlayingAll, setIsPlayingAll] = useState(false);
@@ -405,6 +409,10 @@ export default function AnalyzePage() {
 
       // Cleanup any pending requests from previous analysis
       abortManager.current.cleanup();
+      pendingThemeRequestsRef.current.clear();
+      activeThemeRequestIdRef.current = null;
+      nextThemeRequestIdRef.current = 0;
+      selectedThemeRef.current = null;
 
       setError("");
       setIsRateLimitError(false);
@@ -1128,16 +1136,25 @@ export default function AnalyzePage() {
     }
   }, [isPlayingAll, requestPlayAll]);
 
+  useEffect(() => {
+    selectedThemeRef.current = selectedTheme;
+  }, [selectedTheme]);
+
   const handleThemeSelect = useCallback(async (themeLabel: string | null) => {
     if (!videoId) return;
 
-    const resetToDefault = () => {
+    const resetToDefault = (options?: { preserveError?: boolean }) => {
+      if (!options?.preserveError) {
+        setThemeError(null);
+      }
       setSelectedTheme(null);
-      setThemeError(null);
+      selectedThemeRef.current = null;
       setTopics(baseTopics);
       setSelectedTopic(null);
       setIsPlayingAll(false);
       setPlayAllIndex(0);
+      setIsLoadingThemeTopics(false);
+      activeThemeRequestIdRef.current = null;
       setUsedTopicKeys(new Set(
         baseTopics
           .filter((topic): topic is Topic & { quote: { timestamp: string; text: string } } => !!topic.quote?.timestamp && !!topic.quote.text)
@@ -1162,13 +1179,6 @@ export default function AnalyzePage() {
       return;
     }
 
-    setSelectedTheme(normalizedTheme);
-    setThemeError(null);
-    setIsLoadingThemeTopics(true);
-    setSelectedTopic(null);
-    setIsPlayingAll(false);
-    setPlayAllIndex(0);
-
     let themedTopics = themeTopicsMap[normalizedTheme];
     const needsHydration =
       Array.isArray(themedTopics) &&
@@ -1185,9 +1195,30 @@ export default function AnalyzePage() {
       }));
     }
 
+    setSelectedTheme(normalizedTheme);
+    selectedThemeRef.current = normalizedTheme;
+    setThemeError(null);
+    setSelectedTopic(null);
+    setIsPlayingAll(false);
+    setPlayAllIndex(0);
+
+    const pendingRequestId = pendingThemeRequestsRef.current.get(normalizedTheme);
+
+    if (!themedTopics && typeof pendingRequestId === "number") {
+      activeThemeRequestIdRef.current = pendingRequestId;
+      setIsLoadingThemeTopics(true);
+      return;
+    }
+
     if (!themedTopics) {
-      const controller = abortManager.current.createController('theme-topics');
+      const requestId = ++nextThemeRequestIdRef.current;
+      pendingThemeRequestsRef.current.set(normalizedTheme, requestId);
+      activeThemeRequestIdRef.current = requestId;
+      setIsLoadingThemeTopics(true);
+      const requestKey = `theme-topics:${normalizedTheme}:${requestId}`;
+      const controller = abortManager.current.createController(requestKey);
       const exclusionKeys = Array.from(usedTopicKeys).map((key) => key.slice(0, 500));
+
       try {
         const response = await fetch("/api/video-analysis", {
           method: "POST",
@@ -1230,23 +1261,43 @@ export default function AnalyzePage() {
           [normalizedTheme]: themedTopics || []
         }));
       } catch (error) {
+        const isAbortError =
+          typeof error === "object" &&
+          error !== null &&
+          "name" in error &&
+          (error as { name?: string }).name === "AbortError";
+
+        if (isAbortError) {
+          return;
+        }
+
         const message = error instanceof Error ? error.message : "Failed to generate themed topics";
         console.error("Theme-specific generation failed:", error);
-        setThemeError(message);
-        resetToDefault();
-        abortManager.current.cleanup('theme-topics');
-        setIsLoadingThemeTopics(false);
+        if (selectedThemeRef.current === normalizedTheme) {
+          resetToDefault({ preserveError: true });
+          setThemeError(message);
+        }
         return;
       } finally {
-        abortManager.current.cleanup('theme-topics');
+        abortManager.current.cleanup(requestKey);
+        pendingThemeRequestsRef.current.delete(normalizedTheme);
+        if (
+          activeThemeRequestIdRef.current === requestId &&
+          selectedThemeRef.current === normalizedTheme
+        ) {
+          setIsLoadingThemeTopics(false);
+          activeThemeRequestIdRef.current = null;
+        }
       }
+    } else {
+      activeThemeRequestIdRef.current = null;
+      setIsLoadingThemeTopics(false);
     }
 
     if (!themedTopics) {
       themedTopics = [];
     }
 
-    setTopics(themedTopics);
     if (themedTopics.length === 0) {
       setThemeCandidateMap(prev => ({
         ...prev,
@@ -1254,6 +1305,11 @@ export default function AnalyzePage() {
       }));
     }
 
+    if (selectedThemeRef.current !== normalizedTheme) {
+      return;
+    }
+
+    setTopics(themedTopics);
     if (themedTopics.length > 0) {
       setSelectedTopic(themedTopics[0]);
       setThemeError(null);
@@ -1261,8 +1317,6 @@ export default function AnalyzePage() {
       setThemeError("No highlights available for this theme yet.");
       setSelectedTopic(null);
     }
-
-    setIsLoadingThemeTopics(false);
   }, [
     videoId,
     videoInfo,
@@ -1270,10 +1324,8 @@ export default function AnalyzePage() {
     selectedTheme,
     baseTopics,
     themeTopicsMap,
-    themeCandidateMap,
     usedTopicKeys,
     mode,
-    abortManager,
     setIsPlayingAll,
     setPlayAllIndex
   ]);
