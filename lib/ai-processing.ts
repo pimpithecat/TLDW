@@ -650,7 +650,7 @@ export async function generateTopicsFromTranscript(
     excludeTopicKeys,
     includeCandidatePool,
     mode = 'smart',
-    proModel = 'gemini-2.5-pro'
+    proModel = 'gemini-2.5-flash'
   } = options;
 
   const requestedTopics = Math.max(1, Math.min(maxTopics, 5));
