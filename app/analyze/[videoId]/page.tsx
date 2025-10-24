@@ -33,10 +33,26 @@ import { buildSuggestedQuestionFallbacks } from "@/lib/suggested-question-fallba
 
 const GUEST_LIMIT_MESSAGE = "You've used today's free analysis. Sign in to keep going.";
 const AUTH_LIMIT_MESSAGE = "You get 5 videos per day. Come back tomorrow.";
+const DEFAULT_CLIENT_ERROR = "Something went wrong. Please try again.";
+
+function normalizeErrorMessage(message: string | undefined, fallback: string = DEFAULT_CLIENT_ERROR): string {
+  const trimmed = typeof message === "string" ? message.trim() : "";
+  const baseMessage = trimmed.length > 0 ? trimmed : fallback;
+  const normalizedSource = `${trimmed} ${baseMessage}`.toLowerCase();
+
+  if (
+    normalizedSource.includes("user aborted request") ||
+    normalizedSource.includes("unsupported transcript language")
+  ) {
+    return "Only YouTube videos with English transcripts are supported right now. Please choose a video that has English captions enabled.";
+  }
+
+  return baseMessage;
+}
 
 function buildApiErrorMessage(errorData: unknown, fallback: string): string {
   if (!errorData || typeof errorData !== "object") {
-    return fallback;
+    return normalizeErrorMessage(undefined, fallback);
   }
 
   const record = errorData as Record<string, unknown>;
@@ -50,18 +66,18 @@ function buildApiErrorMessage(errorData: unknown, fallback: string): string {
       : "";
 
   if (errorText && detailsText) {
-    return `${errorText}: ${detailsText}`;
+    return normalizeErrorMessage(`${errorText}: ${detailsText}`, fallback);
   }
 
   if (detailsText) {
-    return detailsText;
+    return normalizeErrorMessage(detailsText, fallback);
   }
 
   if (errorText) {
-    return errorText;
+    return normalizeErrorMessage(errorText, fallback);
   }
 
-  return fallback;
+  return normalizeErrorMessage(undefined, fallback);
 }
 
 export default function AnalyzePage() {
@@ -1033,7 +1049,12 @@ export default function AnalyzePage() {
       );
       
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      setError(
+        normalizeErrorMessage(
+          err instanceof Error ? err.message : undefined,
+          "An error occurred"
+        )
+      );
     } finally {
       setPageState('IDLE');
       setLoadingStage(null);
