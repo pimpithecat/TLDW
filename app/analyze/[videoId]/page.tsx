@@ -515,8 +515,25 @@ export default function AnalyzePage() {
             setVideoInfo(null);
           }
 
-          setTopics(hydratedTopics);
-          setBaseTopics(hydratedTopics);
+          // Separate base topics and theme topics
+          const baseTopicsFromCache = hydratedTopics.filter(topic => !topic.theme);
+          const themeTopicsFromCache = hydratedTopics.filter(topic => topic.theme);
+          
+          // Reconstruct themeTopicsMap
+          const reconstructedThemeMap: Record<string, Topic[]> = {};
+          themeTopicsFromCache.forEach(topic => {
+            if (topic.theme) {
+              if (!reconstructedThemeMap[topic.theme]) {
+                reconstructedThemeMap[topic.theme] = [];
+              }
+              reconstructedThemeMap[topic.theme].push(topic);
+            }
+          });
+          
+          setTopics(baseTopicsFromCache);
+          setBaseTopics(baseTopicsFromCache);
+          setThemeTopicsMap(reconstructedThemeMap);
+          
           const initialKeys = new Set<string>();
           hydratedTopics.forEach(topic => {
             if (topic.quote?.timestamp && topic.quote.text) {
@@ -525,7 +542,7 @@ export default function AnalyzePage() {
             }
           });
           setUsedTopicKeys(initialKeys);
-          setSelectedTopic(hydratedTopics.length > 0 ? hydratedTopics[0] : null);
+          setSelectedTopic(baseTopicsFromCache.length > 0 ? baseTopicsFromCache[0] : null);
 
           // Set cached takeaways and questions
           if (cacheData.summary) {
@@ -1293,11 +1310,41 @@ export default function AnalyzePage() {
           }
         });
         setUsedTopicKeys(nextUsedKeys);
-        themedTopics = hydratedThemeTopics;
+        
+        // Tag theme topics with theme name
+        const themedTopicsWithTheme = hydratedThemeTopics.map(topic => ({
+          ...topic,
+          theme: normalizedTheme
+        }));
+        
+        themedTopics = themedTopicsWithTheme;
         setThemeTopicsMap(prev => ({
           ...prev,
           [normalizedTheme]: themedTopics || []
         }));
+
+        // Save theme topics to database (background operation)
+        backgroundOperation(
+          'save-theme-topics',
+          async () => {
+            const allTopics = [
+              ...baseTopics.map(t => ({ ...t, theme: null })),
+              ...Object.entries(themeTopicsMap).flatMap(([theme, topics]) => 
+                topics.map(t => ({ ...t, theme }))
+              ),
+              ...themedTopicsWithTheme
+            ];
+
+            await fetch("/api/update-video-analysis", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                videoId,
+                topics: allTopics
+              })
+            });
+          }
+        );
       } catch (error) {
         const isAbortError =
           typeof error === "object" &&

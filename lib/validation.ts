@@ -184,7 +184,8 @@ export const checkVideoCacheRequestSchema = z.object({
 export const updateVideoAnalysisRequestSchema = z.object({
   videoId: youtubeIdSchema,
   summary: z.any().optional(),
-  suggestedQuestions: z.any().optional()
+  suggestedQuestions: z.any().optional(),
+  topics: z.array(z.any()).optional()
 });
 
 // Rate limiting validation

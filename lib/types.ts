@@ -15,6 +15,7 @@ export interface Topic {
   title: string;
   description?: string;
   duration: number;
+  theme?: string | null; // Theme name for theme-based topics, null/undefined for base topics
   segments: {
     start: number;
     end: number;
