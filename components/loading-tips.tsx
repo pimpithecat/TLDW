@@ -6,6 +6,11 @@ import { Lightbulb, Sparkles, Target, Zap, MessageSquare, Navigation } from "luc
 
 const TIPS = [
   {
+    icon: Zap,
+    title: "This May Take a Minute",
+    text: "We're analyzing the entire video with AI to create intelligent highlight reels. This typically takes 30-90 seconds depending on video length."
+  },
+  {
     icon: Sparkles,
     title: "Smart Highlight Reels",
     text: "Unlike traditional summaries, we identify themes that span across the entire video, connecting related insights from different timestamps."

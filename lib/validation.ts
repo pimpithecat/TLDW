@@ -38,7 +38,7 @@ export const sanitizedTextSchema = z.string()
 export const videoInfoSchema = z.object({
   title: z.string().min(1).max(200).transform(val => val.trim()),
   author: z.string().max(100).transform(val => val.trim()).optional(),
-  duration: z.number().int().min(0).max(86400), // Max 24 hours
+  duration: z.number().int().min(0).max(86400).nullable(), // Max 24 hours, nullable if API doesn't provide it
   thumbnail: z.string().url().optional()
 });
 
@@ -168,9 +168,9 @@ export const noteInsertSchema = z.object({
   youtubeId: youtubeIdSchema,
   videoId: z.string().regex(UUID_REGEX, 'Invalid video record ID').optional(),
   source: noteSourceSchema,
-  sourceId: z.string().optional(),
+  sourceId: z.string().optional().nullable(),
   text: z.string().min(1).max(5000),
-  metadata: noteMetadataSchema
+  metadata: noteMetadataSchema.nullable()
 });
 
 export const noteDeleteSchema = z.object({

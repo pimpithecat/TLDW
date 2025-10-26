@@ -104,6 +104,7 @@ export default function AnalyzePage() {
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
   const [videoPreview, setVideoPreview] = useState<string>("");
   const [transcript, setTranscript] = useState<TranscriptSegment[]>([]);
+  const [translatedTranscripts, setTranslatedTranscripts] = useState<Record<string, TranscriptSegment[]>>({});
   const [topics, setTopics] = useState<Topic[]>([]);
   const [baseTopics, setBaseTopics] = useState<Topic[]>([]);
   const [themes, setThemes] = useState<string[]>([]);
@@ -491,6 +492,11 @@ export default function AnalyzePage() {
 
           // Load all cached data
           setTranscript(sanitizedTranscript);
+          
+          console.log('[AnalyzePage] Cached translations from API:', cacheData.translatedTranscripts);
+          if (cacheData.translatedTranscripts) {
+            setTranslatedTranscripts(cacheData.translatedTranscripts);
+          }
 
           const cachedVideoInfo = cacheData.videoInfo ?? null;
           if (cachedVideoInfo) {
@@ -776,8 +782,9 @@ export default function AnalyzePage() {
       setGenerationStartTime(Date.now());
 
       // Create abort controllers for both requests
-      const topicsController = abortManager.current.createController('topics');
-      const takeawaysController = abortManager.current.createController('takeaways', 60000);
+      // Extended timeout for AI generation (Gemini can take 60+ seconds)
+      const topicsController = abortManager.current.createController('topics', 120000); // 2 minutes
+      const takeawaysController = abortManager.current.createController('takeaways', 120000); // 2 minutes
 
       // Start topics generation using cached video-analysis endpoint
       const topicsPromise = fetch("/api/video-analysis", {
@@ -1684,6 +1691,9 @@ export default function AnalyzePage() {
                   onCancelEditing={handleCancelEditing}
                   isAuthenticated={!!user}
                   onRequestSignIn={promptSignInForNotes}
+                  youtubeId={videoId}
+                  cachedTranslations={translatedTranscripts}
+                  onTranslationUpdate={setTranslatedTranscripts}
                 />
               </div>
             </div>

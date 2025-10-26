@@ -25,14 +25,21 @@ export async function fetchNotes(params: { youtubeId: string }): Promise<Note[]>
 }
 
 export async function saveNote(payload: SaveNotePayload): Promise<Note> {
+  console.log('[notes-client] Saving note with payload:', payload);
   const response = await csrfFetch.post('/api/notes', payload);
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error?.error || 'Failed to save note');
+    console.error('[notes-client] Save note failed:', {
+      status: response.status,
+      statusText: response.statusText,
+      error
+    });
+    throw new Error(error?.error || error?.details || 'Failed to save note');
   }
 
   const data = await response.json();
+  console.log('[notes-client] Note saved successfully:', data.note);
   return data.note as Note;
 }
 

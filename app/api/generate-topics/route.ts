@@ -59,3 +59,5 @@ export const POST = withSecurity(handler, {
   allowedMethods: ['POST']
   // Note: Rate limiting is handled internally by the route for dynamic limits based on auth
 });
+// Allow up to 2 minutes for AI topic generation
+export const maxDuration = 120;

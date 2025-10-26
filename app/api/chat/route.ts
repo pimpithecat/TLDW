@@ -126,6 +126,13 @@ ${chatHistoryContext || 'No prior conversation'}
 </context>
 <goal>Deliver concise, factual answers. Use the transcript when it is relevant to the question; otherwise respond with your best general knowledge.</goal>
 <instructions>
+  <step name="Language Detection">
+    <item>CRITICAL: Detect the language of the user's question and the transcript.</item>
+    <item>If the user asks in Indonesian, respond in Indonesian.</item>
+    <item>If the user asks in English, respond in English.</item>
+    <item>If the transcript is in Indonesian, use Indonesian context naturally.</item>
+    <item>Always match the user's language in your response.</item>
+  </step>
   <step name="Assess Intent">
     <item>Decide whether the user's question requires information from the transcript.</item>
     <item>If the question is general knowledge or unrelated to the video, answer directly without forcing transcript references.</item>
@@ -137,16 +144,18 @@ ${chatHistoryContext || 'No prior conversation'}
     <item>List the same timestamps in the timestamps array, zero-padded and in the order they appear. Provide no more than five unique timestamps.</item>
   </step>
   <step name="AnswerFormatting">
+    <item>Respond in the SAME LANGUAGE as the user's question.</item>
     <item>Respond in concise, complete sentences that mirror the transcript's language when applicable.</item>
     <item>If the transcript lacks the requested information or was unnecessary, state that clearly and return an empty timestamps array.</item>
   </step>
 </instructions>
 <validationChecklist>
+  <item>Did you respond in the SAME LANGUAGE as the user's question?</item>
   <item>If you cited the transcript, does every factual statement have a supporting timestamp in brackets?</item>
   <item>Are all timestamps valid moments within the transcript?</item>
   <item>If the transcript was unnecessary or lacked the answer, did you state that and keep the timestamps array empty?</item>
 </validationChecklist>
-<outputFormat>Return strict JSON object: {"answer":"string","timestamps":["MM:SS"]}. No extra commentary.</outputFormat>
+<outputFormat>Return strict JSON object: {"answer":"string","timestamps":["MM:SS"]}. No extra commentary. The "answer" field must be in the SAME LANGUAGE as the user's question.</outputFormat>
 <transcript><![CDATA[
 ${transcriptContext}
 ]]></transcript>

@@ -77,6 +77,22 @@ The app uses Next.js 15 App Router with two main pages:
 - `/api/csrf-token`: Provides CSRF tokens for secure state-changing requests
 - `/api/save-analysis`: Saves complete video analysis to database
 
+### Translation Feature
+
+**Transcript Translation (EN ↔ ID)**
+- Toggle button in Transcript Viewer header (next to Auto/Manual toggle)
+- Uses OpenAI GPT-4o mini for high-quality translation
+- Batch processing: 30 segments per request for optimal performance
+- Parallel processing across batches
+- Smart caching:
+  - Memory cache: Instant toggle between languages within session
+  - Database cache: Persistent storage in `translated_transcripts` JSONB column
+  - Auto-load cached translations on video revisit
+- AI Chat integration: Automatically uses transcript in active language
+- Background saving: Non-blocking database updates
+- Files: `app/api/translate-transcript/route.ts`, `components/transcript-viewer.tsx`
+- Migration: `supabase/migrations/20241027000000_add_translated_transcripts.sql`
+
 ### Key Technical Implementation
 
 #### Quote Matching System (`lib/quote-matcher.ts`)
@@ -317,6 +333,7 @@ The application uses aggressive parallel processing to minimize latency:
 ### Environment Variables
 Required in `.env.local`:
 - `GEMINI_API_KEY`: Google Gemini API key for AI generation
+- `OPENAI_API_KEY`: OpenAI API key for transcript translation (GPT-4o mini)
 - `SUPADATA_API_KEY`: Supadata API key for transcript fetching
 - `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase anonymous key

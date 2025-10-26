@@ -51,7 +51,10 @@ export function YouTubePlayer({
   const [currentTime, setCurrentTime] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
   const [playerReady, setPlayerReady] = useState(false);
+  const [embedBlocked, setEmbedBlocked] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const playerInitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isSeekingRef = useRef(false);
   const isPlayingAllRef = useRef(false);
   const playAllIndexRef = useRef(0);
@@ -91,6 +94,9 @@ export function YouTubePlayer({
           controls: 1,
           modestbranding: 1,
           rel: 0,
+          origin: typeof window !== 'undefined' ? window.location.origin : '',
+          enablejsapi: 1,
+          widget_referrer: typeof window !== 'undefined' ? window.location.href : '',
         },
         events: {
           onReady: (event: { target: any }) => {
@@ -100,7 +106,43 @@ export function YouTubePlayer({
             setVideoDuration(duration);
             onDurationChange?.(duration);
             setPlayerReady(true);
+            setEmbedBlocked(false);
+            setRetryCount(0);
             onPlayerReady?.();
+          },
+          onError: (event: { data: number }) => {
+            if (!mounted) return;
+            
+            // Error codes: 2 = invalid param, 5 = HTML5 player error, 100 = video not found, 101/150 = embed restricted
+            if (event.data === 101 || event.data === 150) {
+              // Try reload once after delay for rate limiting issues
+              if (retryCount < 1 && event.data === 150) {
+                console.log('[YouTubePlayer] Error 150 detected, retrying in 3 seconds...');
+                setRetryCount(prev => prev + 1);
+                
+                // Cleanup current player
+                if (playerRef.current) {
+                  try {
+                    playerRef.current.destroy();
+                  } catch (e) {
+                    console.error('Error destroying player:', e);
+                  }
+                  playerRef.current = null;
+                }
+                
+                // Retry after delay
+                playerInitTimeoutRef.current = setTimeout(() => {
+                  if (mounted) {
+                    initializePlayer();
+                  }
+                }, 3000);
+              } else {
+                console.log('[YouTubePlayer] Playback restricted (error ' + event.data + ')');
+                setEmbedBlocked(true);
+              }
+            } else {
+              console.error('[YouTubePlayer] Error code:', event.data);
+            }
           },
           onStateChange: (event: { data: number; target: any }) => {
             if (!mounted) return;
@@ -408,10 +450,48 @@ export function YouTubePlayer({
     <div className="w-full">
       <Card className="overflow-hidden shadow-sm p-0">
         <div className="relative bg-black overflow-hidden aspect-video">
-          <div
-            id="youtube-player"
-            className="absolute top-0 left-0 w-full h-full"
-          />
+          {embedBlocked ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center bg-black">
+              <div className="max-w-md space-y-4">
+                <svg className="w-16 h-16 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  <line x1="2" y1="2" x2="22" y2="22" strokeWidth={2} strokeLinecap="round" />
+                </svg>
+                <h3 className="text-xl font-semibold text-white">Playback Restricted</h3>
+                <p className="text-gray-300 text-sm">
+                  This video cannot be played here. This may be due to playback restrictions or rate limiting. You can still use all analysis features (transcript, topics, chat, notes).
+                </p>
+                <div className="flex flex-col gap-2">
+                  <a
+                    href={`https://www.youtube.com/watch?v=${videoId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                    </svg>
+                    Watch on YouTube
+                  </a>
+                  <button
+                    onClick={() => {
+                      setEmbedBlocked(false);
+                      setRetryCount(0);
+                      window.location.reload();
+                    }}
+                    className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+                  >
+                    Reload Page
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div
+              id="youtube-player"
+              className="absolute top-0 left-0 w-full h-full"
+            />
+          )}
         </div>
       
         {renderControls && (

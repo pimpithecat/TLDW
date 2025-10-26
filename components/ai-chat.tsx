@@ -107,9 +107,11 @@ interface AIChatProps {
   cachedSuggestedQuestions?: string[] | null;
   onSaveNote?: (payload: { text: string; source: NoteSource; sourceId?: string | null; metadata?: NoteMetadata | null }) => Promise<void>;
   onTakeNoteFromSelection?: (payload: SelectionActionPayload) => void;
+  currentLanguage?: string;
+  translatedTranscripts?: Record<string, TranscriptSegment[]>;
 }
 
-export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onCitationClick, onTimestampClick, cachedSuggestedQuestions, onSaveNote, onTakeNoteFromSelection }: AIChatProps) {
+export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onCitationClick, onTimestampClick, cachedSuggestedQuestions, onSaveNote, onTakeNoteFromSelection, currentLanguage = 'en', translatedTranscripts = {} }: AIChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -126,6 +128,10 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
   const dismissedQuestionsRef = useRef<Set<string>>(new Set());
   const followUpQuestionsRef = useRef<string[]>([]);
   const followUpRequestIdRef = useRef(0);
+  
+  const activeTranscript = useMemo(() => {
+    return translatedTranscripts[currentLanguage] || transcript;
+  }, [currentLanguage, translatedTranscripts, transcript]);
 
   useEffect(() => {
     const viewport = scrollViewportRef.current;
@@ -410,7 +416,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: promptText,
-          transcript,
+          transcript: activeTranscript,
           topics: sanitizedTopicsForChat,
           videoId,
           chatHistory: messages,

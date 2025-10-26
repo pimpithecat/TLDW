@@ -4,6 +4,12 @@ export interface TranscriptSegment {
   duration: number;
 }
 
+export type TranscriptLanguage = 'en' | 'id';
+
+export interface TranslationCache {
+  [language: string]: TranscriptSegment[];
+}
+
 export interface Topic {
   id: string;
   title: string;

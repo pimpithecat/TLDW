@@ -33,6 +33,9 @@ interface RightColumnTabsProps {
   onCancelEditing?: () => void;
   isAuthenticated?: boolean;
   onRequestSignIn?: () => void;
+  youtubeId?: string;
+  cachedTranslations?: Record<string, TranscriptSegment[]>;
+  onTranslationUpdate?: (translations: Record<string, TranscriptSegment[]>) => void;
 }
 
 export interface RightColumnTabsHandle {
@@ -62,8 +65,12 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   onCancelEditing,
   isAuthenticated,
   onRequestSignIn,
+  youtubeId,
+  cachedTranslations,
+  onTranslationUpdate,
 }, ref) => {
   const [activeTab, setActiveTab] = useState<"transcript" | "chat" | "notes">("transcript");
+  const [currentLanguage, setCurrentLanguage] = useState<string>('en');
 
   // Expose methods to parent to switch tabs
   useImperativeHandle(ref, () => ({
@@ -149,6 +156,10 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
             citationHighlight={citationHighlight}
             onTakeNoteFromSelection={onTakeNoteFromSelection}
             videoId={videoId}
+            youtubeId={youtubeId}
+            cachedTranslations={cachedTranslations}
+            onTranslationUpdate={onTranslationUpdate}
+            onLanguageChange={setCurrentLanguage}
           />
         </div>
         <div className={cn("absolute inset-0", (activeTab !== "chat" || !showChatTab) && "hidden")}>
@@ -163,6 +174,8 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
             cachedSuggestedQuestions={cachedSuggestedQuestions}
             onSaveNote={onSaveNote}
             onTakeNoteFromSelection={onTakeNoteFromSelection}
+            currentLanguage={currentLanguage}
+            translatedTranscripts={cachedTranslations}
           />
         </div>
         <div className={cn("absolute inset-0", activeTab !== "notes" && "hidden")}

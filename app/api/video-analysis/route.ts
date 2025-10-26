@@ -112,6 +112,7 @@ async function handler(req: NextRequest) {
           },
           summary: cachedVideo.summary,
           suggestedQuestions: cachedVideo.suggested_questions,
+          translatedTranscripts: cachedVideo.translated_transcripts || {},
           themes,
           cached: true,
           cacheDate: cachedVideo.created_at
@@ -205,3 +206,6 @@ async function handler(req: NextRequest) {
 }
 
 export const POST = withSecurity(handler, SECURITY_PRESETS.PUBLIC);
+
+// Allow up to 2 minutes for AI generation (Gemini can be slow)
+export const maxDuration = 120;

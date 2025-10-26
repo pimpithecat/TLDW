@@ -207,3 +207,6 @@ export const POST = withSecurity(handler, {
   maxBodySize: 10 * 1024 * 1024, // 10MB for large transcripts
   allowedMethods: ['POST']
 });
+
+// Allow up to 2 minutes for AI summary generation
+export const maxDuration = 120;

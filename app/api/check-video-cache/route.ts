@@ -55,6 +55,7 @@ async function handler(req: NextRequest) {
         videoId: videoId,
         topics: cachedVideo.topics,
         transcript: cachedVideo.transcript,
+        translatedTranscripts: cachedVideo.translated_transcripts || {},
         videoInfo: {
           title: cachedVideo.title,
           author: cachedVideo.author,

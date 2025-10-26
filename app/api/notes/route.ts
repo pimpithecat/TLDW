@@ -99,11 +99,15 @@ async function handler(req: NextRequest) {
   if (req.method === 'POST') {
     try {
       const body = await req.json();
+      console.log('[notes API] POST request body:', body);
+      
       const validatedData = noteInsertSchema.parse(body);
+      console.log('[notes API] Validated data:', validatedData);
 
       const youtubeId = validatedData.youtubeId;
 
       if (!youtubeId) {
+        console.error('[notes API] Missing youtubeId');
         return NextResponse.json(
           { error: 'youtubeId is required' },
           { status: 400 }
@@ -122,43 +126,51 @@ async function handler(req: NextRequest) {
       }
 
       const video = videos?.[0];
+      console.log('[notes API] Found video:', video);
 
       if (!video?.id) {
+        console.error('[notes API] Video not found for youtubeId:', youtubeId);
         return NextResponse.json(
           { error: 'Video not found' },
           { status: 404 }
         );
       }
 
+      const insertPayload = {
+        user_id: user.id,
+        video_id: video.id,
+        source: validatedData.source,
+        source_id: validatedData.sourceId ?? null,
+        note_text: validatedData.text,
+        metadata: validatedData.metadata ?? null
+      };
+      console.log('[notes API] Inserting note with payload:', insertPayload);
+
       const { data: noteRow, error } = await supabase
         .from('user_notes')
-        .insert({
-          user_id: user.id,
-          video_id: video.id,
-          source: validatedData.source,
-          source_id: validatedData.sourceId || null,
-          note_text: validatedData.text,
-          metadata: validatedData.metadata || {}
-        })
+        .insert(insertPayload)
         .select()
         .single();
 
       if (error) {
+        console.error('[notes API] Supabase insert error:', error);
         throw error;
       }
 
+      console.log('[notes API] Note created successfully:', noteRow);
       return NextResponse.json({ note: mapNote(noteRow as NoteRow) }, { status: 201 });
     } catch (error) {
       if (error instanceof z.ZodError) {
+        console.error('[notes API] Validation error:', error.issues);
         return NextResponse.json(
           { error: 'Validation failed', details: formatValidationError(error) },
           { status: 400 }
         );
       }
 
-      console.error('Error creating note:', error);
+      console.error('[notes API] Error creating note:', error);
       return NextResponse.json(
-        { error: 'Failed to save note' },
+        { error: 'Failed to save note', details: error instanceof Error ? error.message : 'Unknown error' },
         { status: 500 }
       );
     }

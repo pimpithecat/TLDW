@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { TranscriptSegment, Topic, Citation } from "@/lib/types";
+import { TranscriptSegment, Topic, Citation, TranscriptLanguage, TranslationCache } from "@/lib/types";
 import { getTopicHSLColor, formatDuration } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Eye, EyeOff, ChevronDown } from "lucide-react";
+import { Eye, EyeOff, ChevronDown, Languages, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { SelectionActions, triggerExplainSelection, SelectionActionPayload } from "@/components/selection-actions";
 import { NoteMetadata } from "@/lib/types";
+import { toast } from "sonner";
 
 interface TranscriptViewerProps {
   transcript: TranscriptSegment[];
@@ -20,6 +21,10 @@ interface TranscriptViewerProps {
   citationHighlight?: Citation | null;
   onTakeNoteFromSelection?: (payload: SelectionActionPayload) => void;
   videoId?: string;
+  youtubeId?: string;
+  cachedTranslations?: Record<string, TranscriptSegment[]>;
+  onTranslationUpdate?: (translations: Record<string, TranscriptSegment[]>) => void;
+  onLanguageChange?: (language: string) => void;
 }
 
 export function TranscriptViewer({
@@ -30,7 +35,11 @@ export function TranscriptViewer({
   topics = [],
   citationHighlight,
   onTakeNoteFromSelection,
-  videoId
+  videoId,
+  youtubeId,
+  cachedTranslations = {},
+  onTranslationUpdate,
+  onLanguageChange
 }: TranscriptViewerProps) {
   const highlightedRefs = useRef<(HTMLDivElement | null)[]>([]);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -45,6 +54,103 @@ export function TranscriptViewer({
     : -1;
   const selectedTopicColor =
     selectedTopicIndex >= 0 ? getTopicHSLColor(selectedTopicIndex, videoId) : null;
+  
+  const [currentLanguage, setCurrentLanguage] = useState<TranscriptLanguage>('en');
+  const [translationCache, setTranslationCache] = useState<TranslationCache>(() => ({
+    en: transcript,
+    ...cachedTranslations
+  }));
+  const translationCacheRef = useRef(translationCache);
+  const [isTranslating, setIsTranslating] = useState(false);
+  
+  const displayedTranscript = translationCache[currentLanguage] || transcript;
+  
+  useEffect(() => {
+    translationCacheRef.current = translationCache;
+  }, [translationCache]);
+
+  useEffect(() => {
+    console.log('[TranscriptViewer] Loading cached translations:', cachedTranslations);
+    setTranslationCache({ 
+      en: transcript,
+      ...cachedTranslations 
+    });
+    setCurrentLanguage('en');
+  }, [transcript, cachedTranslations]);
+
+  const handleLanguageToggle = useCallback(async () => {
+    const targetLang: TranscriptLanguage = currentLanguage === 'en' ? 'id' : 'en';
+    const cache = translationCacheRef.current;
+    
+    console.log('[TranscriptViewer] Toggle to:', targetLang);
+    console.log('[TranscriptViewer] Translation cache keys:', Object.keys(cache));
+    console.log('[TranscriptViewer] Has target lang in cache:', !!cache[targetLang]);
+    
+    if (cache[targetLang]) {
+      console.log('[TranscriptViewer] Using existing translation');
+      setCurrentLanguage(targetLang);
+      if (onLanguageChange) {
+        onLanguageChange(targetLang);
+      }
+      return;
+    }
+
+    console.log('[TranscriptViewer] Cache miss, fetching translation from API');
+    setIsTranslating(true);
+    
+    try {
+      const response = await fetch('/api/translate-transcript', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          segments: transcript,
+          targetLanguage: targetLang,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Translation failed');
+      }
+
+      const data = await response.json();
+      
+      const updatedCache = {
+        ...cache,
+        [targetLang]: data.segments,
+      };
+      
+      setTranslationCache(updatedCache);
+      setCurrentLanguage(targetLang);
+      
+      if (onLanguageChange) {
+        onLanguageChange(targetLang);
+      }
+      
+      if (onTranslationUpdate) {
+        onTranslationUpdate(updatedCache);
+      }
+      
+      if (youtubeId) {
+        fetch('/api/update-video-analysis', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            videoId: youtubeId,
+            translatedTranscripts: updatedCache,
+          }),
+        }).catch(err => {
+          console.error('Failed to save translation to database:', err);
+        });
+      }
+      
+      toast.success(targetLang === 'id' ? 'Diterjemahkan ke Bahasa Indonesia' : 'Translated to English');
+    } catch (error) {
+      console.error('Translation error:', error);
+      toast.error('Gagal menerjemahkan transkrip');
+    } finally {
+      setIsTranslating(false);
+    }
+  }, [currentLanguage, transcript, youtubeId, onTranslationUpdate, onLanguageChange]);
 
   // Clear refs when topic changes
   useEffect(() => {
@@ -410,30 +516,58 @@ export function TranscriptViewer({
               )}
             </div>
 
-            <Button
-              variant={autoScroll ? "default" : "outline"}
-              size="sm"
-              onClick={() => {
-                setAutoScroll(!autoScroll);
-                if (!autoScroll) {
-                  setShowScrollToCurrentButton(false);
-                  jumpToCurrent();
-                }
-              }}
-              className="text-[11px] h-6 shadow-none"
-            >
-              {autoScroll ? (
-                <>
-                  <Eye className="w-2.5 h-2.5 mr-1" />
-                  Auto
-                </>
-              ) : (
-                <>
-                  <EyeOff className="w-2.5 h-2.5 mr-1" />
-                  Manual
-                </>
-              )}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleLanguageToggle}
+                    disabled={isTranslating}
+                    className="text-[11px] h-6 shadow-none min-w-[48px]"
+                  >
+                    {isTranslating ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <>
+                        <Languages className="w-2.5 h-2.5 mr-1" />
+                        {currentLanguage.toUpperCase()}
+                      </>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <p className="text-[11px]">
+                    {currentLanguage === 'en' ? 'Translate to Indonesian' : 'Translate to English'}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+
+              <Button
+                variant={autoScroll ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setAutoScroll(!autoScroll);
+                  if (!autoScroll) {
+                    setShowScrollToCurrentButton(false);
+                    jumpToCurrent();
+                  }
+                }}
+                className="text-[11px] h-6 shadow-none"
+              >
+                {autoScroll ? (
+                  <>
+                    <Eye className="w-2.5 h-2.5 mr-1" />
+                    Auto
+                  </>
+                ) : (
+                  <>
+                    <EyeOff className="w-2.5 h-2.5 mr-1" />
+                    Manual
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -510,12 +644,12 @@ export function TranscriptViewer({
             <div className="text-center py-8 text-muted-foreground text-sm">
               No transcript available
             </div>
-          ) : (
+           ) : (
             (() => {
               // Calculate current segment index once for all segments
               const currentSegmentIndex = getCurrentSegmentIndex();
               
-              return transcript.map((segment, index) => {
+              return displayedTranscript.map((segment, index) => {
                 const highlightedText = getHighlightedText(segment, index);
                 const isCurrent = index === currentSegmentIndex;
                 getSegmentTopic(segment);

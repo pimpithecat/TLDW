@@ -31,12 +31,15 @@ async function handler(request: NextRequest) {
     }
 
     let transcriptSegments: any[] | null = null;
+    
     try {
+      console.log('[transcript API] Fetching transcript from Supadata for videoId:', videoId);
       const response = await fetch(`https://api.supadata.ai/v1/youtube/transcript?url=https://www.youtube.com/watch?v=${videoId}&lang=en`, {
         method: 'GET',
         headers: {
           'x-api-key': apiKey,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         }
       });
 

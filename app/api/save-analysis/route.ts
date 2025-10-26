@@ -22,7 +22,12 @@ const saveAnalysisSchema = z.object({
   topics: z.array(z.any()),
   summary: z.string().nullable().optional(),
   suggestedQuestions: z.array(z.string()).nullable().optional(),
-  model: z.string().default('gemini-2.5-flash')
+  model: z.string().default('gemini-2.5-flash'),
+  translatedTranscripts: z.record(z.string(), z.array(z.object({
+    text: z.string(),
+    start: z.number(),
+    duration: z.number()
+  }))).optional()
 });
 
 async function handler(req: NextRequest) {
@@ -52,7 +57,8 @@ async function handler(req: NextRequest) {
       topics,
       summary,
       suggestedQuestions,
-      model
+      model,
+      translatedTranscripts
     } = validatedData;
 
     const supabase = await createClient();
@@ -74,6 +80,17 @@ async function handler(req: NextRequest) {
         p_user_id: user?.id || null
       })
       .single();
+
+    if (result && translatedTranscripts && Object.keys(translatedTranscripts).length > 0) {
+      const { error: updateError } = await supabase
+        .from('video_analyses')
+        .update({ translated_transcripts: translatedTranscripts })
+        .eq('youtube_id', videoId);
+
+      if (updateError) {
+        console.error('Error saving translated transcripts:', updateError);
+      }
+    }
 
     if (saveError) {
       console.error('Error saving video analysis:', saveError);

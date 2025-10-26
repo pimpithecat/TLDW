@@ -7,7 +7,8 @@ async function handler(req: NextRequest) {
     const {
       videoId,
       summary,
-      suggestedQuestions
+      suggestedQuestions,
+      translatedTranscripts
     } = await req.json();
 
     if (!videoId) {
@@ -30,6 +31,10 @@ async function handler(req: NextRequest) {
 
     if (suggestedQuestions !== undefined) {
       updateData.suggested_questions = suggestedQuestions;
+    }
+
+    if (translatedTranscripts !== undefined) {
+      updateData.translated_transcripts = translatedTranscripts;
     }
 
     const { data: updatedVideo, error: updateError } = await supabase
