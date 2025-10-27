@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { RightColumnTabs, type RightColumnTabsHandle } from "@/components/right-column-tabs";
 import { YouTubePlayer } from "@/components/youtube-player";
 import { HighlightsPanel } from "@/components/highlights-panel";
@@ -113,6 +113,7 @@ export default function AnalyzePage() {
   const [themeCandidateMap, setThemeCandidateMap] = useState<Record<string, TopicCandidate[]>>({});
   const [usedTopicKeys, setUsedTopicKeys] = useState<Set<string>>(new Set());
   const [isLoadingThemeTopics, setIsLoadingThemeTopics] = useState(false);
+  const [isSuggestingThemes, setIsSuggestingThemes] = useState(false);
   const [themeError, setThemeError] = useState<string | null>(null);
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
@@ -344,14 +345,21 @@ export default function AnalyzePage() {
 
   // Handle pending video linking when user logs in and videoId is available
   useEffect(() => {
-    if (user && !hasAttemptedLinking.current && (videoId || sessionStorage.getItem('pendingVideoId'))) {
+    const pendingVideoId = sessionStorage.getItem('pendingVideoId');
+    const videoToLink = pendingVideoId || videoId;
+    
+    // Only attempt linking if:
+    // 1. User is authenticated
+    // 2. Haven't attempted linking for this specific video yet
+    // 3. There's a video to link
+    if (user && videoToLink && !hasAttemptedLinking.current) {
       hasAttemptedLinking.current = true;
       // Delay the link attempt to ensure authentication is fully propagated
       setTimeout(() => {
         checkPendingVideoLink();
       }, 1500);
     }
-  }, [user, videoId]); // Properly track both dependencies
+  }, [user, videoId]); // Track both user and videoId
 
   // Cleanup AbortManager on component unmount
   useEffect(() => {
@@ -515,11 +523,13 @@ export default function AnalyzePage() {
             setVideoInfo(null);
           }
 
-          // Separate base topics and theme topics
+          // Separate base topics, real theme topics, and placeholders
           const baseTopicsFromCache = hydratedTopics.filter(topic => !topic.theme);
-          const themeTopicsFromCache = hydratedTopics.filter(topic => topic.theme);
+          const themeTopicsFromCache = hydratedTopics.filter(topic => 
+            topic.theme && !topic.id?.startsWith('placeholder-')
+          );
           
-          // Reconstruct themeTopicsMap
+          // Reconstruct themeTopicsMap (excluding placeholders)
           const reconstructedThemeMap: Record<string, Topic[]> = {};
           themeTopicsFromCache.forEach(topic => {
             if (topic.theme) {
@@ -562,44 +572,13 @@ export default function AnalyzePage() {
           setLoadingStage(null);
           setProcessingStartTime(null);
 
-          backgroundOperation(
-            'load-cached-themes',
-            async () => {
-              const response = await fetch("/api/video-analysis", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  videoId: extractedVideoId,
-                  videoInfo: cacheData.videoInfo,
-                  transcript: sanitizedTranscript,
-                  model: 'gemini-2.5-flash',
-                  includeCandidatePool: true,
-                  mode: selectedMode
-                }),
-              });
-
-              if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-                const message = buildApiErrorMessage(errorData, "Failed to generate themes");
-                throw new Error(message);
-              }
-
-              const data = await response.json();
-              if (Array.isArray(data.themes)) {
-                setThemes(data.themes);
-              }
-              if (Array.isArray(data.topicCandidates)) {
-                setThemeCandidateMap(prev => ({
-                  ...prev,
-                  __default: data.topicCandidates
-                }));
-              }
-              return data.themes;
-            },
-            (error) => {
-              console.error("Failed to generate themes for cached video:", error);
-            }
-          );
+          // Extract themes from topics (those with theme field, including placeholders)
+          const themesFromCache = [...new Set(
+            hydratedTopics
+              .filter(topic => topic.theme && topic.theme.trim().length > 0)
+              .map(topic => topic.theme as string)
+          )];
+          setThemes(themesFromCache);
 
           // Auto-start takeaways generation if not available
           if (!cacheData.summary) {
@@ -812,7 +791,8 @@ export default function AnalyzePage() {
           videoInfo: fetchedVideoInfo,
           transcript: normalizedTranscriptData,
           model: 'gemini-2.5-flash',
-          mode: selectedMode
+          mode: selectedMode,
+          includeCandidatePool: selectedMode === 'smart' // Generate placeholders for smart mode
         }),
         signal: topicsController.signal,
       }).catch(err => {
@@ -853,6 +833,7 @@ export default function AnalyzePage() {
       let generatedTopics: Topic[] = [];
       let generatedThemes: string[] = [];
       let generatedCandidates: TopicCandidate[] = [];
+      let allTopicsWithPlaceholders: any[] = []; // Track all topics including placeholders
       if (topicsResult.status === 'fulfilled') {
         const topicsRes = topicsResult.value;
 
@@ -898,8 +879,20 @@ export default function AnalyzePage() {
 
         const topicsData = await topicsRes.json();
         const rawTopics = Array.isArray(topicsData.topics) ? topicsData.topics : [];
-        generatedTopics = hydrateTopicsWithTranscript(rawTopics, normalizedTranscriptData);
-        generatedThemes = Array.isArray(topicsData.themes) ? topicsData.themes : [];
+        allTopicsWithPlaceholders = rawTopics; // Store all including placeholders
+        
+        // Separate real topics from placeholders
+        const realTopics = rawTopics.filter((t: any) => !t.id?.startsWith('placeholder-'));
+        
+        // Only hydrate real topics (placeholders don't need hydration)
+        generatedTopics = hydrateTopicsWithTranscript(realTopics, normalizedTranscriptData);
+        
+        // Extract unique themes from ALL topics (including placeholders)
+        const themesArray: string[] = rawTopics
+          .filter((topic: any) => topic.theme && typeof topic.theme === 'string' && topic.theme.trim().length > 0)
+          .map((topic: any) => topic.theme as string);
+        generatedThemes = [...new Set(themesArray)];
+        
         generatedCandidates = Array.isArray(topicsData.topicCandidates) ? topicsData.topicCandidates : [];
         generatedCandidates = generatedCandidates.map(candidate => ({
           ...candidate,
@@ -976,7 +969,7 @@ export default function AnalyzePage() {
                 thumbnail: ''
               },
               transcript: normalizedTranscriptData,
-              topics: generatedTopics,
+              topics: allTopicsWithPlaceholders.length > 0 ? allTopicsWithPlaceholders : generatedTopics,
               summary: generatedTakeaways,
               model: 'gemini-2.5-flash'
             }),
@@ -1324,14 +1317,34 @@ export default function AnalyzePage() {
         }));
 
         // Save theme topics to database (background operation)
+        // Replace placeholder with real topics
         backgroundOperation(
           'save-theme-topics',
           async () => {
+            // Get current topics from database first
+            const checkResponse = await fetch("/api/check-video-cache", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ url: `https://www.youtube.com/watch?v=${videoId}` })
+            });
+            
+            let existingTopics: any[] = [];
+            if (checkResponse.ok) {
+              const cacheData = await checkResponse.json();
+              existingTopics = cacheData.topics || [];
+            }
+            
+            // Remove placeholder for this theme
+            const topicsWithoutPlaceholder = existingTopics.filter(t => 
+              !(t.id?.startsWith('placeholder-') && t.theme === normalizedTheme)
+            );
+            
+            // Remove old topics for this theme (if any)
+            const topicsWithoutOldTheme = topicsWithoutPlaceholder.filter(t => t.theme !== normalizedTheme);
+            
+            // Add new theme topics
             const allTopics = [
-              ...baseTopics.map(t => ({ ...t, theme: null })),
-              ...Object.entries(themeTopicsMap).flatMap(([theme, topics]) => 
-                topics.map(t => ({ ...t, theme }))
-              ),
+              ...topicsWithoutOldTheme,
               ...themedTopicsWithTheme
             ];
 
@@ -1414,6 +1427,113 @@ export default function AnalyzePage() {
     setIsPlayingAll,
     setPlayAllIndex
   ]);
+
+  const handleSuggestThemes = useCallback(async () => {
+    if (!videoId || isSuggestingThemes) return;
+
+    // Check if already at max themes (10)
+    if (themes.length >= 10) {
+      toast.error('Maximum topics reached. Please delete some topics first.');
+      return;
+    }
+
+    setIsSuggestingThemes(true);
+    try {
+      const response = await fetch('/api/suggest-themes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoId })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate theme suggestions');
+      }
+
+      const data = await response.json();
+      if (data.suggestedThemes && data.suggestedThemes.length > 0) {
+        // Refresh themes from updated topics
+        const cacheResponse = await fetch('/api/check-video-cache', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: `https://www.youtube.com/watch?v=${videoId}` })
+        });
+
+        if (cacheResponse.ok) {
+          const cacheData = await cacheResponse.json();
+          const updatedTopics = cacheData.topics || [];
+          const themesArray: string[] = updatedTopics
+            .filter((t: any) => t.theme && typeof t.theme === 'string' && t.theme.trim().length > 0)
+            .map((t: any) => t.theme as string);
+          setThemes([...new Set(themesArray)]);
+          toast.success(`Added ${data.suggestedThemes.length} new topic${data.suggestedThemes.length > 1 ? 's' : ''}`);
+        }
+      } else {
+        toast.info('No new topics found. All suggested topics already exist.');
+      }
+    } catch (error) {
+      console.error('Error suggesting themes:', error);
+      toast.error('Failed to generate topic suggestions');
+    } finally {
+      setIsSuggestingThemes(false);
+    }
+  }, [videoId, isSuggestingThemes, themes.length]);
+
+  const handleDeleteTheme = useCallback(async (theme: string) => {
+    if (!videoId) return;
+
+    try {
+      // Get current topics from database
+      const checkResponse = await fetch('/api/check-video-cache', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: `https://www.youtube.com/watch?v=${videoId}` })
+      });
+
+      if (!checkResponse.ok) {
+        throw new Error('Failed to load video data');
+      }
+
+      const cacheData = await checkResponse.json();
+      const existingTopics = cacheData.topics || [];
+
+      // Remove all topics with this theme (including placeholders and real topics)
+      const filteredTopics = existingTopics.filter((t: any) => t.theme !== theme);
+
+      // Update database
+      const updateResponse = await fetch('/api/update-video-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoId,
+          topics: filteredTopics
+        })
+      });
+
+      if (!updateResponse.ok) {
+        throw new Error('Failed to delete theme');
+      }
+
+      // Update local state
+      setThemes(prev => prev.filter(t => t !== theme));
+      setThemeTopicsMap(prev => {
+        const newMap = { ...prev };
+        delete newMap[theme];
+        return newMap;
+      });
+
+      // If deleted theme was selected, reset to base topics
+      if (selectedTheme === theme) {
+        setSelectedTheme(null);
+        setTopics(baseTopics);
+        setSelectedTopic(baseTopics[0] || null);
+      }
+
+      toast.success(`Deleted theme: ${theme}`);
+    } catch (error) {
+      console.error('Error deleting theme:', error);
+      toast.error('Failed to delete theme');
+    }
+  }, [videoId, selectedTheme, baseTopics]);
 
   // Dynamically adjust right column height to match video container
   useEffect(() => {
@@ -1545,6 +1665,43 @@ export default function AnalyzePage() {
   const handleCancelEditing = useCallback(() => {
     setEditingNote(null);
   }, []);
+
+  // Compute placeholder themes (themes that don't have generated topics in themeTopicsMap)
+  const placeholderThemes = useMemo(() => {
+    const placeholders = new Set<string>();
+    
+    // Check each theme in the themes array
+    themes.forEach(themeName => {
+      const topicsForTheme = themeTopicsMap[themeName];
+      
+      if (!topicsForTheme || topicsForTheme.length === 0) {
+        // Theme exists but has no topics generated yet
+        placeholders.add(themeName);
+      } else {
+        const hasGeneratedTopics = topicsForTheme.some(t => Array.isArray(t.segments) && t.segments.length > 0);
+        if (!hasGeneratedTopics) {
+          placeholders.add(themeName);
+        }
+      }
+    });
+    
+    return placeholders;
+  }, [themes, themeTopicsMap]);
+
+  // Sort themes: generated first, placeholders last
+  const sortedThemes = useMemo(() => {
+    return [...themes].sort((a, b) => {
+      const aIsPlaceholder = placeholderThemes.has(a);
+      const bIsPlaceholder = placeholderThemes.has(b);
+      
+      // If one is placeholder and other is not, non-placeholder comes first
+      if (aIsPlaceholder && !bIsPlaceholder) return 1;
+      if (!aIsPlaceholder && bIsPlaceholder) return -1;
+      
+      // Otherwise maintain original order
+      return 0;
+    });
+  }, [themes, placeholderThemes]);
 
   return (
     <div className="min-h-screen bg-white pt-12 pb-2">
@@ -1680,17 +1837,19 @@ export default function AnalyzePage() {
                   renderControls={false}
                   onDurationChange={setVideoDuration}
                 />
-                {(themes.length > 0 || isLoadingThemeTopics || themeError || selectedTheme) && (
-                  <div className="flex justify-center">
-                    <ThemeSelector
-                      themes={themes}
-                      selectedTheme={selectedTheme}
-                      onSelect={handleThemeSelect}
-                      isLoading={isLoadingThemeTopics}
-                      error={themeError}
-                    />
-                  </div>
-                )}
+                <div className="flex justify-center">
+                  <ThemeSelector
+                    themes={sortedThemes}
+                    selectedTheme={selectedTheme}
+                    onSelect={handleThemeSelect}
+                    onDelete={handleDeleteTheme}
+                    onSuggestThemes={handleSuggestThemes}
+                    isLoading={isLoadingThemeTopics}
+                    isSuggesting={isSuggestingThemes}
+                    error={themeError}
+                    placeholderThemes={placeholderThemes}
+                  />
+                </div>
                 <HighlightsPanel
                   topics={topics}
                   selectedTopic={selectedTopic}

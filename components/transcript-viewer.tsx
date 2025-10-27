@@ -161,26 +161,7 @@ export function TranscriptViewer({
       
       const firstSeg = selectedTopic.segments[0];
       if (firstSeg.startSegmentIdx !== undefined && firstSeg.endSegmentIdx !== undefined) {
-        
-        // Check what's actually at those indices
-        if (transcript[firstSeg.startSegmentIdx]) {
-          
-          // Try to find where the quote actually is
-          const quoteStart = firstSeg.text.substring(0, 30).toLowerCase().replace(/[^a-z0-9 ]/g, '');
-          let foundAt = -1;
-          
-          for (let i = Math.max(0, firstSeg.startSegmentIdx - 5); i <= Math.min(firstSeg.startSegmentIdx + 5, transcript.length - 1); i++) {
-            const segText = transcript[i]?.text || '';
-            const segTextNorm = segText.toLowerCase().replace(/[^a-z0-9 ]/g, '');
-            if (segTextNorm.includes(quoteStart)) {
-              foundAt = i;
-              break;
-            }
-          }
-          
-          if (foundAt !== -1 && foundAt !== firstSeg.startSegmentIdx) {
-          }
-        }
+        // Segment indices are already correct, no need to verify
       }
     }
   }, [selectedTopic, transcript]);
@@ -671,8 +652,12 @@ export function TranscriptViewer({
                         }
                       }
                     }}
+                    onClick={() => {
+                      lastUserScrollTime.current = Date.now() + 1000;
+                      onTimestampClick(segment.start, segment.start + segment.duration);
+                    }}
                     className={cn(
-                      "group relative px-2.5 py-1.5 rounded-xl transition-all duration-200"
+                      "group relative px-2.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer hover:bg-accent/50"
                     )}
                   >
                     {/* Transcript text with partial highlighting */}

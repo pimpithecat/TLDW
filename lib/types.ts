@@ -19,7 +19,7 @@ export interface Topic {
   segments: {
     start: number;
     end: number;
-    text: string;
+    text?: string; // DEPRECATED: Redundant with quote.text, no longer written to DB
     startSegmentIdx?: number;
     endSegmentIdx?: number;
     // Character offsets within the start/end segments for precise highlighting

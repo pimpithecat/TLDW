@@ -546,7 +546,6 @@ async function findExactQuotes(
       return {
         start: startSegment.start,
         end: endSegment.start + endSegment.duration,
-        text: quoteText,
         startSegmentIdx: match.startSegmentIdx,
         endSegmentIdx: match.endSegmentIdx,
         startCharOffset: match.startCharOffset,
@@ -594,7 +593,6 @@ async function findExactQuotes(
         return {
           start: startSegment.start,
           end: endSegment.start + endSegment.duration,
-          text: quoteText,
           startSegmentIdx: rangeMatch.startSegmentIdx,
           endSegmentIdx: rangeMatch.endSegmentIdx,
           startCharOffset: rangeMatch.startCharOffset,
@@ -607,12 +605,9 @@ async function findExactQuotes(
       // Final fallback: Use timestamp range
       const firstSegment = segmentsInRange[0];
       const lastSegment = segmentsInRange[segmentsInRange.length - 1];
-      const joinedText = segmentsInRange.map(s => s.segment.text).join(' ');
-
       return {
         start: firstSegment.segment.start,
         end: lastSegment.segment.start + lastSegment.segment.duration,
-        text: joinedText, // Use the actual joined text from segments
         startSegmentIdx: firstSegment.idx,
         endSegmentIdx: lastSegment.idx,
         startCharOffset: 0,

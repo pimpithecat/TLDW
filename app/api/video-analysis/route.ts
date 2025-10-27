@@ -87,18 +87,11 @@ async function handler(req: NextRequest) {
             p_thumbnail_url: cachedVideo.thumbnail_url,
             p_transcript: cachedVideo.transcript,
             p_topics: cachedVideo.topics,
-            p_summary: cachedVideo.summary || null,  // Ensure null instead of undefined
+            p_summary: cachedVideo.summary || null,
             p_suggested_questions: cachedVideo.suggested_questions || null,
             p_model_used: cachedVideo.model_used,
             p_user_id: user.id
           });
-        }
-
-        let themes: string[] = [];
-        try {
-          themes = await generateThemesFromTranscript(transcript, videoInfo);
-        } catch (error) {
-          console.error('Error generating themes for cached video:', error);
         }
 
         return NextResponse.json({
@@ -113,7 +106,6 @@ async function handler(req: NextRequest) {
           summary: cachedVideo.summary,
           suggestedQuestions: cachedVideo.suggested_questions,
           translatedTranscripts: cachedVideo.translated_transcripts || {},
-          themes,
           cached: true,
           cacheDate: cachedVideo.created_at
         });
@@ -172,22 +164,37 @@ async function handler(req: NextRequest) {
       videoInfo,
       includeCandidatePool: validatedData.includeCandidatePool,
       excludeTopicKeys: new Set(validatedData.excludeTopicKeys ?? []),
-      mode
+      mode,
+      theme
     });
-    const topics = generationResult.topics;
+    let topics = generationResult.topics;
     const topicCandidates = generationResult.candidates;
     const modelUsed = generationResult.modelUsed;
 
-    let themes: string[] = [];
-    try {
-      themes = await generateThemesFromTranscript(transcript, videoInfo);
-    } catch (error) {
-      console.error('Error generating themes:', error);
+    // Generate suggested themes for new videos (not theme-specific requests)
+    // Add them as placeholder topics (no segments, just theme metadata)
+    if (!theme && validatedData.includeCandidatePool) {
+      try {
+        const suggestedThemes = await generateThemesFromTranscript(transcript, videoInfo);
+        
+        // Create placeholder topics for each suggested theme
+        const placeholderTopics = suggestedThemes.map((themeName, idx) => ({
+          id: `placeholder-${idx}`,
+          title: themeName,
+          theme: themeName,
+          duration: 0,
+          segments: [] // Empty segments = placeholder
+        }));
+        
+        // Append placeholders to topics array
+        topics = [...topics, ...placeholderTopics];
+      } catch (error) {
+        console.error('Error generating suggested themes:', error);
+      }
     }
 
     return NextResponse.json({
       topics,
-      themes,
       cached: false,
       topicCandidates: validatedData.includeCandidatePool ? topicCandidates ?? [] : undefined,
       modelUsed

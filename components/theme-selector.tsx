@@ -4,29 +4,37 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { ArrowUp, ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
+import { ArrowUp, ChevronLeft, ChevronRight, Plus, X, Sparkles } from "lucide-react";
 
 interface ThemeSelectorProps {
   themes: string[];
   selectedTheme: string | null;
   onSelect: (theme: string | null) => void;
+  onDelete?: (theme: string) => void;
+  onSuggestThemes?: () => void;
   isLoading?: boolean;
+  isSuggesting?: boolean;
   error?: string | null;
+  placeholderThemes?: Set<string>; // Themes that don't have generated topics yet
 }
 
 export function ThemeSelector({
   themes,
   selectedTheme,
   onSelect,
+  onDelete,
+  onSuggestThemes,
   isLoading = false,
+  isSuggesting = false,
   error = null,
+  placeholderThemes = new Set(),
 }: ThemeSelectorProps) {
   const [customThemes, setCustomThemes] = useState<string[]>([]);
-  const baseThemes = useMemo(() => themes.slice(0, 3), [themes]);
+  // Display all themes from props
   const displayThemes = useMemo(() => {
-    const additionalThemes = customThemes.filter((theme) => !baseThemes.includes(theme));
-    return [...baseThemes, ...additionalThemes];
-  }, [baseThemes, customThemes]);
+    const allThemes = [...themes, ...customThemes.filter((theme) => !themes.includes(theme))];
+    return allThemes;
+  }, [themes, customThemes]);
   const hasThemes = displayThemes.length > 0;
   const isOverallSelected = selectedTheme === null;
   const [customThemeInput, setCustomThemeInput] = useState("");
@@ -45,7 +53,7 @@ export function ThemeSelector({
   }, [customThemes, selectedTheme]);
 
   useEffect(() => {
-    if (selectedTheme && !baseThemes.includes(selectedTheme)) {
+    if (selectedTheme && !themes.includes(selectedTheme)) {
       setCustomThemes((prev) => {
         if (prev.includes(selectedTheme)) {
           return prev;
@@ -53,7 +61,7 @@ export function ThemeSelector({
         return [...prev, selectedTheme];
       });
     }
-  }, [baseThemes, selectedTheme]);
+  }, [themes, selectedTheme]);
 
   const buttonClasses = (isActive: boolean, forceInactive = false) =>
     cn(
@@ -102,7 +110,7 @@ export function ThemeSelector({
     }
 
     setCustomThemes((prev) => {
-      if (baseThemes.includes(trimmedValue) || prev.includes(trimmedValue)) {
+      if (themes.includes(trimmedValue) || prev.includes(trimmedValue)) {
         return prev;
       }
       return [...prev, trimmedValue];
@@ -203,18 +211,48 @@ export function ThemeSelector({
           >
             Overall highlights
           </Button>
-          {hasThemes && displayThemes.map((theme) => (
-            <Button
-              key={theme}
-              type="button"
-              size="sm"
-              className={cn(buttonClasses(selectedTheme === theme, showCustomInput), "transition-all duration-200 flex-shrink-0")}
-              onClick={() => onSelect(selectedTheme === theme ? null : theme)}
-              tabIndex={showCustomInput ? -1 : 0}
-            >
-              {theme}
-            </Button>
-          ))}
+          {hasThemes && displayThemes.map((theme) => {
+            const isPlaceholder = placeholderThemes.has(theme);
+            const isSelected = selectedTheme === theme;
+            
+            return (
+              <div key={theme} className="relative flex-shrink-0 group">
+                <Button
+                  type="button"
+                  size="sm"
+                  className={cn(
+                    "rounded-full px-3 py-1 text-sm transition-all duration-200 pr-8",
+                    // Selected state (same for both)
+                    isSelected && !showCustomInput
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "",
+                    // Not selected - different backgrounds
+                    !isSelected && !isPlaceholder && "bg-muted/40 text-muted-foreground hover:text-foreground hover:bg-muted/60",
+                    !isSelected && isPlaceholder && "bg-blue-50 text-muted-foreground hover:text-foreground hover:bg-blue-100",
+                    showCustomInput && "blur-[2px] opacity-50"
+                  )}
+                  onClick={() => onSelect(selectedTheme === theme ? null : theme)}
+                  tabIndex={showCustomInput ? -1 : 0}
+                  title={isPlaceholder ? "Click to generate topics" : undefined}
+                >
+                  {theme}
+                </Button>
+                {onDelete && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(theme);
+                    }}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5 rounded-full bg-muted/80 hover:bg-destructive hover:text-destructive-foreground opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center justify-center"
+                    aria-label={`Delete ${theme}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
         
         {/* Combined scroll button - absolutely positioned on right edge */}
@@ -262,8 +300,8 @@ export function ThemeSelector({
                 <X className="h-4 w-4" />
               </Button>
               
-              {/* Form with expanded textbox and inline arrow button */}
-              <form className="relative" onSubmit={handleSubmit}>
+              {/* Form with expanded textbox and inline buttons */}
+              <form className="relative flex items-center gap-2" onSubmit={handleSubmit}>
                 <Input
                   ref={inputRef}
                   value={customThemeInput}
@@ -279,9 +317,9 @@ export function ThemeSelector({
                       closeCustomInput();
                     }
                   }}
-                  placeholder="Input your topics"
-                  disabled={isLoading}
-                  className="h-8 w-[300px] rounded-full bg-muted border-0 px-3 pr-10 text-sm transition-all duration-300 ease-in-out"
+                  placeholder="Input your topic"
+                  disabled={isLoading || isSuggesting}
+                  className="h-8 w-[240px] rounded-full bg-muted border-0 px-3 pr-10 text-sm transition-all duration-300 ease-in-out"
                 />
                 <Button
                   type="submit"
@@ -292,6 +330,22 @@ export function ThemeSelector({
                 >
                   <ArrowUp className="h-4 w-4" />
                 </Button>
+                {onSuggestThemes && (
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    onClick={() => {
+                      closeCustomInput();
+                      onSuggestThemes();
+                    }}
+                    disabled={isLoading || isSuggesting}
+                    className="h-8 w-8 rounded-full"
+                    title="Suggest topics from AI"
+                  >
+                    <Sparkles className={cn("h-4 w-4", isSuggesting && "animate-pulse")} />
+                  </Button>
+                )}
               </form>
             </div>
           </div>

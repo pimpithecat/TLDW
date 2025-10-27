@@ -170,16 +170,9 @@ function createSegmentFromMatch(
     }
   }
 
-  const fallbackText = transcript
-    .slice(match.startSegmentIdx, match.endSegmentIdx + 1)
-    .map((segment) => segment.text)
-    .join(' ')
-    .trim();
-
   return {
     start: startTime,
     end: endTime,
-    text: (preferredText || fallbackText || '').trim(),
     startSegmentIdx: match.startSegmentIdx,
     endSegmentIdx: match.endSegmentIdx,
     startCharOffset: typeof match.startCharOffset === 'number' ? match.startCharOffset : 0,
@@ -240,16 +233,9 @@ function createSegmentFromTimestamp(
     endTime = startTime + Math.max(5, endSegment.duration || 0);
   }
 
-  const combinedText = transcript
-    .slice(startIdx, endIdx + 1)
-    .map((segment) => segment.text)
-    .join(' ')
-    .trim();
-
   return {
     start: startTime,
     end: endTime,
-    text: (preferredText || combinedText || '').trim(),
     startSegmentIdx: startIdx,
     endSegmentIdx: endIdx,
     startCharOffset: 0,
@@ -273,16 +259,9 @@ function createFallbackSegment(transcript: TranscriptSegment[]): TopicSegment | 
     }
   }
 
-  const combinedText = transcript
-    .slice(0, endIdx + 1)
-    .map((segment) => segment.text)
-    .join(' ')
-    .trim();
-
   return {
     start: startSegment.start,
     end: endTime,
-    text: combinedText,
     startSegmentIdx: 0,
     endSegmentIdx: endIdx,
     startCharOffset: 0,
