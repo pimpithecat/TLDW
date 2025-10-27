@@ -97,7 +97,7 @@ export function UrlInputWithBranding({ onSubmit, isLoading = false, initialUrl, 
                   setIsFocused(false);
                 }}
                 placeholder="Paste Youtube URL link here..."
-                className="flex-1 border-0 bg-transparent text-[14px] text-[#989999] placeholder:text-[#989999] focus:outline-none min-w-0"
+                className="flex-1 border-0 bg-transparent text-[16px] text-[#989999] placeholder:text-[#989999] focus:outline-none min-w-0"
               />
             </div>
           </form>

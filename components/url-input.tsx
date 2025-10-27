@@ -63,7 +63,7 @@ export function UrlInput({ onSubmit, isLoading = false, mode, onModeChange }: Ur
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
               placeholder="Paste Youtube URL link here..."
-              className="flex-1 border-0 bg-transparent text-[14px] text-[#989999] placeholder:text-[#989999] focus:outline-none"
+              className="flex-1 border-0 bg-transparent text-[16px] text-[#989999] placeholder:text-[#989999] focus:outline-none"
               disabled={isLoading}
             />
           </div>
