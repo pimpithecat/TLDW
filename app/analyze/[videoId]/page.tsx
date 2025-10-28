@@ -506,10 +506,20 @@ export default function AnalyzePage() {
             setTranslatedTranscripts(cacheData.translatedTranscripts);
           }
 
+          // Calculate duration from transcript as fallback
+          const calculateDurationFromTranscript = (segments: TranscriptSegment[]) => {
+            if (!segments || segments.length === 0) return 0;
+            const lastSegment = segments[segments.length - 1];
+            return lastSegment.start + (lastSegment.duration || 0);
+          };
+          const transcriptDuration = calculateDurationFromTranscript(sanitizedTranscript);
+
           const cachedVideoInfo = cacheData.videoInfo ?? null;
+          let durationSet = false;
           if (cachedVideoInfo) {
             setVideoInfo(cachedVideoInfo);
             const rawDuration = (cachedVideoInfo as { duration?: number | string | null }).duration;
+            console.log('[AnalyzePage] Cached video info duration:', rawDuration);
             const numericDuration =
               typeof rawDuration === "number"
                 ? rawDuration
@@ -517,10 +527,39 @@ export default function AnalyzePage() {
                   ? Number(rawDuration)
                   : null;
             if (numericDuration && !Number.isNaN(numericDuration) && numericDuration > 0) {
+              console.log('[AnalyzePage] Setting duration from cached video info:', numericDuration);
               setVideoDuration(numericDuration);
+              durationSet = true;
             }
           } else {
+            console.log('[AnalyzePage] No cached video info available');
             setVideoInfo(null);
+          }
+
+          // Fallback: Use transcript duration if video info duration not available
+          if (!durationSet && transcriptDuration > 0) {
+            console.log('[AnalyzePage] Using transcript-calculated duration for cached video:', transcriptDuration);
+            setVideoDuration(transcriptDuration);
+            durationSet = true;
+          }
+          
+          if (!durationSet) {
+            console.error('[AnalyzePage] CRITICAL: No duration available from any source for cached video!');
+            console.error('[AnalyzePage] videoInfo:', cachedVideoInfo);
+            console.error('[AnalyzePage] transcript length:', sanitizedTranscript.length);
+            console.error('[AnalyzePage] transcript duration calculation:', transcriptDuration);
+            
+            // Last resort: Calculate from topics
+            if (hydratedTopics.length > 0) {
+              const maxTopicEnd = Math.max(...hydratedTopics.flatMap(topic => 
+                topic.segments.map(seg => seg.end || 0)
+              ));
+              if (maxTopicEnd > 0) {
+                console.log('[AnalyzePage] Last resort: Using max topic end time as duration:', maxTopicEnd);
+                setVideoDuration(maxTopicEnd);
+                durationSet = true;
+              }
+            }
           }
 
           // Separate base topics, real theme topics, and placeholders
@@ -717,8 +756,17 @@ export default function AnalyzePage() {
       const normalizedTranscriptData = normalizeTranscript(fetchedTranscript);
       setTranscript(normalizedTranscriptData);
 
+      // Calculate duration from transcript as fallback
+      const calculateDurationFromTranscript = (segments: TranscriptSegment[]) => {
+        if (!segments || segments.length === 0) return 0;
+        const lastSegment = segments[segments.length - 1];
+        return lastSegment.start + (lastSegment.duration || 0);
+      };
+      const transcriptDuration = calculateDurationFromTranscript(normalizedTranscriptData);
+
       // Process video info response (optional)
       let fetchedVideoInfo: VideoInfo | null = null;
+      let durationSet = false;
       if (videoInfoRes && videoInfoRes.ok) {
         try {
           const videoInfoData = await videoInfoRes.json();
@@ -733,12 +781,19 @@ export default function AnalyzePage() {
                   : null;
             if (numericDuration && !Number.isNaN(numericDuration) && numericDuration > 0) {
               setVideoDuration(numericDuration);
+              durationSet = true;
             }
             fetchedVideoInfo = videoInfoData;
           }
         } catch (error) {
           console.error("Failed to parse video info:", error);
         }
+      }
+
+      // Fallback: Use transcript duration if video info duration not available
+      if (!durationSet && transcriptDuration > 0) {
+        console.log('[AnalyzePage] Using transcript-calculated duration:', transcriptDuration);
+        setVideoDuration(transcriptDuration);
       }
 
       // Move to understanding stage

@@ -105,6 +105,18 @@ export function VideoProgressBar({
 
   return (
     <div className="relative w-full space-y-2">
+      {/* Loading state when waiting for duration */}
+      {!hasDuration && topics.length > 0 && (
+        <div className="relative h-12 bg-muted/50 rounded-lg overflow-hidden flex items-center justify-center">
+          <div className="text-xs text-muted-foreground animate-pulse flex items-center gap-2">
+            <div className="h-2 w-2 bg-primary/50 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+            <div className="h-2 w-2 bg-primary/50 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+            <div className="h-2 w-2 bg-primary/50 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            <span className="ml-2">Loading video timeline...</span>
+          </div>
+        </div>
+      )}
+      
       {/* Main progress bar - Click to navigate */}
       {hasDuration && (
         <div

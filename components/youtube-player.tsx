@@ -74,6 +74,7 @@ export function YouTubePlayer({
   }, [topics]);
 
   useEffect(() => {
+    console.log('[YouTubePlayer] Effect triggered for videoId:', videoId);
     setVideoDuration(0);
     setCurrentTime(0);
     onDurationChange?.(0);
@@ -84,9 +85,25 @@ export function YouTubePlayer({
     let player: any = null;
 
     const initializePlayer = () => {
+      console.log('[YouTubePlayer] initializePlayer called, mounted:', mounted, 'playerRef.current:', !!playerRef.current);
       // Only create player if component still mounted and no player exists
-      if (!mounted || playerRef.current) return;
+      if (!mounted) {
+        console.log('[YouTubePlayer] Skipping init - component unmounted');
+        return;
+      }
+      if (playerRef.current) {
+        console.log('[YouTubePlayer] Skipping init - player already exists');
+        return;
+      }
 
+      // Ensure IFrame element is clean for new player
+      const container = document.getElementById('youtube-player');
+      if (container && container.querySelector('iframe')) {
+        console.log('[YouTubePlayer] Cleaning up existing IFrame before initializing new player');
+        container.innerHTML = '';
+      }
+
+      console.log('[YouTubePlayer] Creating new YT.Player for videoId:', videoId);
       player = new (window as any).YT.Player("youtube-player", {
         videoId: videoId,
         playerVars: {
@@ -100,11 +117,26 @@ export function YouTubePlayer({
         },
         events: {
           onReady: (event: { target: any }) => {
-            if (!mounted) return;
-            playerRef.current = player;
+            console.log('[YouTubePlayer] onReady called, mounted:', mounted);
+            
+            // Get duration first before any checks
             const duration = event.target.getDuration();
-            setVideoDuration(duration);
-            onDurationChange?.(duration);
+            console.log('[YouTubePlayer] Video duration:', duration);
+            
+            // Always set duration even if component is unmounting
+            // This prevents "loading timeline" from getting stuck
+            if (duration && duration > 0) {
+              setVideoDuration(duration);
+              onDurationChange?.(duration);
+            }
+            
+            // Then check if we should continue with player setup
+            if (!mounted) {
+              console.log('[YouTubePlayer] Component unmounted, skipping player setup but duration was set');
+              return;
+            }
+            
+            playerRef.current = player;
             setPlayerReady(true);
             setEmbedBlocked(false);
             setRetryCount(0);
@@ -211,35 +243,74 @@ export function YouTubePlayer({
       });
     };
 
-    // Check if YouTube API is already loaded
-    if ((window as any).YT && (window as any).YT.Player) {
-      initializePlayer();
-    } else {
-      // Only add script if it doesn't exist
-      if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
-        const tag = document.createElement("script");
-        tag.src = "https://www.youtube.com/iframe_api";
-        document.body.appendChild(tag);
+    // Robust YouTube API loading with polling to handle race conditions
+    const waitForYouTubeAPI = () => {
+      console.log('[YouTubePlayer] waitForYouTubeAPI called, YT available:', !!((window as any).YT && (window as any).YT.Player));
+      if ((window as any).YT && (window as any).YT.Player) {
+        initializePlayer();
+        return;
       }
 
-      // Set up or use existing callback
+      // Poll for API availability (handles cases where script exists but API not ready)
+      let pollAttempts = 0;
+      const maxPollAttempts = 50; // 5 seconds max (50 * 100ms)
+      
+      console.log('[YouTubePlayer] Starting polling for YT API...');
+      const pollInterval = setInterval(() => {
+        pollAttempts++;
+        
+        if ((window as any).YT && (window as any).YT.Player) {
+          console.log('[YouTubePlayer] YT API ready after', pollAttempts, 'attempts');
+          clearInterval(pollInterval);
+          if (mounted) initializePlayer();
+        } else if (pollAttempts >= maxPollAttempts) {
+          clearInterval(pollInterval);
+          console.error('[YouTubePlayer] YouTube API failed to load after 5 seconds');
+          setEmbedBlocked(true);
+        }
+      }, 100);
+
+      // Store interval for cleanup
+      playerInitTimeoutRef.current = pollInterval as any;
+    };
+
+    // Add script if it doesn't exist
+    if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+      const tag = document.createElement("script");
+      tag.src = "https://www.youtube.com/iframe_api";
+      document.body.appendChild(tag);
+
+      // Set up callback for when script loads
       const existingCallback = (window as any).onYouTubeIframeAPIReady;
       (window as any).onYouTubeIframeAPIReady = () => {
         if (existingCallback) existingCallback();
         if (mounted) initializePlayer();
       };
+    } else {
+      // Script exists, wait for API to be ready
+      waitForYouTubeAPI();
     }
 
     // Cleanup: Always destroy player if it exists
     return () => {
+      console.log('[YouTubePlayer] Cleanup triggered for videoId:', videoId);
       mounted = false;
       setPlayerReady(false);
 
+      // Clear any pending initialization timeouts or polling intervals
+      if (playerInitTimeoutRef.current) {
+        console.log('[YouTubePlayer] Clearing pending initialization timeout/interval');
+        clearTimeout(playerInitTimeoutRef.current);
+        clearInterval(playerInitTimeoutRef.current as any); // Handle both timeout and interval
+        playerInitTimeoutRef.current = null;
+      }
+
       if (playerRef.current) {
+        console.log('[YouTubePlayer] Destroying existing player');
         try {
           playerRef.current.destroy();
         } catch (e) {
-          console.error('Error destroying player:', e);
+          console.error('[YouTubePlayer] Error destroying player:', e);
         }
         playerRef.current = null;
       }
@@ -252,7 +323,13 @@ export function YouTubePlayer({
 
   // Centralized command executor
   useEffect(() => {
-    if (!playbackCommand || !playerRef.current || !playerReady) return;
+    if (!playbackCommand) return;
+    
+    // Warn if player not ready
+    if (!playerRef.current || !playerReady) {
+      console.warn('[YouTubePlayer] Playback command received but player not ready:', playbackCommand.type);
+      return;
+    }
 
     const executeCommand = () => {
       switch (playbackCommand.type) {
@@ -488,6 +565,7 @@ export function YouTubePlayer({
             </div>
           ) : (
             <div
+              key={videoId}
               id="youtube-player"
               className="absolute top-0 left-0 w-full h-full"
             />
