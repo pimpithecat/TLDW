@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -180,6 +180,16 @@ export function SelectionActions({
     }
   }, [disabled, clearSelection]);
 
+  // Clear browser's visual selection highlight on mobile (prevent tap conflicts)
+  React.useEffect(() => {
+    if (selection && typeof window !== 'undefined' && window.innerWidth < 768) {
+      const browserSelection = window.getSelection();
+      if (browserSelection && browserSelection.rangeCount > 0) {
+        browserSelection.removeAllRanges();
+      }
+    }
+  }, [selection]);
+
   if (!selection || disabled) {
     return null;
   }
@@ -258,23 +268,23 @@ export function SelectionActions({
             </p>
           </div>
 
-          {/* Action buttons */}
-          <div className="flex flex-col gap-3">
+          {/* Action buttons - Single row */}
+          <div className="flex gap-3">
             {onExplain && (
               <Button
                 size="lg"
-                className="w-full h-12 text-base font-medium"
+                className="flex-1 h-12 text-base font-medium"
                 disabled={isProcessing}
                 onClick={() => handleAction("explain")}
               >
-                {isProcessing ? "Processing..." : "Explain this"}
+                {isProcessing ? "Processing..." : "Explain"}
               </Button>
             )}
             {onTakeNote && (
               <Button
                 size="lg"
                 variant="outline"
-                className="w-full h-12 text-base font-medium"
+                className="flex-1 h-12 text-base font-medium"
                 disabled={isProcessing}
                 onClick={() => handleAction("note")}
               >
