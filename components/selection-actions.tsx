@@ -223,53 +223,42 @@ export function SelectionActions({
     ? (window.visualViewport?.width || window.innerWidth)
     : 0;
 
-  // Reserve safe zones for mobile browser UI
+  // Safe zones for mobile browser UI
   const safeZone = {
     top: 60,
     bottom: isMobile ? 100 : 20
   };
 
-  // Calculate possible positions
-  const posAbove = rect.top + window.scrollY - buttonHeight - padding;
-  const posBelow = rect.bottom + window.scrollY + padding;
-
-  // Check if positions are within safe viewport
-  const isAboveVisible = rect.top >= (safeZone.top + buttonHeight + padding);
-  const isBelowVisible = (rect.bottom + buttonHeight + padding) <= (viewportHeight - safeZone.bottom);
-
   let top: number;
 
-  if (isAboveVisible) {
-    // Prefer above if space available
-    top = posAbove;
-  } else if (isBelowVisible) {
-    // Use below if above doesn't fit
-    top = posBelow;
-  } else {
-    // Neither fits perfectly - use best available position
-    const selectionMiddle = (rect.top + rect.bottom) / 2;
+  if (isMobile) {
+    // MOBILE: ALWAYS above selection
+    const desiredTop = rect.top + window.scrollY - buttonHeight - padding;
+    const minTop = window.scrollY + safeZone.top;
     
-    if (selectionMiddle < viewportHeight / 2) {
-      // Selection in upper half - place button in lower safe area
-      top = Math.max(
-        posBelow,
-        window.scrollY + viewportHeight - buttonHeight - safeZone.bottom
-      );
+    // Clamp to safe zone top (prevent going off viewport top)
+    top = Math.max(desiredTop, minTop);
+    
+  } else {
+    // DESKTOP: Smart positioning (prefer above, fallback below)
+    const posAbove = rect.top + window.scrollY - buttonHeight - padding;
+    const posBelow = rect.bottom + window.scrollY + padding;
+    
+    const isAboveVisible = rect.top >= (safeZone.top + buttonHeight + padding);
+    const isBelowVisible = (rect.bottom + buttonHeight + padding) <= (viewportHeight - safeZone.bottom);
+    
+    if (isAboveVisible) {
+      top = posAbove;
+    } else if (isBelowVisible) {
+      top = posBelow;
     } else {
-      // Selection in lower half - place button in upper safe area
-      top = Math.max(
-        window.scrollY + safeZone.top,
-        Math.min(posAbove, window.scrollY + viewportHeight - buttonHeight - safeZone.bottom)
-      );
+      // Fallback: use above with clamp
+      const minTop = window.scrollY + safeZone.top;
+      top = Math.max(posAbove, minTop);
     }
   }
 
-  // Ultimate safety clamp - ensure button is ALWAYS within viewport
-  const minTop = window.scrollY + safeZone.top;
-  const maxTop = window.scrollY + viewportHeight - buttonHeight - safeZone.bottom;
-  top = Math.max(minTop, Math.min(top, maxTop));
-
-  // Horizontal positioning
+  // Horizontal positioning (same for both mobile and desktop)
   const left = rect.left + window.scrollX + rect.width / 2;
 
   // Ensure button doesn't go off screen horizontally
