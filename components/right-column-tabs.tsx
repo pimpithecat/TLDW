@@ -27,6 +27,7 @@ interface RightColumnTabsProps {
   cachedSuggestedQuestions?: string[] | null;
   notes?: Note[];
   onSaveNote?: (payload: { text: string; source: NoteSource; sourceId?: string | null; metadata?: NoteMetadata | null }) => Promise<void>;
+  onDeleteNote?: (noteId: string) => Promise<void>;
   onTakeNoteFromSelection?: (payload: SelectionActionPayload) => void;
   editingNote?: EditingNote | null;
   onSaveEditingNote?: (noteText: string) => void;
@@ -36,6 +37,7 @@ interface RightColumnTabsProps {
   youtubeId?: string;
   cachedTranslations?: Record<string, TranscriptSegment[]>;
   onTranslationUpdate?: (translations: Record<string, TranscriptSegment[]>) => void;
+  bookmarkedMessageIds?: Set<string>;
 }
 
 export interface RightColumnTabsHandle {
@@ -59,6 +61,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   cachedSuggestedQuestions,
   notes,
   onSaveNote,
+  onDeleteNote,
   onTakeNoteFromSelection,
   editingNote,
   onSaveEditingNote,
@@ -68,6 +71,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   youtubeId,
   cachedTranslations,
   onTranslationUpdate,
+  bookmarkedMessageIds,
 }, ref) => {
   const [activeTab, setActiveTab] = useState<"transcript" | "chat" | "notes">("transcript");
   const [currentLanguage, setCurrentLanguage] = useState<string>('en');
@@ -176,6 +180,7 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
             onTakeNoteFromSelection={onTakeNoteFromSelection}
             currentLanguage={currentLanguage}
             translatedTranscripts={cachedTranslations}
+            bookmarkedMessageIds={bookmarkedMessageIds}
           />
         </div>
         <div className={cn("absolute inset-0", activeTab !== "notes" && "hidden")}
@@ -188,6 +193,8 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
               onCancelEditing={onCancelEditing}
               isAuthenticated={isAuthenticated}
               onSignInClick={onRequestSignIn}
+              onDeleteNote={onDeleteNote}
+              onTimestampClick={(seconds) => onTimestampClick(seconds)}
             />
           </TooltipProvider>
         </div>

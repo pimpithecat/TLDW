@@ -6,8 +6,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Trash2, Clock } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { NoteEditor } from "@/components/note-editor";
+import { TimestampButton } from "@/components/timestamp-button";
+import { parseTimestamp } from "@/lib/timestamp-utils";
 
 function formatDateOnly(dateString: string): string {
   const date = new Date(dateString);
@@ -18,10 +20,65 @@ function formatDateOnly(dateString: string): string {
   });
 }
 
-const markdownComponents = {
-  p: ({ children }: any) => (
-    <p className="mb-2 last:mb-0 whitespace-pre-wrap">{children}</p>
-  ),
+function createMarkdownComponents(onTimestampClick?: (seconds: number) => void) {
+  const processTextWithTimestamps = (text: string | ReactNode): ReactNode | ReactNode[] => {
+    if (!onTimestampClick || typeof text !== 'string') return text;
+    
+    const timestampRegex = /\[(\d{1,2}:\d{2})\]/g;
+    const parts: ReactNode[] = [];
+    let lastIndex = 0;
+    let match;
+    let key = 0;
+
+    while ((match = timestampRegex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+
+      const timestamp = match[1];
+      const seconds = parseTimestamp(timestamp);
+      
+      if (seconds !== null) {
+        parts.push(
+          <TimestampButton
+            key={`ts-${key++}`}
+            timestamp={timestamp}
+            seconds={seconds}
+            onClick={onTimestampClick}
+            className="text-[11px] mx-0.5"
+            showIcon={false}
+          />
+        );
+      } else {
+        parts.push(match[0]);
+      }
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+
+    return parts.length > 0 ? parts : text;
+  };
+
+  const processChildren = (children: any): any => {
+    if (typeof children === 'string') {
+      return processTextWithTimestamps(children);
+    }
+    if (Array.isArray(children)) {
+      return children.map((child, idx) => 
+        typeof child === 'string' ? processTextWithTimestamps(child) : child
+      );
+    }
+    return children;
+  };
+
+  return {
+  p: ({ children }: any) => {
+    return <p className="mb-2 last:mb-0 whitespace-pre-wrap">{processChildren(children)}</p>;
+  },
   ul: ({ children }: any) => (
     <ul className="list-disc list-inside space-y-1 mb-2 last:mb-0">{children}</ul>
   ),
@@ -29,7 +86,7 @@ const markdownComponents = {
     <ol className="list-decimal list-inside space-y-1 mb-2 last:mb-0">{children}</ol>
   ),
   li: ({ children }: any) => (
-    <li className="whitespace-pre-wrap">{children}</li>
+    <li className="whitespace-pre-wrap">{processChildren(children)}</li>
   ),
   a: ({ children, href, ...props }: any) => (
     <a
@@ -59,21 +116,22 @@ const markdownComponents = {
     <blockquote className="border-l-4 border-muted-foreground/30 pl-4 italic">{children}</blockquote>
   ),
   strong: ({ children }: any) => (
-    <strong className="font-semibold">{children}</strong>
+    <strong className="font-semibold">{processChildren(children)}</strong>
   ),
   em: ({ children }: any) => (
-    <em className="italic">{children}</em>
+    <em className="italic">{processChildren(children)}</em>
   ),
   h1: ({ children }: any) => (
-    <h1 className="text-base font-semibold mb-2">{children}</h1>
+    <h1 className="text-base font-semibold mb-2">{processChildren(children)}</h1>
   ),
   h2: ({ children }: any) => (
-    <h2 className="text-sm font-semibold mb-1">{children}</h2>
+    <h2 className="text-sm font-semibold mb-1">{processChildren(children)}</h2>
   ),
   h3: ({ children }: any) => (
-    <h3 className="text-sm font-medium mb-1">{children}</h3>
+    <h3 className="text-sm font-medium mb-1">{processChildren(children)}</h3>
   ),
-};
+  };
+}
 
 export interface EditingNote {
   text: string;
@@ -89,6 +147,7 @@ interface NotesPanelProps {
   onCancelEditing?: () => void;
   isAuthenticated?: boolean;
   onSignInClick?: () => void;
+  onTimestampClick?: (seconds: number) => void;
 }
 
 function getSourceLabel(source: NoteSource) {
@@ -104,7 +163,9 @@ function getSourceLabel(source: NoteSource) {
   }
 }
 
-export function NotesPanel({ notes = [], onDeleteNote, editingNote, onSaveEditingNote, onCancelEditing, isAuthenticated = true, onSignInClick }: NotesPanelProps) {
+export function NotesPanel({ notes = [], onDeleteNote, editingNote, onSaveEditingNote, onCancelEditing, isAuthenticated = true, onSignInClick, onTimestampClick }: NotesPanelProps) {
+  const markdownComponents = useMemo(() => createMarkdownComponents(onTimestampClick), [onTimestampClick]);
+  
   const groupedNotes = useMemo(() => {
     return notes.reduce<Record<NoteSource, Note[]>>((acc, note) => {
       const list = acc[note.source] || [];
@@ -194,10 +255,20 @@ export function NotesPanel({ notes = [], onDeleteNote, editingNote, onSaveEditin
                   );
                 }
 
-                if (!isTranscriptNote && note.metadata?.timestampLabel) {
+                if (note.metadata?.timestampLabel && note.metadata?.transcript?.start !== undefined && onTimestampClick) {
                   inlineMetadata.push(
-                    <span key="timestamp" className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
+                    <TimestampButton
+                      key="timestamp"
+                      timestamp={note.metadata.timestampLabel}
+                      seconds={note.metadata.transcript.start}
+                      onClick={onTimestampClick}
+                      className="text-[11px]"
+                      showIcon={true}
+                    />
+                  );
+                } else if (note.metadata?.timestampLabel) {
+                  inlineMetadata.push(
+                    <span key="timestamp" className="text-muted-foreground">
                       {note.metadata.timestampLabel}
                     </span>
                   );
@@ -210,7 +281,7 @@ export function NotesPanel({ notes = [], onDeleteNote, editingNote, onSaveEditin
                 );
 
                 const shouldShowSegmentInfo =
-                  !isTranscriptNote && note.metadata?.transcript?.segmentIndex !== undefined;
+                  isTranscriptNote && note.metadata?.transcript?.segmentIndex !== undefined;
 
                 return (
                   <Card key={note.id} className="group p-3.5 bg-white hover:bg-neutral-50/60 border-none shadow-none transition-colors">

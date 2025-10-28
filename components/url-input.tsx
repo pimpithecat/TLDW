@@ -82,7 +82,7 @@ export function UrlInput({ onSubmit, isLoading = false, mode, onModeChange }: Ur
               type="submit"
               disabled={isLoading || !url.trim()}
               size="icon"
-              className="h-7 w-7 shrink-0 rounded-full bg-[#B3B4B4] text-white hover:bg-[#9d9e9e] disabled:bg-[#B3B4B4] disabled:text-white disabled:opacity-100"
+              className="h-7 w-7 shrink-0 rounded-full bg-black text-white hover:bg-gray-800 disabled:bg-[#B3B4B4] disabled:text-white disabled:opacity-100"
             >
               {isLoading ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />

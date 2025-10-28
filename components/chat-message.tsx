@@ -19,6 +19,7 @@ interface ChatMessageProps {
   onTimestampClick: (seconds: number, endSeconds?: number, isCitation?: boolean, citationText?: string) => void;
   onRetry?: (messageId: string) => void;
   onSaveNote?: (payload: { text: string; source: NoteSource; sourceId?: string | null; metadata?: NoteMetadata | null }) => Promise<void>;
+  isBookmarked?: boolean;
 }
 
 function formatTimestamp(seconds: number): string {
@@ -27,9 +28,10 @@ function formatTimestamp(seconds: number): string {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-export function ChatMessageComponent({ message, onCitationClick, onTimestampClick, onRetry, onSaveNote }: ChatMessageProps) {
+export function ChatMessageComponent({ message, onCitationClick, onTimestampClick, onRetry, onSaveNote, isBookmarked = false }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
+  const [saved, setSaved] = useState(isBookmarked);
 
   // Handle copy to clipboard
   const handleCopy = React.useCallback(async () => {
@@ -41,6 +43,30 @@ export function ChatMessageComponent({ message, onCitationClick, onTimestampClic
       console.error('Failed to copy:', error);
     }
   }, [message.content]);
+
+  // Handle save note
+  const handleSaveNote = React.useCallback(async () => {
+    if (!onSaveNote || saved) return;
+    
+    try {
+      await onSaveNote({
+        text: message.content,
+        source: 'chat',
+        sourceId: message.id,
+        metadata: {
+          chat: {
+            messageId: message.id,
+            role: message.role,
+            timestamp: message.timestamp?.toISOString()
+          }
+        }
+      });
+      // Set saved permanently - parent will update isBookmarked prop
+      setSaved(true);
+    } catch (error) {
+      console.error('Failed to save note:', error);
+    }
+  }, [onSaveNote, message.content, message.id, message.role, message.timestamp, saved]);
 
   // Handle retry
   const handleRetry = React.useCallback(() => {
@@ -381,25 +407,19 @@ const findMatchingCitation = useCallback((seconds: number): Citation | null => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => onSaveNote({
-                      text: message.content,
-                      source: 'chat',
-                      sourceId: message.id,
-                      metadata: {
-                        chat: {
-                          messageId: message.id,
-                          role: message.role,
-                          timestamp: message.timestamp?.toISOString()
-                        }
-                      }
-                    })}
-                    className="h-7 px-2 text-muted-foreground hover:text-foreground"
+                    onClick={handleSaveNote}
+                    disabled={saved}
+                    className="h-7 px-2 text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Bookmark className="h-4 w-4" />
+                    {saved ? (
+                      <Check className="h-4 w-4" />
+                    ) : (
+                      <Bookmark className="h-4 w-4" />
+                    )}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p className="text-xs">Save note</p>
+                  <p className="text-xs">{saved ? 'Saved!' : 'Save note'}</p>
                 </TooltipContent>
               </Tooltip>
             )}

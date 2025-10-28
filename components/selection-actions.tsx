@@ -184,7 +184,17 @@ export function SelectionActions({
   };
 
   const { rect } = selection;
-  const top = rect.top + window.scrollY - 48;
+  
+  // Smart positioning: place below if not enough space above
+  const viewportTop = rect.top;
+  const buttonHeight = 48;
+  const padding = 12;
+  const shouldPlaceBelow = viewportTop < (buttonHeight + padding);
+
+  const top = shouldPlaceBelow
+    ? rect.bottom + window.scrollY + padding  // Below selection
+    : rect.top + window.scrollY - buttonHeight; // Above selection
+
   const left = rect.left + window.scrollX + rect.width / 2;
 
   return createPortal(
@@ -195,7 +205,7 @@ export function SelectionActions({
         "px-3 py-1.5",
       )}
       style={{
-        top: Math.max(top, 12),
+        top: Math.max(top, padding),
         left,
         transform: "translateX(-50%)",
       }}

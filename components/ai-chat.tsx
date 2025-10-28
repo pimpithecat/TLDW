@@ -109,9 +109,10 @@ interface AIChatProps {
   onTakeNoteFromSelection?: (payload: SelectionActionPayload) => void;
   currentLanguage?: string;
   translatedTranscripts?: Record<string, TranscriptSegment[]>;
+  bookmarkedMessageIds?: Set<string>;
 }
 
-export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onCitationClick, onTimestampClick, cachedSuggestedQuestions, onSaveNote, onTakeNoteFromSelection, currentLanguage = 'en', translatedTranscripts = {} }: AIChatProps) {
+export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onCitationClick, onTimestampClick, cachedSuggestedQuestions, onSaveNote, onTakeNoteFromSelection, currentLanguage = 'en', translatedTranscripts = {}, bookmarkedMessageIds = new Set() }: AIChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -983,6 +984,7 @@ export function AIChat({ transcript, topics, videoId, videoTitle, videoInfo, onC
                       onTimestampClick={onTimestampClick}
                       onRetry={message.role === 'assistant' ? handleRetry : undefined}
                       onSaveNote={message.role === 'assistant' ? onSaveNote : undefined}
+                      isBookmarked={bookmarkedMessageIds.has(message.id)}
                     />
                     {showFollowUps && (
                       <div className="mt-3">

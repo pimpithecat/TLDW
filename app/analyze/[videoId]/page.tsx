@@ -1113,11 +1113,6 @@ export default function AnalyzePage() {
     setSelectedTopic(null);
     setCitationHighlight(citation);
 
-    const videoContainer = document.getElementById("video-container");
-    if (videoContainer) {
-      videoContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-
     // Request seek through centralized command system
     requestSeek(citation.start);
   };
@@ -1137,12 +1132,6 @@ export default function AnalyzePage() {
     // Clear citation highlight for non-citation clicks
     if (!isCitation) {
       setCitationHighlight(null);
-    }
-
-    // Scroll to video player
-    const videoContainer = document.getElementById("video-container");
-    if (videoContainer) {
-      videoContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     // Request seek through centralized command system
@@ -1569,16 +1558,28 @@ export default function AnalyzePage() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   const [editingNote, setEditingNote] = useState<EditingNote | null>(null);
+  const [bookmarkedMessageIds, setBookmarkedMessageIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!videoId || !user) {
       setNotes([]);
+      setBookmarkedMessageIds(new Set());
       return;
     }
 
     setIsLoadingNotes(true);
     fetchNotes({ youtubeId: videoId })
-      .then(setNotes)
+      .then((fetchedNotes) => {
+        setNotes(fetchedNotes);
+        // Extract message IDs from chat notes
+        const chatMessageIds = new Set<string>();
+        fetchedNotes.forEach((note) => {
+          if (note.source === 'chat' && note.sourceId) {
+            chatMessageIds.add(note.sourceId);
+          }
+        });
+        setBookmarkedMessageIds(chatMessageIds);
+      })
       .catch((error) => {
         console.error("Failed to load notes", error);
       })
@@ -1614,6 +1615,12 @@ export default function AnalyzePage() {
         metadata: metadata ?? undefined,
       });
       setNotes((prev) => [note, ...prev]);
+      
+      // Track bookmarked message IDs for chat messages
+      if (source === 'chat' && sourceId) {
+        setBookmarkedMessageIds((prev) => new Set(prev).add(sourceId));
+      }
+      
       toast.success("Note saved");
     } catch (error) {
       console.error("Failed to save note", error);
@@ -1665,6 +1672,20 @@ export default function AnalyzePage() {
   const handleCancelEditing = useCallback(() => {
     setEditingNote(null);
   }, []);
+
+  const handleDeleteNote = useCallback(async (noteId: string) => {
+    if (!videoId) return;
+    
+    try {
+      const { deleteNote } = await import('@/lib/notes-client');
+      await deleteNote(noteId);
+      setNotes((prev) => prev.filter((note) => note.id !== noteId));
+      toast.success("Note deleted");
+    } catch (error) {
+      console.error("Failed to delete note", error);
+      toast.error("Failed to delete note");
+    }
+  }, [videoId]);
 
   // Compute placeholder themes (themes that don't have generated topics in themeTopicsMap)
   const placeholderThemes = useMemo(() => {
@@ -1734,11 +1755,9 @@ export default function AnalyzePage() {
       )}
 
       {pageState === 'LOADING_CACHED' && (
-        <section className="flex min-h-[calc(100vh-11rem)] items-center justify-center px-5">
-          <div className="w-full max-w-7xl">
-            <VideoSkeleton />
-          </div>
-        </section>
+        <div className="mx-auto w-full max-w-7xl px-5 pb-5 pt-0">
+          <VideoSkeleton />
+        </div>
       )}
 
       {pageState === 'ANALYZING_NEW' && (
@@ -1891,6 +1910,7 @@ export default function AnalyzePage() {
                   cachedSuggestedQuestions={cachedSuggestedQuestions}
                   notes={notes}
                   onSaveNote={handleSaveNote}
+                  onDeleteNote={handleDeleteNote}
                   onTakeNoteFromSelection={handleTakeNoteFromSelection}
                   editingNote={editingNote}
                   onSaveEditingNote={handleSaveEditingNote}
@@ -1900,6 +1920,7 @@ export default function AnalyzePage() {
                   youtubeId={videoId}
                   cachedTranslations={translatedTranscripts}
                   onTranslationUpdate={setTranslatedTranscripts}
+                  bookmarkedMessageIds={bookmarkedMessageIds}
                 />
               </div>
             </div>
