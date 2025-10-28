@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { NoteMetadata } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { X } from "lucide-react";
 
 export interface SelectionActionPayload {
   text: string;
@@ -208,14 +209,90 @@ export function SelectionActions({
     }
   };
 
+  // Detect mobile
+  const isMobile = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
+
+  if (isMobile) {
+    // MOBILE: Render modal popup
+    return createPortal(
+      <div 
+        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/20 backdrop-blur-sm animate-in fade-in duration-200"
+        onClick={(e) => {
+          // Click outside modal = close
+          if (e.target === e.currentTarget) {
+            clearSelection();
+          }
+        }}
+        onTouchStart={(e) => {
+          // Prevent touch events from bubbling
+          if (e.target === e.currentTarget) {
+            e.preventDefault();
+          }
+        }}
+      >
+        <Card
+          data-selection-actions="true"
+          className="relative mx-4 w-full max-w-sm bg-white shadow-2xl rounded-2xl p-6 animate-in zoom-in-95 slide-in-from-bottom-4 duration-200"
+          onClick={(e) => e.stopPropagation()}
+          onTouchStart={(e) => {
+            e.stopPropagation();
+          }}
+          onTouchEnd={(e) => {
+            e.stopPropagation();
+          }}
+        >
+          {/* Close button */}
+          <button
+            onClick={clearSelection}
+            className="absolute top-4 right-4 p-2 rounded-full hover:bg-gray-100 active:bg-gray-200 transition-colors"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+
+          {/* Selected text preview */}
+          <div className="mb-5 pr-10">
+            <p className="text-xs font-medium text-gray-500 mb-2">Selected text:</p>
+            <p className="text-sm text-gray-900 line-clamp-3 leading-relaxed">
+              &ldquo;{selection.text.length > 100 ? selection.text.substring(0, 100) + '...' : selection.text}&rdquo;
+            </p>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex flex-col gap-3">
+            {onExplain && (
+              <Button
+                size="lg"
+                className="w-full h-12 text-base font-medium"
+                disabled={isProcessing}
+                onClick={() => handleAction("explain")}
+              >
+                {isProcessing ? "Processing..." : "Explain this"}
+              </Button>
+            )}
+            {onTakeNote && (
+              <Button
+                size="lg"
+                variant="outline"
+                className="w-full h-12 text-base font-medium"
+                disabled={isProcessing}
+                onClick={() => handleAction("note")}
+              >
+                Take Notes
+              </Button>
+            )}
+          </div>
+        </Card>
+      </div>,
+      document.body
+    );
+  }
+
+  // DESKTOP: Floating button above selection
   const { rect } = selection;
   const buttonHeight = 48;
   const padding = 12;
 
-  // Detect mobile
-  const isMobile = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
-
-  // Get viewport dimensions (accounting for mobile browser bars)
   const viewportHeight = typeof window !== 'undefined' 
     ? (window.visualViewport?.height || window.innerHeight)
     : 0;
@@ -223,45 +300,27 @@ export function SelectionActions({
     ? (window.visualViewport?.width || window.innerWidth)
     : 0;
 
-  // Safe zones for mobile browser UI
-  const safeZone = {
-    top: 60,
-    bottom: isMobile ? 100 : 20
-  };
+  const safeZone = { top: 60, bottom: 20 };
 
+  // Desktop: Smart positioning (prefer above, fallback below)
+  const posAbove = rect.top + window.scrollY - buttonHeight - padding;
+  const posBelow = rect.bottom + window.scrollY + padding;
+  
+  const isAboveVisible = rect.top >= (safeZone.top + buttonHeight + padding);
+  const isBelowVisible = (rect.bottom + buttonHeight + padding) <= (viewportHeight - safeZone.bottom);
+  
   let top: number;
-
-  if (isMobile) {
-    // MOBILE: ALWAYS above selection
-    const desiredTop = rect.top + window.scrollY - buttonHeight - padding;
-    const minTop = window.scrollY + safeZone.top;
-    
-    // Clamp to safe zone top (prevent going off viewport top)
-    top = Math.max(desiredTop, minTop);
-    
+  if (isAboveVisible) {
+    top = posAbove;
+  } else if (isBelowVisible) {
+    top = posBelow;
   } else {
-    // DESKTOP: Smart positioning (prefer above, fallback below)
-    const posAbove = rect.top + window.scrollY - buttonHeight - padding;
-    const posBelow = rect.bottom + window.scrollY + padding;
-    
-    const isAboveVisible = rect.top >= (safeZone.top + buttonHeight + padding);
-    const isBelowVisible = (rect.bottom + buttonHeight + padding) <= (viewportHeight - safeZone.bottom);
-    
-    if (isAboveVisible) {
-      top = posAbove;
-    } else if (isBelowVisible) {
-      top = posBelow;
-    } else {
-      // Fallback: use above with clamp
-      const minTop = window.scrollY + safeZone.top;
-      top = Math.max(posAbove, minTop);
-    }
+    const minTop = window.scrollY + safeZone.top;
+    top = Math.max(posAbove, minTop);
   }
 
-  // Horizontal positioning (same for both mobile and desktop)
+  // Horizontal positioning
   const left = rect.left + window.scrollX + rect.width / 2;
-
-  // Ensure button doesn't go off screen horizontally
   const buttonWidth = 200;
   const minLeft = window.scrollX + buttonWidth / 2 + padding;
   const maxLeft = window.scrollX + viewportWidth - buttonWidth / 2 - padding;
@@ -270,24 +329,11 @@ export function SelectionActions({
   return createPortal(
     <Card
       data-selection-actions="true"
-      className={cn(
-        "fixed z-[9999] flex flex-row items-center gap-1 rounded-xl backdrop-blur-md shadow-lg",
-        "transition-opacity animate-in fade-in",
-        isMobile 
-          ? "border border-border/60 bg-white/98 px-3 py-2 shadow-xl"
-          : "border border-border/40 bg-primary/5 px-3 py-1.5"
-      )}
+      className="fixed z-[9999] flex flex-row items-center gap-1 rounded-xl border border-border/40 bg-primary/5 backdrop-blur-md shadow-lg px-3 py-1.5 transition-opacity animate-in fade-in"
       style={{
         top: top,
         left: clampedLeft,
         transform: "translateX(-50%)",
-      }}
-      onTouchStart={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-      }}
-      onTouchEnd={(e) => {
-        e.stopPropagation();
       }}
       onMouseDown={(e) => {
         e.preventDefault();
@@ -297,14 +343,8 @@ export function SelectionActions({
       {onExplain && (
         <Button
           variant="ghost"
-          size={isMobile ? "default" : "sm"}
-          className={cn(
-            "font-normal rounded-lg transition-all duration-200",
-            isMobile 
-              ? "h-11 px-4 text-base min-w-[120px]"
-              : "h-7 px-2.5 text-sm",
-            "hover:bg-primary/10 hover:scale-105 hover:text-foreground"
-          )}
+          size="sm"
+          className="h-7 px-2.5 text-sm font-normal rounded-lg transition-all duration-200 hover:bg-primary/10 hover:scale-105 hover:text-foreground"
           disabled={isProcessing}
           onClick={() => handleAction("explain")}
         >
@@ -317,14 +357,8 @@ export function SelectionActions({
       {onTakeNote && (
         <Button
           variant="ghost"
-          size={isMobile ? "default" : "sm"}
-          className={cn(
-            "font-normal rounded-lg transition-all duration-200",
-            isMobile 
-              ? "h-11 px-4 text-base min-w-[120px]"
-              : "h-7 px-2.5 text-sm",
-            "hover:bg-primary/10 hover:scale-105 hover:text-foreground"
-          )}
+          size="sm"
+          className="h-7 px-2.5 text-sm font-normal rounded-lg transition-all duration-200 hover:bg-primary/10 hover:scale-105 hover:text-foreground"
           disabled={isProcessing}
           onClick={() => handleAction("note")}
         >
