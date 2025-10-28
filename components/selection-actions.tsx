@@ -50,7 +50,6 @@ export function SelectionActions({
   const [selection, setSelection] = useState<SelectionState | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const latestSelectionRef = useRef<SelectionState | null>(null);
-  const container = containerRef.current;
 
   const clearSelection = useCallback(() => {
     setSelection(null);
@@ -133,18 +132,44 @@ export function SelectionActions({
       }
     };
 
+    const handleMouseDownClear = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-selection-actions]')) {
+        return;
+      }
+      clearSelection();
+    };
+
+    const handleTouchStartClear = (e: TouchEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-selection-actions]')) {
+        return;
+      }
+      clearSelection();
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-selection-actions]')) {
+        return;
+      }
+      requestAnimationFrame(handleSelectionChange);
+    };
+
     document.addEventListener("mouseup", handleMouseUp);
     document.addEventListener("keyup", handleKeyUp);
-    document.addEventListener("touchend", handleMouseUp);
+    document.addEventListener("touchend", handleTouchEnd);
+    document.addEventListener("touchstart", handleTouchStartClear, { passive: true });
     document.addEventListener("scroll", handleScroll, true);
-    document.addEventListener("mousedown", clearSelection);
+    document.addEventListener("mousedown", handleMouseDownClear);
 
     return () => {
       document.removeEventListener("mouseup", handleMouseUp);
       document.removeEventListener("keyup", handleKeyUp);
-      document.removeEventListener("touchend", handleMouseUp);
+      document.removeEventListener("touchend", handleTouchEnd);
+      document.removeEventListener("touchstart", handleTouchStartClear);
       document.removeEventListener("scroll", handleScroll, true);
-      document.removeEventListener("mousedown", clearSelection);
+      document.removeEventListener("mousedown", handleMouseDownClear);
     };
   }, [handleSelectionChange, selection, clearSelection, disabled]);
 
@@ -184,38 +209,113 @@ export function SelectionActions({
   };
 
   const { rect } = selection;
-  
-  // Smart positioning: place below if not enough space above
-  const viewportTop = rect.top;
   const buttonHeight = 48;
   const padding = 12;
-  const shouldPlaceBelow = viewportTop < (buttonHeight + padding);
 
-  const top = shouldPlaceBelow
-    ? rect.bottom + window.scrollY + padding  // Below selection
-    : rect.top + window.scrollY - buttonHeight; // Above selection
+  // Detect mobile
+  const isMobile = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
 
+  // Get viewport dimensions (accounting for mobile browser bars)
+  const viewportHeight = typeof window !== 'undefined' 
+    ? (window.visualViewport?.height || window.innerHeight)
+    : 0;
+  const viewportWidth = typeof window !== 'undefined'
+    ? (window.visualViewport?.width || window.innerWidth)
+    : 0;
+
+  // Reserve safe zones for mobile browser UI
+  const safeZone = {
+    top: 60,
+    bottom: isMobile ? 100 : 20
+  };
+
+  // Calculate possible positions
+  const posAbove = rect.top + window.scrollY - buttonHeight - padding;
+  const posBelow = rect.bottom + window.scrollY + padding;
+
+  // Check if positions are within safe viewport
+  const isAboveVisible = rect.top >= (safeZone.top + buttonHeight + padding);
+  const isBelowVisible = (rect.bottom + buttonHeight + padding) <= (viewportHeight - safeZone.bottom);
+
+  let top: number;
+
+  if (isAboveVisible) {
+    // Prefer above if space available
+    top = posAbove;
+  } else if (isBelowVisible) {
+    // Use below if above doesn't fit
+    top = posBelow;
+  } else {
+    // Neither fits perfectly - use best available position
+    const selectionMiddle = (rect.top + rect.bottom) / 2;
+    
+    if (selectionMiddle < viewportHeight / 2) {
+      // Selection in upper half - place button in lower safe area
+      top = Math.max(
+        posBelow,
+        window.scrollY + viewportHeight - buttonHeight - safeZone.bottom
+      );
+    } else {
+      // Selection in lower half - place button in upper safe area
+      top = Math.max(
+        window.scrollY + safeZone.top,
+        Math.min(posAbove, window.scrollY + viewportHeight - buttonHeight - safeZone.bottom)
+      );
+    }
+  }
+
+  // Ultimate safety clamp - ensure button is ALWAYS within viewport
+  const minTop = window.scrollY + safeZone.top;
+  const maxTop = window.scrollY + viewportHeight - buttonHeight - safeZone.bottom;
+  top = Math.max(minTop, Math.min(top, maxTop));
+
+  // Horizontal positioning
   const left = rect.left + window.scrollX + rect.width / 2;
+
+  // Ensure button doesn't go off screen horizontally
+  const buttonWidth = 200;
+  const minLeft = window.scrollX + buttonWidth / 2 + padding;
+  const maxLeft = window.scrollX + viewportWidth - buttonWidth / 2 - padding;
+  const clampedLeft = Math.max(minLeft, Math.min(left, maxLeft));
 
   return createPortal(
     <Card
+      data-selection-actions="true"
       className={cn(
-        "fixed z-[9999] flex flex-row items-center gap-1 rounded-xl border border-border/40 bg-primary/5 backdrop-blur-md shadow-lg",
+        "fixed z-[9999] flex flex-row items-center gap-1 rounded-xl backdrop-blur-md shadow-lg",
         "transition-opacity animate-in fade-in",
-        "px-3 py-1.5",
+        isMobile 
+          ? "border border-border/60 bg-white/98 px-3 py-2 shadow-xl"
+          : "border border-border/40 bg-primary/5 px-3 py-1.5"
       )}
       style={{
-        top: Math.max(top, padding),
-        left,
+        top: top,
+        left: clampedLeft,
         transform: "translateX(-50%)",
       }}
-      onMouseDown={(event) => event.stopPropagation()}
+      onTouchStart={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+      onTouchEnd={(e) => {
+        e.stopPropagation();
+      }}
+      onMouseDown={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
     >
       {onExplain && (
         <Button
           variant="ghost"
-          size="sm"
-          className="h-7 px-2.5 text-sm font-normal rounded-lg transition-all duration-200 hover:bg-primary/10 hover:scale-105 hover:text-foreground"
+          size={isMobile ? "default" : "sm"}
+          className={cn(
+            "font-normal rounded-lg transition-all duration-200",
+            isMobile 
+              ? "h-11 px-4 text-base min-w-[120px]"
+              : "h-7 px-2.5 text-sm",
+            "hover:bg-primary/10 hover:scale-105 hover:text-foreground"
+          )}
           disabled={isProcessing}
           onClick={() => handleAction("explain")}
         >
@@ -228,8 +328,14 @@ export function SelectionActions({
       {onTakeNote && (
         <Button
           variant="ghost"
-          size="sm"
-          className="h-7 px-2.5 text-sm font-normal rounded-lg transition-all duration-200 hover:bg-primary/10 hover:scale-105 hover:text-foreground"
+          size={isMobile ? "default" : "sm"}
+          className={cn(
+            "font-normal rounded-lg transition-all duration-200",
+            isMobile 
+              ? "h-11 px-4 text-base min-w-[120px]"
+              : "h-7 px-2.5 text-sm",
+            "hover:bg-primary/10 hover:scale-105 hover:text-foreground"
+          )}
           disabled={isProcessing}
           onClick={() => handleAction("note")}
         >
